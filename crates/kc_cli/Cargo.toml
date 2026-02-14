@@ -11,3 +11,4 @@ kc_core = { path = "../kc_core" }
 kc_extract = { path = "../kc_extract" }
 kc_index = { path = "../kc_index" }
 serde_json.workspace = true
+walkdir = "2.5"

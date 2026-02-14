@@ -5,6 +5,8 @@ pub mod types;
 pub mod vault;
 pub mod db;
 pub mod object_store;
+pub mod events;
+pub mod ingest;
 pub mod locator;
 pub mod chunking;
 pub mod export;
