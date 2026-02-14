@@ -1,16 +1,19 @@
 # Post-D–K Operations and Follow-up Policy
 
 ## Purpose
-Define stable post-delivery operations policy for KnowledgeCore Desktop, including benchmark governance, local git hygiene, and carry-forward follow-up handling after O/P/Q/R execution.
+Define stable post-delivery operations policy for KnowledgeCore Desktop, including benchmark governance, local git hygiene, and carry-forward follow-up handling after S/T/U/V execution.
 
 ## Scope
 - Applies to local development and pre-release validation runs.
 - Applies to benchmark smoke policy (`kc_cli bench run --corpus v1`).
 - Applies to local git hygiene and branch lifecycle after milestone merges.
 
-## Horizon Update (R2)
+## Horizon Update (V1)
 - O/P/Q capabilities are active runtime contracts.
 - Phase L preview scaffolding has been retired from runtime surfaces.
+- Phase S trust and recovery contracts are active runtime capabilities.
+- Phase T conservative auto-merge preview/apply flow is active and deterministic.
+- Phase U collaborative lineage turn-lock contracts are active across core/CLI/RPC/UI.
 - Carry-forward items now exclude previously delivered deferred capabilities.
 
 ## Bench Baseline Governance
@@ -77,12 +80,12 @@ Define stable post-delivery operations policy for KnowledgeCore Desktop, includi
 - Avoid long-lived milestone branches once merged.
 - Keep only `master` unless there is an active in-progress milestone.
 
-## Deferred Items Carry-forward Policy (Post-R)
+## Deferred Items Carry-forward Policy (Post-V)
 - The following remain deferred until explicitly promoted:
-  - device-key or PKI-based trust exchange,
-  - deterministic multi-target sync conflict auto-resolution,
-  - collaborative lineage editing and governance workflows,
-  - encryption key escrow/recovery features.
+  - managed identity or PKI-based trust exchange (beyond manual fingerprint verification),
+  - deterministic auto-merge policies beyond conservative disjoint-only mode,
+  - multi-document or team-role lineage lock governance flows,
+  - remote/escrow recovery-key management integrations.
 - Promotions must include:
   - explicit phase assignment,
   - schema/API impact statement,

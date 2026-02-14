@@ -1,7 +1,7 @@
 # Next Stretch Readiness Note
 
 ## Purpose
-Record execution status after completing the post-N3 roadmap through Phases O, P, Q, and R.
+Record execution status after completing the post-N3 roadmap through Phases O, P, Q, R, S, T, U, and V.
 
 ## Current Readiness Status
 - D–K is complete on `master`.
@@ -13,8 +13,11 @@ Record execution status after completing the post-N3 roadmap through Phases O, P
 - Phase O is complete (URI-based sync target abstraction + S3 transport).
 - Phase P is complete (SQLCipher DB encryption + lock-session and migration UX).
 - Phase Q is complete (overlay-only lineage write model with deterministic `lineage_query_v2`).
-- Phase R1 is complete (preview scaffold retirement and runtime cleanup).
-- Phase R2 is complete (final consolidation docs + full gates + double bench smoke).
+- Phase R is complete (preview scaffold retirement + horizon hardening).
+- Phase S is complete (manual device trust + local recovery kit).
+- Phase T is complete (conservative sync auto-merge preview/apply flow).
+- Phase U is complete (turn-based lineage edit lock model and desktop workflows).
+- Phase V is complete (final consolidation for this horizon).
 
 ## Required Reference Set
 - `knowledgecore-docpack/docs/03-phase-d-k-closure-report.md`
@@ -23,26 +26,17 @@ Record execution status after completing the post-N3 roadmap through Phases O, P
 - `knowledgecore-docpack/docs/07-phase-l-execution-notes.md`
 - `knowledgecore-docpack/SCHEMA_REGISTRY.md`
 
-## Completion Evidence (L→R1)
+## Completion Evidence (S→U)
 | Milestone | Branch | Merge Commit | Notes |
 |---|---|---|---|
-| L | `codex/l-phase-l-design-lock` | `51a8b2b` | Design-lock specs `22`–`26` |
-| M1 | `codex/m1-phase-m-core-encryption` | `6db6b39` | object-store encryption core + vault v2 |
-| M2 | `codex/m2-phase-m-ux-migration` | `07009f6` | CLI/RPC/UI encryption migration flows |
-| N1 | `codex/n1-phase-n-zip-packaging` | `56bd485` | deterministic ZIP export + verifier checks |
-| N2 | `codex/n2-phase-n-sync-filesystem` | `6d1162d` | filesystem snapshot sync v1 |
-| N3 | `codex/n3-phase-n-lineage-ui` | `ef29732` | lineage query desktop surface |
-| O0 | `codex/o0-contract-realignment` | `7f0bf3c` | post-N3 docs/spec activation alignment |
-| O1 | `codex/o1-sync-transport-foundation` | `a5e3b67` | sync transport abstraction + URI parse |
-| O2 | `codex/o2-sync-s3-execution` | `c67dcb3` | S3 lock/trust conflict-safe push/pull |
-| O3 | `codex/o3-sync-s3-surface` | `399bbd6` | CLI/Tauri/UI URI sync integration |
-| P1 | `codex/p1-sqlcipher-core` | `7bac439` | vault v3 + SQLCipher key handling |
-| P2 | `codex/p2-sqlcipher-migration-ux` | `0b9b72c` | DB unlock/lock session + migration UX |
-| P3 | `codex/p3-sqlcipher-export-verify` | `e5f4b35` | DB encryption manifest + verifier parity |
-| Q1 | `codex/q1-lineage-overlays-core` | `6e27675` | overlay storage + deterministic query merge |
-| Q2 | `codex/q2-lineage-overlays-ui` | `7477f47` | lineage v2 + overlay RPC/UI integration |
-| R1 | `codex/r1-preview-retirement` | `ee4098d` | preview scaffolding retired from runtime |
-| R2 | `codex/r2-final-consolidation` | this milestone commit | readiness/follow-up closure + final gate evidence |
+| S0 | `codex/s0-security-contract-activation` | `915242c` | activated specs `35` and `36`, registry alignment |
+| S1 | `codex/s1-device-trust-core` | `adf584e` | device trust schema/tables + deterministic fingerprint flow |
+| S2 | `codex/s2-recovery-kit` | `97a8c4b` | recovery kit generate/verify RPC + CLI + UI settings surface |
+| T1 | `codex/t1-sync-merge-core` | `3f564d4` | conservative merge engine + deterministic merge report |
+| T2 | `codex/t2-sync-merge-surface` | `df2e698` | sync merge preview/pull surfaces across CLI/RPC/UI |
+| U1 | `codex/u1-lineage-lock-core` | `bc363ef` | lock lease model + schema v5 + overlay lock enforcement |
+| U2 | `codex/u2-lineage-lock-surface` | `f9fb7b6` | lock acquire/release/status surfaces in CLI/RPC/UI |
+| V1 | `codex/v1-final-consolidation` | this milestone commit | final risk closure evidence + gates rerun |
 
 ## Gate Evidence (Source: `knowledgecore-docpack/AGENTS.md`)
 - Rust gate:
@@ -54,19 +48,19 @@ Record execution status after completing the post-N3 roadmap through Phases O, P
   - `cargo test -p apps_desktop_tauri -- rpc_schema`
   - `cargo test -p kc_core -- schema_`
   - `cargo test -p kc_cli -- schema_`
-- Final bench gate (R2 target):
+- Final bench gate (V1 target):
   - `cargo run -p kc_cli -- bench run --corpus v1` (twice)
 
-## Carry-Forward Deferred Table (Post-R1)
+## Carry-Forward Deferred Table (Post-V)
 | Item | Status | Carry-Forward Target | Notes |
 |---|---|---|---|
-| Device-key trust exchange | Deferred | Future sync/security phase | Current horizon remains passphrase-only trust |
-| SQLite encryption key escrow/recovery | Deferred | Future security phase | SQLCipher active; no key escrow in this horizon |
-| Sync auto-merge resolution | Deferred | Future sync phase | Current policy is hard-fail + conflict artifact |
-| Collaborative lineage editing | Deferred | Future lineage phase | Current lineage writes are overlay-only, single-writer intent |
+| Managed identity / PKI trust exchange | Deferred | Future security horizon | Current trust model is manual fingerprint verification |
+| Recovery key escrow / remote recovery management | Deferred | Future security horizon | Current model is local recovery kit only |
+| Auto-merge policy beyond conservative disjoint-only | Deferred | Future sync horizon | Current auto-merge is opt-in conservative mode |
+| Multi-doc/team-role lineage lock governance | Deferred | Future lineage horizon | Current lock model is per-doc turn lease |
 
 ## Git Hygiene Note
-- Fast-forward merge mode was used for every completed milestone.
-- Local milestone refs were removed after merge using direct ref deletion fallback where needed:
+- Fast-forward merge mode was used for completed milestones.
+- Local milestone refs were removed after merge; environment fallback used when `git branch -d` was blocked:
   - `git update-ref -d refs/heads/<merged-branch>`
 - `master` remains the only active local branch between milestones.

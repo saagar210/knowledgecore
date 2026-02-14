@@ -1,7 +1,7 @@
-# Phase L–R Execution Notes
+# Phase L–V Execution Notes
 
 ## Purpose
-Track baseline, milestone progression, gate evidence, and risk/follow-up closure across Phase L through Phase R.
+Track baseline, milestone progression, gate evidence, and risk/follow-up closure across Phases L through V.
 
 ## Baseline
 - Baseline branch: `master`
@@ -32,7 +32,15 @@ Track baseline, milestone progression, gate evidence, and risk/follow-up closure
 | Q1 | `codex/q1-lineage-overlays-core` | `6e27675` | ff-only | Complete |
 | Q2 | `codex/q2-lineage-overlays-ui` | `7477f47` | ff-only | Complete |
 | R1 | `codex/r1-preview-retirement` | `ee4098d` | ff-only | Complete |
-| R2 | `codex/r2-final-consolidation` | this milestone commit | ff-only | Complete |
+| R2 | `codex/r2-final-consolidation` | `34a66b5` | ff-only | Complete |
+| S0 | `codex/s0-security-contract-activation` | `915242c` | ff-only | Complete |
+| S1 | `codex/s1-device-trust-core` | `adf584e` | ff-only | Complete |
+| S2 | `codex/s2-recovery-kit` | `97a8c4b` | ff-only | Complete |
+| T1 | `codex/t1-sync-merge-core` | `3f564d4` | ff-only | Complete |
+| T2 | `codex/t2-sync-merge-surface` | `df2e698` | ff-only | Complete |
+| U1 | `codex/u1-lineage-lock-core` | `bc363ef` | ff-only | Complete |
+| U2 | `codex/u2-lineage-lock-surface` | `f9fb7b6` | ff-only | Complete |
+| V1 | `codex/v1-final-consolidation` | this milestone commit | ff-only | Complete |
 
 ## Major Contract Promotions
 - Encryption-at-rest active contract: `knowledgecore-docpack/spec/27-encryption-at-rest-v1.md`
@@ -43,6 +51,10 @@ Track baseline, milestone progression, gate evidence, and risk/follow-up closure
 - SQLCipher contract: `knowledgecore-docpack/spec/32-sqlite-encryption-sqlcipher-v1.md`
 - Passphrase trust contract: `knowledgecore-docpack/spec/33-cross-device-passphrase-trust-v1.md`
 - Lineage overlays contract: `knowledgecore-docpack/spec/34-lineage-overlays-v1.md`
+- Device trust manual verification contract: `knowledgecore-docpack/spec/35-device-trust-manual-verify-v1.md`
+- Local recovery kit contract: `knowledgecore-docpack/spec/36-local-recovery-kit-v1.md`
+- Conservative auto-merge contract: `knowledgecore-docpack/spec/37-sync-conservative-auto-merge-v1.md`
+- Turn-based lineage lock contract: `knowledgecore-docpack/spec/38-lineage-collab-turn-lock-v1.md`
 
 ## Verification Summary
 - Canonical Rust gate passed on completed milestones:
@@ -61,7 +73,10 @@ Track baseline, milestone progression, gate evidence, and risk/follow-up closure
 | SQLCipher portability/build drift | SQLCipher path compiled in canonical Rust + desktop builds; migration tests green |
 | S3 lock/consistency race | deterministic lock protocol + conflict artifact tests; no silent overwrite behavior |
 | Passphrase trust mismatch | head trust metadata validation with deterministic `KC_SYNC_KEY_MISMATCH` paths |
-| Lineage business logic leak | overlay assembly in core only; RPC/UI tests verify thin orchestration and no client reordering |
+| Recovery kit misuse/tamper | deterministic manifest/checksum verification with explicit mismatch error tests |
+| Sync auto-merge false positives | conservative disjoint-only merge policy + preview report tests |
+| Lineage lock contention drift | fixed 15-minute lease semantics with lock token validation and expiration tests |
+| UI/Tauri business-logic leakage | core-only merge/lineage lock logic + RPC/UI thin-surface tests |
 | Schema drift across Rust/UI | schema registry updates plus schema and RPC request/response tests per milestone |
 
 ## Git Hygiene Notes
