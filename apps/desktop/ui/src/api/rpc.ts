@@ -131,3 +131,9 @@ export const rpcMethods = {
   eventsList: (req: EventsListReq) => rpc<EventsListReq, EventsListRes>("events_list", req),
   jobsList: (req: JobsListReq) => rpc<JobsListReq, JobsListRes>("jobs_list", req)
 };
+
+export type DesktopRpcApi = typeof rpcMethods;
+
+export function createDesktopRpcApi(): DesktopRpcApi {
+  return rpcMethods;
+}

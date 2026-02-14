@@ -1,8 +1,25 @@
 import { describe, expect, it } from "vitest";
-import { appName } from "../src/main";
+import { appName, createDesktopApp } from "../src/main";
 
 describe("ui scaffold", () => {
   it("returns app name", () => {
     expect(appName()).toBe("KnowledgeCore Desktop");
+  });
+
+  it("creates full desktop app wiring for all feature routes", () => {
+    const app = createDesktopApp();
+    expect(app.routes.length).toBe(10);
+    expect(Object.keys(app.controllers).sort()).toEqual([
+      "ask",
+      "document",
+      "events",
+      "export",
+      "ingest",
+      "related",
+      "search",
+      "settings",
+      "vault",
+      "verify"
+    ]);
   });
 });
