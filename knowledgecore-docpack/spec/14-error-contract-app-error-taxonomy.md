@@ -66,6 +66,11 @@ AppError schema v1 and stable error taxonomy; UI branches on code only.
 - Export/Verify: `KC_EXPORT_*`, `KC_VERIFY_*`
 - Ask/Trace: `KC_ASK_*`, `KC_TRACE_*`
 - RPC/Internal: `KC_RPC_*`, `KC_INTERNAL_ERROR`
+- Encryption:
+  - `KC_ENCRYPTION_KEY_INVALID`
+  - `KC_ENCRYPTION_UNSUPPORTED`
+  - `KC_ENCRYPTION_REQUIRED`
+  - `KC_ENCRYPTION_MIGRATION_FAILED`
 
 ## RPC mapping
 - RPC responses return either `{ ok: true, data }` or `{ ok: false, error: AppError }` without changing `error.code`.

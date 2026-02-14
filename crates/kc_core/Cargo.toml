@@ -9,7 +9,9 @@ default = []
 phase_l_preview = []
 
 [dependencies]
+argon2 = "0.5"
 blake3.workspace = true
+chacha20poly1305 = "0.10"
 regex = "1.12"
 rusqlite.workspace = true
 serde.workspace = true
