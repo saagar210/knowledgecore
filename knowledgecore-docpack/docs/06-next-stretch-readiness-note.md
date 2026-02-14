@@ -1,7 +1,7 @@
 # Next Stretch Readiness Note
 
 ## Purpose
-Record execution status after completing the post-N3 roadmap through Phases O, P, Q, R, S, T, U, and V.
+Record execution status after completing the post-N3 roadmap through Phases O, P, Q, R, S, T, U, and V, and activating the W–Z horizon.
 
 ## Current Readiness Status
 - D–K is complete on `master`.
@@ -18,6 +18,8 @@ Record execution status after completing the post-N3 roadmap through Phases O, P
 - Phase T is complete (conservative sync auto-merge preview/apply flow).
 - Phase U is complete (turn-based lineage edit lock model and desktop workflows).
 - Phase V is complete (final consolidation for this horizon).
+- Phase W0 is activated (managed identity + sync head v3 specs ratified).
+- Phases W1–Z3 are planned and pending implementation.
 
 ## Required Reference Set
 - `knowledgecore-docpack/docs/03-phase-d-k-closure-report.md`
@@ -58,6 +60,13 @@ Record execution status after completing the post-N3 roadmap through Phases O, P
 | Recovery key escrow / remote recovery management | Deferred | Future security horizon | Current model is local recovery kit only |
 | Auto-merge policy beyond conservative disjoint-only | Deferred | Future sync horizon | Current auto-merge is opt-in conservative mode |
 | Multi-doc/team-role lineage lock governance | Deferred | Future lineage horizon | Current lock model is per-doc turn lease |
+
+## Next Horizon Mapping (W–Z)
+- W: managed identity trust v2 (`spec/39-managed-identity-oidc-device-cert-v1.md`)
+- W: sync head signature chain v3 (`spec/40-sync-head-signature-chain-v3.md`)
+- X: recovery escrow v2 (provider abstraction, AWS first)
+- Y: sync merge policy expansion v2 (`conservative_plus_v2`)
+- Z: lineage governance v2 (vault RBAC + scoped locks)
 
 ## Git Hygiene Note
 - Fast-forward merge mode was used for completed milestones.

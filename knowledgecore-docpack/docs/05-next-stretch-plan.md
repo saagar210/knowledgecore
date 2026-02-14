@@ -1,14 +1,14 @@
-# Next Stretch Plan (Post-R)
+# Next Stretch Plan (Post-V)
 
 ## Title
-KnowledgeCore Remaining Roadmap: Phases S, T, U, V
+KnowledgeCore Remaining Roadmap: Phases W, X, Y, Z
 
 ## Summary
-This execution horizon closes the remaining deferred scope after O–R:
-- S: security foundations (manual device trust + local recovery kit)
-- T: conservative sync auto-merge (preview-first)
-- U: collaborative lineage with turn-based locks
-- V: final hardening and closure
+This execution horizon closes the remaining deferred scope after Phase V:
+- W: managed identity trust (OIDC + device certificates)
+- X: recovery escrow provider model (local adapter + AWS first)
+- Y: conservative auto-merge expansion with deterministic policy v2
+- Z: lineage governance v2 (vault RBAC + scoped lock workflows)
 
 ## Global Invariants
 - Local-first remains default; remote adapters are optional.
@@ -18,79 +18,88 @@ This execution horizon closes the remaining deferred scope after O–R:
 - Schema changes must update `SCHEMA_REGISTRY.md` and schema validation tests.
 - Milestones are merge-as-we-go with stop/fix/rerun gates.
 
-## Phase S — Security Foundations
+## Phase W — Managed Identity Trust v2
 
 ### Goal
-Introduce manual device-key verification trust and local recovery-kit workflows.
+Introduce OIDC-backed identity sessions and certificate-chain validated device authorship for sync heads.
 
 ### Scope
-- Device trust APIs and schema.
-- Trust author metadata in sync heads.
-- Recovery bundle generate/verify/status APIs.
-- CLI/RPC/UI settings surface for trust and recovery.
+- Trust identity provider/session model.
+- Device certificate enrollment and chain verification.
+- Sync head v3 authorship/signature chain fields.
+- CLI/RPC/UI trust onboarding and status flows.
 
 ### Non-goals
-- Managed identity.
-- Shamir secret sharing.
-- Remote escrow.
+- Managed recovery escrow.
+- Aggressive sync merge policy changes.
 
 ### Acceptance
-- Unverified devices cannot author accepted remote heads.
-- Fingerprint verification is explicit and deterministic.
-- Recovery bundle verification hard-fails on mismatch/tamper.
+- Invalid identity/session/cert/signature paths fail with stable AppError codes.
+- Sync head v3 serialization and validation are deterministic.
 
-## Phase T — Sync Conservative Auto-Merge
+## Phase X — Recovery Escrow v2
 
 ### Goal
-Enable opt-in conservative merge where only disjoint deterministic changes are auto-applied.
+Add recovery escrow abstraction with local adapter and AWS KMS + Secrets Manager first production adapter.
 
 ### Scope
-- `sync_merge` preview report contract and deterministic ordering.
-- CLI surface for `sync merge-preview` and `sync pull --auto-merge conservative`.
-- RPC and UI settings preview wiring.
+- Escrow provider abstraction and adapter plumbing.
+- Recovery manifest v2 escrow metadata.
+- CLI/RPC/UI escrow status/enable/rotate/restore flows.
+- Export/verifier contract coverage for escrow metadata.
 
 ### Non-goals
-- Aggressive conflict resolution.
-- Hidden/implicit merge behavior.
+- Multi-provider production rollout in one phase.
+- External secret persistence in repo-tracked state.
 
 ### Acceptance
-- Overlap hard-fails with `KC_SYNC_MERGE_NOT_SAFE`.
-- Disjoint sets merge predictably with no silent overwrite.
+- Local recovery remains functional.
+- Escrow-enabled workflows are deterministic and schema-validated.
 
-## Phase U — Collaborative Lineage (Turn-Based Lock)
+## Phase Y — Sync Auto-Merge Policy Expansion v2
 
 ### Goal
-Add edit-lock semantics for lineage overlays with explicit acquire/release/status.
+Extend merge policy to `conservative_plus_v2` with explicit safety allowlist and deterministic decision traces.
 
 ### Scope
-- Per-doc lock table and lock APIs.
-- Overlay mutation paths gated by valid lock token.
-- CLI/RPC/UI lock workflows.
+- Core merge policy engine update.
+- CLI/RPC/UI policy selection and preview-first workflows.
+- Matrix tests for overlap/trust/lock conflicts.
 
 ### Non-goals
-- Real-time collaborative merge.
-- CRDT/OT editing models.
+- Automatic merge without preview.
+- Destructive overwrite behavior.
 
 ### Acceptance
-- Lock contention and expiration codes are deterministic.
-- Overlay mutations without valid lock token fail.
+- Unsafe merges hard-fail with deterministic reasons.
+- Allowed merges are deterministic and replay-stable.
 
-## Phase V — Final Consolidation
+## Phase Z — Lineage Governance v2
 
 ### Goal
-Close risks/follow-ups, run final full gates, and leave planning-ready `master`.
+Add vault-DB RBAC governance for lineage overlays and scoped locking for team workflows.
 
 ### Scope
-- Readiness and operations docs updates.
-- Final canonical Rust/desktop/schema/RPC gates.
-- Bench smoke run twice.
+- RBAC schema + deterministic permission evaluation.
+- Core enforcement on overlay mutation paths.
+- CLI/RPC/UI governance surfaces.
+- Final horizon consolidation and closure docs.
+
+### Non-goals
+- Real-time collaborative conflict resolution models (CRDT/OT).
+- Non-deterministic role arbitration.
 
 ### Acceptance
-- No unresolved S–U follow-ups in this horizon.
-- `master` clean with branch hygiene normalized.
+- Overlay writes require valid lock + RBAC permission.
+- Governance decisions are deterministic and test-covered.
 
 ## Canonical Gates
 - Rust: `cargo test -p kc_core -p kc_extract -p kc_index -p kc_ask -p kc_cli`
 - Desktop: `pnpm lint && pnpm test && pnpm tauri build`
-- RPC/schema: `cargo test -p apps_desktop_tauri -- rpc_` and `cargo test -p apps_desktop_tauri -- rpc_schema`
-- Bench smoke: `cargo run -p kc_cli -- bench run --corpus v1` (twice at final consolidation)
+- RPC/schema:
+  - `cargo test -p apps_desktop_tauri -- rpc_`
+  - `cargo test -p apps_desktop_tauri -- rpc_schema`
+  - `cargo test -p kc_core -- schema_`
+  - `cargo test -p kc_cli -- schema_`
+- Final consolidation bench:
+  - `cargo run -p kc_cli -- bench run --corpus v1` (twice)
