@@ -6,5 +6,6 @@ license.workspace = true
 
 [dependencies]
 kc_core = { path = "../kc_core" }
+regex = "1.12"
 serde.workspace = true
 serde_json.workspace = true

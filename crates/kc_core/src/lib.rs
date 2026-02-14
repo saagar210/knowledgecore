@@ -7,6 +7,8 @@ pub mod db;
 pub mod object_store;
 pub mod events;
 pub mod ingest;
+pub mod services;
+pub mod canonical;
 pub mod locator;
 pub mod chunking;
 pub mod export;
