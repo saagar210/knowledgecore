@@ -56,6 +56,10 @@ AppError schema v1 and stable error taxonomy; UI branches on code only.
 
 ## Taxonomy (v1)
 - Vault/DB: `KC_VAULT_*`, `KC_DB_*`
+  - `KC_DB_KEY_INVALID`
+  - `KC_DB_LOCKED`
+  - `KC_DB_ENCRYPTION_UNSUPPORTED`
+  - `KC_DB_ENCRYPTION_MIGRATION_FAILED`
 - Hash/Canon JSON: `KC_HASH_*`, `KC_CANON_JSON_*`
 - Ingest: `KC_INGEST_*`, `KC_INBOX_*`, `KC_TIMESTAMP_*`
 - Extract: `KC_CANONICAL_*`, `KC_PDFIUM_UNAVAILABLE`, `KC_TESSERACT_UNAVAILABLE`, `KC_OCR_FAILED`

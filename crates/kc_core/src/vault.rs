@@ -5,7 +5,7 @@ use std::path::{Path, PathBuf};
 use uuid::Uuid;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct VaultJsonV2 {
+pub struct VaultJsonV3 {
     pub schema_version: u32,
     pub vault_id: String,
     pub vault_slug: String,
@@ -15,10 +15,13 @@ pub struct VaultJsonV2 {
     pub toolchain: VaultToolchain,
     #[serde(default)]
     pub encryption: VaultEncryptionConfigV2,
+    #[serde(default)]
+    pub db_encryption: VaultDbEncryptionConfigV3,
 }
 
-// Alias for compatibility with older references in docs/tests.
-pub type VaultJsonV1 = VaultJsonV2;
+// Aliases kept for compatibility with existing crate references.
+pub type VaultJsonV2 = VaultJsonV3;
+pub type VaultJsonV1 = VaultJsonV3;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct VaultDbConfig {
@@ -88,6 +91,38 @@ impl Default for VaultKdfConfigV2 {
     }
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct VaultDbEncryptionConfigV3 {
+    pub enabled: bool,
+    pub mode: String,
+    pub kdf: VaultDbKdfConfigV3,
+    pub key_reference: Option<String>,
+}
+
+impl Default for VaultDbEncryptionConfigV3 {
+    fn default() -> Self {
+        Self {
+            enabled: false,
+            mode: "sqlcipher_v4".to_string(),
+            kdf: VaultDbKdfConfigV3::default(),
+            key_reference: None,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct VaultDbKdfConfigV3 {
+    pub algorithm: String,
+}
+
+impl Default for VaultDbKdfConfigV3 {
+    fn default() -> Self {
+        Self {
+            algorithm: "pbkdf2_hmac_sha512".to_string(),
+        }
+    }
+}
+
 #[derive(Debug, Clone, Deserialize)]
 struct LegacyVaultJsonV1 {
     pub vault_id: String,
@@ -96,6 +131,18 @@ struct LegacyVaultJsonV1 {
     pub db: VaultDbConfig,
     pub defaults: VaultDefaults,
     pub toolchain: VaultToolchain,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+struct LegacyVaultJsonV2 {
+    pub vault_id: String,
+    pub vault_slug: String,
+    pub created_at_ms: i64,
+    pub db: VaultDbConfig,
+    pub defaults: VaultDefaults,
+    pub toolchain: VaultToolchain,
+    #[serde(default)]
+    pub encryption: VaultEncryptionConfigV2,
 }
 
 #[derive(Debug, Clone)]
@@ -108,7 +155,7 @@ pub struct VaultPaths {
     pub vectors_dir: PathBuf,
 }
 
-impl VaultJsonV2 {
+impl VaultJsonV3 {
     pub fn encryption_enabled(&self) -> bool {
         self.encryption.enabled
     }
@@ -185,7 +232,7 @@ pub fn vault_paths(vault_path: &Path) -> VaultPaths {
     }
 }
 
-pub fn vault_init(vault_path: &Path, vault_slug: &str, now_ms: i64) -> AppResult<VaultJsonV2> {
+pub fn vault_init(vault_path: &Path, vault_slug: &str, now_ms: i64) -> AppResult<VaultJsonV3> {
     let paths = vault_paths(vault_path);
     fs::create_dir_all(paths.db.parent().ok_or_else(|| {
         AppError::new(
@@ -233,8 +280,8 @@ pub fn vault_init(vault_path: &Path, vault_slug: &str, now_ms: i64) -> AppResult
         )
     })?;
 
-    let vault = VaultJsonV2 {
-        schema_version: 2,
+    let vault = VaultJsonV3 {
+        schema_version: 3,
         vault_id: Uuid::new_v4().to_string(),
         vault_slug: vault_slug.to_string(),
         created_at_ms: now_ms,
@@ -255,6 +302,7 @@ pub fn vault_init(vault_path: &Path, vault_slug: &str, now_ms: i64) -> AppResult
             },
         },
         encryption: VaultEncryptionConfigV2::default(),
+        db_encryption: VaultDbEncryptionConfigV3::default(),
     };
 
     vault_save(vault_path, &vault)?;
@@ -262,7 +310,7 @@ pub fn vault_init(vault_path: &Path, vault_slug: &str, now_ms: i64) -> AppResult
     Ok(vault)
 }
 
-pub fn vault_save(vault_path: &Path, vault: &VaultJsonV2) -> AppResult<()> {
+pub fn vault_save(vault_path: &Path, vault: &VaultJsonV3) -> AppResult<()> {
     let bytes = serde_json::to_vec_pretty(vault).map_err(|e| {
         AppError::new(
             "KC_VAULT_INIT_FAILED",
@@ -285,7 +333,54 @@ pub fn vault_save(vault_path: &Path, vault: &VaultJsonV2) -> AppResult<()> {
     Ok(())
 }
 
-pub fn vault_open(vault_path: &Path) -> AppResult<VaultJsonV2> {
+fn validate_object_encryption(vault: &VaultJsonV3) -> AppResult<()> {
+    if vault.encryption.enabled && vault.encryption.mode != "object_store_xchacha20poly1305" {
+        return Err(AppError::new(
+            "KC_ENCRYPTION_UNSUPPORTED",
+            "encryption",
+            "vault encryption mode is not supported",
+            false,
+            serde_json::json!({
+                "mode": vault.encryption.mode,
+                "supported": ["object_store_xchacha20poly1305"]
+            }),
+        ));
+    }
+    Ok(())
+}
+
+fn validate_db_encryption(vault: &VaultJsonV3) -> AppResult<()> {
+    if !vault.db_encryption.enabled {
+        return Ok(());
+    }
+    if vault.db_encryption.mode != "sqlcipher_v4" {
+        return Err(AppError::new(
+            "KC_DB_ENCRYPTION_UNSUPPORTED",
+            "db",
+            "vault db encryption mode is not supported",
+            false,
+            serde_json::json!({
+                "mode": vault.db_encryption.mode,
+                "supported": ["sqlcipher_v4"]
+            }),
+        ));
+    }
+    if vault.db_encryption.kdf.algorithm != "pbkdf2_hmac_sha512" {
+        return Err(AppError::new(
+            "KC_DB_ENCRYPTION_UNSUPPORTED",
+            "db",
+            "vault db encryption kdf algorithm is not supported",
+            false,
+            serde_json::json!({
+                "algorithm": vault.db_encryption.kdf.algorithm,
+                "supported": ["pbkdf2_hmac_sha512"]
+            }),
+        ));
+    }
+    Ok(())
+}
+
+pub fn vault_open(vault_path: &Path) -> AppResult<VaultJsonV3> {
     let path = vault_path.join("vault.json");
     let bytes = fs::read(&path).map_err(|e| {
         if e.kind() == std::io::ErrorKind::NotFound {
@@ -330,7 +425,7 @@ pub fn vault_open(vault_path: &Path) -> AppResult<VaultJsonV2> {
             )
         })? as u32;
 
-    match schema_version {
+    let normalized = match schema_version {
         1 => {
             let legacy: LegacyVaultJsonV1 = serde_json::from_value(value).map_err(|e| {
                 AppError::new(
@@ -341,8 +436,8 @@ pub fn vault_open(vault_path: &Path) -> AppResult<VaultJsonV2> {
                     serde_json::json!({ "error": e.to_string(), "path": path }),
                 )
             })?;
-            Ok(VaultJsonV2 {
-                schema_version: 2,
+            VaultJsonV3 {
+                schema_version: 3,
                 vault_id: legacy.vault_id,
                 vault_slug: legacy.vault_slug,
                 created_at_ms: legacy.created_at_ms,
@@ -350,10 +445,11 @@ pub fn vault_open(vault_path: &Path) -> AppResult<VaultJsonV2> {
                 defaults: legacy.defaults,
                 toolchain: legacy.toolchain,
                 encryption: VaultEncryptionConfigV2::default(),
-            })
+                db_encryption: VaultDbEncryptionConfigV3::default(),
+            }
         }
         2 => {
-            let parsed: VaultJsonV2 = serde_json::from_value(value).map_err(|e| {
+            let legacy: LegacyVaultJsonV2 = serde_json::from_value(value).map_err(|e| {
                 AppError::new(
                     "KC_VAULT_JSON_INVALID",
                     "vault",
@@ -362,26 +458,39 @@ pub fn vault_open(vault_path: &Path) -> AppResult<VaultJsonV2> {
                     serde_json::json!({ "error": e.to_string(), "path": path }),
                 )
             })?;
-            if parsed.encryption.enabled && parsed.encryption.mode != "object_store_xchacha20poly1305" {
-                return Err(AppError::new(
-                    "KC_ENCRYPTION_UNSUPPORTED",
-                    "encryption",
-                    "vault encryption mode is not supported",
-                    false,
-                    serde_json::json!({
-                        "mode": parsed.encryption.mode,
-                        "supported": ["object_store_xchacha20poly1305"]
-                    }),
-                ));
+            VaultJsonV3 {
+                schema_version: 3,
+                vault_id: legacy.vault_id,
+                vault_slug: legacy.vault_slug,
+                created_at_ms: legacy.created_at_ms,
+                db: legacy.db,
+                defaults: legacy.defaults,
+                toolchain: legacy.toolchain,
+                encryption: legacy.encryption,
+                db_encryption: VaultDbEncryptionConfigV3::default(),
             }
-            Ok(parsed)
         }
-        _ => Err(AppError::new(
-            "KC_VAULT_JSON_UNSUPPORTED_VERSION",
-            "vault",
-            "unsupported vault schema_version",
-            false,
-            serde_json::json!({ "expected": [1, 2], "actual": schema_version }),
-        )),
-    }
+        3 => serde_json::from_value::<VaultJsonV3>(value).map_err(|e| {
+            AppError::new(
+                "KC_VAULT_JSON_INVALID",
+                "vault",
+                "failed to parse vault schema v3",
+                false,
+                serde_json::json!({ "error": e.to_string(), "path": path }),
+            )
+        })?,
+        _ => {
+            return Err(AppError::new(
+                "KC_VAULT_JSON_UNSUPPORTED_VERSION",
+                "vault",
+                "unsupported vault schema_version",
+                false,
+                serde_json::json!({ "expected": [1, 2, 3], "actual": schema_version }),
+            ))
+        }
+    };
+
+    validate_object_encryption(&normalized)?;
+    validate_db_encryption(&normalized)?;
+    Ok(normalized)
 }

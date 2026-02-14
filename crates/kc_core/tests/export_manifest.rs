@@ -92,7 +92,7 @@ fn export_manifest_has_deterministic_object_order() {
             .get("schema_versions")
             .and_then(|v| v.get("vault"))
             .and_then(|v| v.as_i64()),
-        Some(2)
+        Some(3)
     );
 }
 

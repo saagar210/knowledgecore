@@ -6,7 +6,7 @@ fn base_manifest(db_hash: String) -> serde_json::Value {
         "manifest_version": 1,
         "vault_id": "123e4567-e89b-12d3-a456-426614174000",
         "schema_versions": {
-            "vault": 2,
+            "vault": 3,
             "locator": 1,
             "app_error": 1,
             "rpc": 1

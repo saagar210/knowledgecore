@@ -1,13 +1,13 @@
 # Encryption at Rest v1
 
 ## Purpose
-Define active Phase M behavior for optional object-store encryption at rest with vault schema v2 metadata.
+Define active Phase M behavior for optional object-store encryption at rest with vault schema v3 metadata.
 
 ## Invariants
 - Object hash remains `blake3(plaintext_bytes)` and remains Tier 1 deterministic.
 - Encryption applies to object payload bytes on disk only in v1.
 - SQLite file encryption is out of scope for v1.
-- Vault schema v2 is required for active encryption metadata.
+- Vault schema v3 is required for active encryption metadata.
 - UI routes only on `AppError.code`.
 
 ## Non-goals
@@ -16,7 +16,7 @@ Define active Phase M behavior for optional object-store encryption at rest with
 - Cross-device key escrow.
 
 ## Vault schema contract (v2)
-- `schema_version: 2`
+- `schema_version: 3`
 - `encryption.enabled: bool`
 - `encryption.mode: "object_store_xchacha20poly1305"`
 - `encryption.kdf.algorithm: "argon2id"`
@@ -48,7 +48,7 @@ Security note:
 - `KC_ENCRYPTION_MIGRATION_FAILED`
 
 ## Acceptance tests
-- v2 vault init writes `schema_version=2` and default encryption-disabled block.
+- v3 vault init writes `schema_version=3` with default object-store encryption disabled and DB encryption metadata disabled.
 - v1 vault opens and normalizes to v2 model.
 - Encrypted object payload round-trip succeeds with correct key.
 - Encrypted payload read without key fails with `KC_ENCRYPTION_REQUIRED`.

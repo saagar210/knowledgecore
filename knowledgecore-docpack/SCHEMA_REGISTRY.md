@@ -17,7 +17,7 @@ Authoritative registry of all versioned schemas and contracts. Any schema additi
 | Schema | Ver | Path | Producer | Consumer | Tier | Invariants | Compat Rules | Bump Rules |
 |---|---:|---|---|---|---|---|---|---|
 | Canonical JSON | 1 | `spec/00-canonical-json.md` | kc_core | all | 1 | stable canonical JSON bytes | N/A | bump on encoding change |
-| vault.json | 2 | `spec/27-encryption-at-rest-v1.md` | kc_core | all | 1-adj | UUID vault_id; schema_version=2 for new vaults; v1 normalized to v2 in memory | read v1 + v2 during migration window | bump on breaking change |
+| vault.json | 3 | `spec/32-sqlite-encryption-sqlcipher-v1.md` | kc_core | all | 1-adj | UUID vault_id; schema_version=3 for new vaults; v1/v2 normalized to v3 in memory; includes `db_encryption` block | read v1 + v2 + v3 during migration window | bump on breaking change |
 | encryption metadata (object store) | 1 | `spec/27-encryption-at-rest-v1.md` | kc_core | kc_cli/src-tauri/ui settings | 1-adj | mode `object_store_xchacha20poly1305`; deterministic nonce derivation context; plaintext hash remains canonical | additive optional fields ok | bump on mode/kdf semantics change |
 | SQLite schema | 1 | `spec/03-sqlite-schema-v1-and-migrations.md` | kc_core | all | 1 | migrations deterministic | additive ok | bump user_version on change |
 | Locator v1 | 1 | `spec/10-locator-v1-and-resolver.md` | kc_core | all | 1 | [start,end) char indices; strict hash check | additive hints ok | bump on semantics change |

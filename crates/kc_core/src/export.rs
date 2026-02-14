@@ -319,7 +319,7 @@ pub fn export_bundle(vault_path: &Path, export_dir: &Path, opts: &ExportOptions,
         "manifest_version": 1,
         "vault_id": vault.vault_id,
         "schema_versions": {
-            "vault": 2,
+            "vault": 3,
             "locator": 1,
             "app_error": 1,
             "rpc": 1
