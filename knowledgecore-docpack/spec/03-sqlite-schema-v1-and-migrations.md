@@ -1,0 +1,80 @@
+# SQLite Schema v1 and Migrations
+
+## Purpose
+Defines SQLite schema v1 (tables, constraints, indexes) and deterministic migration strategy.
+
+## Invariants
+- Tier 1: derived identifiers stored; queries must use explicit ORDER BY.
+- Foreign keys ON; migrations sequential and transactional; PRAGMA user_version tracks schema.
+
+## Acceptance Tests
+- Migration tests apply from empty DB and validate expected schema.
+- Integrity tests validate foreign keys and invariants.
+
+## Migration strategy
+- Migrations in `crates/kc_core/migrations/NNNN_*.sql`.
+- Apply in order inside a transaction.
+- Update `PRAGMA user_version` to latest after apply.
+
+## DDL (v1) core tables
+See DDL in docs: this is the authoritative copy.
+```sql
+-- (Same as in docs/ and earlier; kept in this spec for single-source)
+CREATE TABLE IF NOT EXISTS objects (
+  object_hash TEXT PRIMARY KEY,
+  bytes INTEGER NOT NULL,
+  relpath TEXT NOT NULL,
+  created_event_id INTEGER NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS docs (
+  doc_id TEXT PRIMARY KEY,
+  original_object_hash TEXT NOT NULL REFERENCES objects(object_hash),
+  bytes INTEGER NOT NULL,
+  mime TEXT NOT NULL,
+  source_kind TEXT NOT NULL,
+  effective_ts_ms INTEGER NOT NULL,
+  ingested_event_id INTEGER NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS canonical_text (
+  doc_id TEXT PRIMARY KEY REFERENCES docs(doc_id),
+  canonical_object_hash TEXT NOT NULL REFERENCES objects(object_hash),
+  canonical_hash TEXT NOT NULL,
+  extractor_name TEXT NOT NULL,
+  extractor_version TEXT NOT NULL,
+  extractor_flags_json TEXT NOT NULL,
+  normalization_version INTEGER NOT NULL,
+  toolchain_json TEXT NOT NULL,
+  created_event_id INTEGER NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS chunks (
+  chunk_id TEXT PRIMARY KEY,
+  doc_id TEXT NOT NULL REFERENCES docs(doc_id),
+  ordinal INTEGER NOT NULL,
+  start_char INTEGER NOT NULL,
+  end_char INTEGER NOT NULL,
+  chunking_config_hash TEXT NOT NULL,
+  source_kind TEXT NOT NULL,
+  UNIQUE(doc_id, chunking_config_hash, ordinal)
+);
+
+CREATE TABLE IF NOT EXISTS events (
+  event_id INTEGER PRIMARY KEY AUTOINCREMENT,
+  ts_ms INTEGER NOT NULL,
+  type TEXT NOT NULL,
+  payload_json TEXT NOT NULL,
+  prev_event_hash TEXT,
+  event_hash TEXT NOT NULL
+);
+```
+
+## FTS5 contract
+- `chunks_fts` virtual table defined in spec/07.
+
+## Error codes
+- `KC_DB_OPEN_FAILED`
+- `KC_DB_MIGRATION_FAILED`
+- `KC_DB_SCHEMA_INCOMPATIBLE`
+- `KC_DB_INTEGRITY_FAILED`

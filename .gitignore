@@ -1,0 +1,19 @@
+.DS_Store
+**/.DS_Store
+
+# Rust
+**/target/
+Cargo.lock
+
+# Node / Tauri
+**/node_modules/
+**/dist/
+
+# Logs
+*.log
+
+# Local vault/runtime artifacts
+.vault/
+*.sqlite
+*.sqlite-shm
+*.sqlite-wal
