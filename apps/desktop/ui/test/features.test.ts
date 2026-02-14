@@ -9,6 +9,7 @@ import {
   ingestInboxStop,
   ingestScanFolder
 } from "../src/features/ingest";
+import { queryLineage } from "../src/features/lineage";
 import { loadRelated } from "../src/features/related";
 import { runSearch } from "../src/features/search";
 import {
@@ -104,6 +105,25 @@ function mockApi(): DesktopRpcApi {
             "blake3:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
           created_at_ms: 6
         }
+      }),
+    lineageQuery: () =>
+      ok({
+        schema_version: 1,
+        seed_doc_id: "d1",
+        depth: 1,
+        generated_at_ms: 9,
+        nodes: [
+          { node_id: "doc:d1", kind: "doc", label: "d1", metadata: {} },
+          { node_id: "chunk:c1", kind: "chunk", label: "Chunk 0", metadata: {} }
+        ],
+        edges: [
+          {
+            from_node_id: "doc:d1",
+            to_node_id: "chunk:c1",
+            relation: "contains_chunk",
+            evidence: "ordinal:0"
+          }
+        ]
       })
   };
 }
@@ -230,6 +250,14 @@ describe("feature controllers", () => {
         vault_path: "/tmp/v",
         target_path: "/tmp/sync",
         now_ms: 8
+      })
+    ).toMatchObject({ kind: "data" });
+    expect(
+      await queryLineage(api, {
+        vault_path: "/tmp/v",
+        seed_doc_id: "d1",
+        depth: 1,
+        now_ms: 9
       })
     ).toMatchObject({ kind: "data" });
   });

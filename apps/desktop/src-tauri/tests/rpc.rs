@@ -3,7 +3,7 @@ use apps_desktop_tauri::rpc::{
     vault_encryption_migrate_rpc, vault_encryption_status_rpc, vault_init_rpc, vault_open_rpc,
     IngestInboxStartReq, IngestInboxStopReq, JobsListReq, RpcResponse, VaultEncryptionEnableReq,
     VaultEncryptionMigrateReq, VaultEncryptionStatusReq, VaultInitReq, VaultOpenReq, SyncPushReq,
-    SyncStatusReq, sync_push_rpc, sync_status_rpc,
+    SyncStatusReq, sync_push_rpc, sync_status_rpc, LineageQueryReq, lineage_query_rpc,
 };
 use apps_desktop_tauri::commands;
 use kc_core::app_error::AppError;
@@ -190,6 +190,82 @@ fn rpc_sync_status_and_push() {
     match pushed {
         RpcResponse::Ok { data } => assert!(!data.snapshot_id.is_empty()),
         RpcResponse::Err { error } => panic!("sync push failed: {}", error.code),
+    }
+}
+
+#[test]
+fn rpc_lineage_query_is_deterministic_and_sorted() {
+    let root = tempfile::tempdir().expect("tempdir").keep();
+    let input = root.join("note-lineage.txt");
+    std::fs::write(&input, b"lineage seed").expect("write input");
+
+    let init = vault_init_rpc(VaultInitReq {
+        vault_path: root.to_string_lossy().to_string(),
+        vault_slug: "demo".to_string(),
+        now_ms: 1,
+    });
+    match init {
+        RpcResponse::Ok { .. } => {}
+        RpcResponse::Err { error } => panic!("vault init failed: {}", error.code),
+    }
+
+    let started = ingest_inbox_start_rpc(IngestInboxStartReq {
+        vault_path: root.to_string_lossy().to_string(),
+        file_path: input.to_string_lossy().to_string(),
+        source_kind: "notes".to_string(),
+        now_ms: 2,
+    });
+    let seed_doc_id = match started {
+        RpcResponse::Ok { data } => data.doc_id,
+        RpcResponse::Err { error } => panic!("ingest failed: {}", error.code),
+    };
+
+    let req = LineageQueryReq {
+        vault_path: root.to_string_lossy().to_string(),
+        seed_doc_id,
+        depth: 2,
+        now_ms: 3,
+    };
+    let res_a = lineage_query_rpc(req);
+    let req_b = LineageQueryReq {
+        vault_path: root.to_string_lossy().to_string(),
+        seed_doc_id: match &res_a {
+            RpcResponse::Ok { data } => data.seed_doc_id.clone(),
+            RpcResponse::Err { .. } => "missing".to_string(),
+        },
+        depth: 2,
+        now_ms: 3,
+    };
+    let res_b = lineage_query_rpc(req_b);
+    assert_eq!(
+        serde_json::to_value(&res_a).expect("serialize a"),
+        serde_json::to_value(&res_b).expect("serialize b")
+    );
+
+    match res_a {
+        RpcResponse::Ok { data } => {
+            let node_keys: Vec<(String, String)> =
+                data.nodes.iter().map(|n| (n.kind.clone(), n.node_id.clone())).collect();
+            let mut sorted_node_keys = node_keys.clone();
+            sorted_node_keys.sort();
+            assert_eq!(node_keys, sorted_node_keys);
+
+            let edge_keys: Vec<(String, String, String)> = data
+                .edges
+                .iter()
+                .map(|e| {
+                    (
+                        e.from_node_id.clone(),
+                        e.to_node_id.clone(),
+                        e.relation.clone(),
+                    )
+                })
+                .collect();
+            let mut sorted_edge_keys = edge_keys.clone();
+            sorted_edge_keys.sort();
+            assert_eq!(edge_keys, sorted_edge_keys);
+        }
+        RpcResponse::Err { error } => panic!("lineage query failed: {}", error.code),
     }
 }
 

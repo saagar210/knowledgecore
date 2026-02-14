@@ -28,6 +28,7 @@ Concise verification checklist for each milestone to enforce determinism, schema
 - [ ] Export manifest ordering matches `spec/12`
 - [ ] Verifier exit codes and report ordering match `spec/13`
 - [ ] Locator strict resolution matches `spec/10`
+- [ ] Lineage query node/edge ordering matches `spec/30`
 
 ## Tier 2 toolchain checklist
 - [ ] PDFium identity captured and stored
@@ -43,6 +44,7 @@ Concise verification checklist for each milestone to enforce determinism, schema
 ## UI boundary checklist (UI milestones only)
 - [ ] UI branches only on `AppError.code`
 - [ ] UI has zero ranking/merge/chunking/locator logic
+- [ ] UI lineage rendering preserves RPC ordering (no client-side reordering)
 - [ ] RPC request/response types match `spec/19`
 - [ ] Desktop gates pass
 

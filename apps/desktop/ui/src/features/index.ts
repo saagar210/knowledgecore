@@ -4,6 +4,7 @@ import * as document from "./document";
 import * as events from "./events";
 import * as exportVerify from "./exportVerify";
 import * as ingest from "./ingest";
+import * as lineage from "./lineage";
 import * as related from "./related";
 import * as search from "./search";
 import * as settings from "./settings";
@@ -20,6 +21,7 @@ export type FeatureControllers = {
   verify: Pick<typeof exportVerify, "verifyBundle">;
   events: typeof events;
   settings: typeof settings;
+  lineage: typeof lineage;
 };
 
 export function createFeatureControllers(_api: DesktopRpcApi): FeatureControllers {
@@ -34,6 +36,7 @@ export function createFeatureControllers(_api: DesktopRpcApi): FeatureController
     export: { exportBundle: exportVerify.exportBundle },
     verify: { verifyBundle: exportVerify.verifyBundle },
     events,
-    settings
+    settings,
+    lineage
   };
 }

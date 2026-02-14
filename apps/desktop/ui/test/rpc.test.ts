@@ -29,7 +29,8 @@ describe("rpc client", () => {
       "jobsList",
       "syncStatus",
       "syncPush",
-      "syncPull"
+      "syncPull",
+      "lineageQuery"
     ]);
   });
 

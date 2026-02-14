@@ -24,6 +24,7 @@ Authoritative registry of all versioned schemas and contracts. Any schema additi
 | Export manifest | 1 | `spec/12-export-bundles-and-manifest.md` | kc_core | verifier/UI | 1 | deterministic ordering; `vault_id` UUID; db hash; chunking_config_hash uses canonical config hashing; required `encryption` block; object entries carry `hash` (plaintext hash), `storage_hash` (stored payload hash), and `encrypted` flag | additive blocks ok | bump on ordering/hash rule change |
 | ZIP packaging metadata | 1 | `spec/28-deterministic-zip-packaging-v1.md` | kc_core | kc_cli verifier | 1 | entry order lexical; compression stored; fixed mtime `1980-01-01T00:00:00Z`; file mode `0644` | additive fields ok | bump on any deterministic ZIP policy change |
 | Sync filesystem snapshots | 1 | `spec/29-sync-v1-filesystem-snapshots.md` | kc_core | kc_cli/src-tauri/ui | 1 | deterministic snapshot id + head schema + conflict artifact ordering; no auto-merge | additive fields ok | bump on conflict policy or snapshot/head semantics change |
+| Lineage query | 1 | `spec/30-advanced-lineage-ui-v1.md` | kc_core | src-tauri/ui | 1 | deterministic nodes (`kind`,`node_id`) and edges (`from`,`to`,`relation`,`evidence`) ordering; read-only query contract | additive optional metadata fields ok | bump on request/response semantics or ordering rule change |
 | Verifier report | 1 | `spec/13-verifier-and-reporting.md` | kc_cli | UI/automation | 1 | stable exit codes (0/20/21/31/40/41/60); deterministic ordering; schema-validated manifest input; encryption-state mismatches map into code 41 | additive ok | bump on exit/order/schema rule change |
 | AppError | 1 | `spec/14-error-contract-app-error-taxonomy.md` | all | UI/CLI/RPC | 1-adj | UI branches on code only | additive codes ok | bump on struct change |
 | Trace log | 1 | `spec/17-trace-log-schema-and-redaction.md` | kc_ask | UI/automation | 1 | `trace_id`/`vault_id` UUID; deterministic retrieval chunk ordering + locator ordering | additive ok | bump on struct change |
@@ -31,9 +32,7 @@ Authoritative registry of all versioned schemas and contracts. Any schema additi
 
 ## Draft Schemas (Phase L, non-runtime)
 
-| Schema | Ver | Path | Producer | Consumer | Status | Activation Phase | Invariants | Compat Rules | Bump Rules |
-|---|---:|---|---|---|---|---|---|---|---|
-| Lineage query draft | 1 | `spec/25-advanced-lineage-ui-v1-design-lock.md` | kc_core (feature-gated) | src-tauri/ui preview shells | draft | N3 | deterministic node/edge ordering; non-runtime | draft-only additive fields allowed with tests | bump on query/result semantics change |
+- No remaining draft schemas. Phase L draft lineage contract was promoted to active in N3 (`spec/30-advanced-lineage-ui-v1.md`).
 
 ## Schema validation workflow
 - JSON schema validation tests (Rust `jsonschema` crate):

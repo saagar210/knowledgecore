@@ -354,6 +354,41 @@ pub struct SyncPullRes {
     pub remote_head: SyncHeadRes,
 }
 
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct LineageQueryReq {
+    pub vault_path: String,
+    pub seed_doc_id: String,
+    pub depth: i64,
+    pub now_ms: i64,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct LineageNodeRes {
+    pub node_id: String,
+    pub kind: String,
+    pub label: String,
+    pub metadata: serde_json::Value,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct LineageEdgeRes {
+    pub from_node_id: String,
+    pub to_node_id: String,
+    pub relation: String,
+    pub evidence: String,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct LineageQueryRes {
+    pub schema_version: i64,
+    pub seed_doc_id: String,
+    pub depth: i64,
+    pub generated_at_ms: i64,
+    pub nodes: Vec<LineageNodeRes>,
+    pub edges: Vec<LineageEdgeRes>,
+}
+
 #[cfg(feature = "phase_l_preview")]
 #[derive(Debug, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -615,6 +650,43 @@ pub fn sync_pull_rpc(req: SyncPullReq) -> RpcResponse<SyncPullRes> {
             snapshot_id: out.snapshot_id,
             manifest_hash: out.manifest_hash,
             remote_head: map_sync_head(out.remote_head),
+        }),
+        Err(error) => RpcResponse::err(error),
+    }
+}
+
+pub fn lineage_query_rpc(req: LineageQueryReq) -> RpcResponse<LineageQueryRes> {
+    match rpc_service::lineage_query_service(
+        std::path::Path::new(&req.vault_path),
+        &req.seed_doc_id,
+        req.depth,
+        req.now_ms,
+    ) {
+        Ok(res) => RpcResponse::ok(LineageQueryRes {
+            schema_version: res.schema_version,
+            seed_doc_id: res.seed_doc_id,
+            depth: res.depth,
+            generated_at_ms: res.generated_at_ms,
+            nodes: res
+                .nodes
+                .into_iter()
+                .map(|n| LineageNodeRes {
+                    node_id: n.node_id,
+                    kind: n.kind,
+                    label: n.label,
+                    metadata: n.metadata,
+                })
+                .collect(),
+            edges: res
+                .edges
+                .into_iter()
+                .map(|e| LineageEdgeRes {
+                    from_node_id: e.from_node_id,
+                    to_node_id: e.to_node_id,
+                    relation: e.relation,
+                    evidence: e.evidence,
+                })
+                .collect(),
         }),
         Err(error) => RpcResponse::err(error),
     }

@@ -164,6 +164,32 @@ export type SyncPullRes = {
   manifest_hash: string;
   remote_head: SyncHead;
 };
+export type LineageQueryReq = {
+  vault_path: string;
+  seed_doc_id: string;
+  depth: number;
+  now_ms: number;
+};
+export type LineageNode = {
+  node_id: string;
+  kind: string;
+  label: string;
+  metadata: unknown;
+};
+export type LineageEdge = {
+  from_node_id: string;
+  to_node_id: string;
+  relation: string;
+  evidence: string;
+};
+export type LineageQueryRes = {
+  schema_version: number;
+  seed_doc_id: string;
+  depth: number;
+  generated_at_ms: number;
+  nodes: LineageNode[];
+  edges: LineageEdge[];
+};
 export type PreviewStatusReq = Record<string, never>;
 export type PreviewCapabilityDraft = {
   schema_version: number;
@@ -202,7 +228,9 @@ export const rpcMethods = {
   jobsList: (req: JobsListReq) => rpc<JobsListReq, JobsListRes>("jobs_list", req),
   syncStatus: (req: SyncStatusReq) => rpc<SyncStatusReq, SyncStatusRes>("sync_status", req),
   syncPush: (req: SyncPushReq) => rpc<SyncPushReq, SyncPushRes>("sync_push", req),
-  syncPull: (req: SyncPullReq) => rpc<SyncPullReq, SyncPullRes>("sync_pull", req)
+  syncPull: (req: SyncPullReq) => rpc<SyncPullReq, SyncPullRes>("sync_pull", req),
+  lineageQuery: (req: LineageQueryReq) =>
+    rpc<LineageQueryReq, LineageQueryRes>("lineage_query", req)
 };
 
 export function previewRpcEnabled(): boolean {

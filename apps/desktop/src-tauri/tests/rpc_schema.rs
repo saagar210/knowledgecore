@@ -1,6 +1,7 @@
 use apps_desktop_tauri::rpc::{
     AskQuestionReq, SearchQueryReq, VaultEncryptionEnableReq, VaultEncryptionMigrateReq,
     VaultEncryptionStatusReq, VaultInitReq, SyncPushReq, SyncPullReq, SyncStatusReq,
+    LineageQueryReq,
 };
 
 #[test]
@@ -71,6 +72,28 @@ fn rpc_schema_sync_rejects_unknown_fields() {
         "extra": "nope"
     });
     assert!(serde_json::from_value::<SyncStatusReq>(invalid_status).is_err());
+}
+
+#[test]
+fn rpc_schema_requires_now_ms_for_lineage_query() {
+    let missing_now = serde_json::json!({
+        "vault_path": "/tmp/vault",
+        "seed_doc_id": "doc-1",
+        "depth": 1
+    });
+    assert!(serde_json::from_value::<LineageQueryReq>(missing_now).is_err());
+}
+
+#[test]
+fn rpc_schema_lineage_rejects_unknown_fields() {
+    let invalid = serde_json::json!({
+        "vault_path": "/tmp/vault",
+        "seed_doc_id": "doc-1",
+        "depth": 1,
+        "now_ms": 123,
+        "extra": "nope"
+    });
+    assert!(serde_json::from_value::<LineageQueryReq>(invalid).is_err());
 }
 
 #[cfg(not(feature = "phase_l_preview"))]

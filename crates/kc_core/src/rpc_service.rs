@@ -382,6 +382,17 @@ pub fn sync_pull_service(
     crate::sync::sync_pull(&conn, vault_path, target_path, now_ms)
 }
 
+pub fn lineage_query_service(
+    vault_path: &Path,
+    seed_doc_id: &str,
+    depth: i64,
+    now_ms: i64,
+) -> AppResult<crate::lineage::LineageQueryResV1> {
+    let vault = vault_open(vault_path)?;
+    let conn = open_db(&vault_path.join(vault.db.relative_path))?;
+    crate::lineage::query_lineage(&conn, seed_doc_id, depth, now_ms)
+}
+
 fn load_object_hashes(conn: &rusqlite::Connection) -> AppResult<Vec<ObjectHash>> {
     let mut stmt = conn
         .prepare("SELECT object_hash FROM objects ORDER BY object_hash ASC")

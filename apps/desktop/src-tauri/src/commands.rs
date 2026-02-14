@@ -96,6 +96,11 @@ pub fn sync_pull(req: rpc::SyncPullReq) -> rpc::RpcResponse<rpc::SyncPullRes> {
     rpc::sync_pull_rpc(req)
 }
 
+#[tauri::command]
+pub fn lineage_query(req: rpc::LineageQueryReq) -> rpc::RpcResponse<rpc::LineageQueryRes> {
+    rpc::lineage_query_rpc(req)
+}
+
 #[cfg(feature = "phase_l_preview")]
 #[tauri::command]
 pub fn preview_status(req: rpc::PreviewStatusReq) -> rpc::RpcResponse<rpc::PreviewStatusRes> {

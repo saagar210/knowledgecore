@@ -23,6 +23,7 @@ fn main() {
         commands::sync_status,
         commands::sync_push,
         commands::sync_pull,
+        commands::lineage_query,
         commands::preview_status,
         commands::preview_capability,
     ]);
@@ -47,6 +48,7 @@ fn main() {
         commands::sync_status,
         commands::sync_push,
         commands::sync_pull,
+        commands::lineage_query,
     ]);
 
     builder.run(tauri::generate_context!()).expect("failed to run tauri app");

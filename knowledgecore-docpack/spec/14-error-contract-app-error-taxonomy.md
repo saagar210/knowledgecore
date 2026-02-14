@@ -76,6 +76,10 @@ AppError schema v1 and stable error taxonomy; UI branches on code only.
   - `KC_SYNC_STATE_FAILED`
   - `KC_SYNC_CONFLICT`
   - `KC_SYNC_APPLY_FAILED`
+- Lineage:
+  - `KC_LINEAGE_INVALID_DEPTH`
+  - `KC_LINEAGE_DOC_NOT_FOUND`
+  - `KC_LINEAGE_QUERY_FAILED`
 
 ## RPC mapping
 - RPC responses return either `{ ok: true, data }` or `{ ok: false, error: AppError }` without changing `error.code`.

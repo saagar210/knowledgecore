@@ -8,7 +8,8 @@ export const appRoutes = [
   "export",
   "verify",
   "events",
-  "settings"
+  "settings",
+  "lineage"
 ] as const;
 
 export type AppRoute = (typeof appRoutes)[number];
@@ -29,5 +30,6 @@ export const routeDescriptors: RouteDescriptor[] = [
   { id: "export", title: "Export", rpcMethod: "exportBundle" },
   { id: "verify", title: "Verifier", rpcMethod: "verifyBundle" },
   { id: "events", title: "Events", rpcMethod: "eventsList" },
-  { id: "settings", title: "Settings", rpcMethod: "jobsList" }
+  { id: "settings", title: "Settings", rpcMethod: "jobsList" },
+  { id: "lineage", title: "Lineage", rpcMethod: "lineageQuery" }
 ];

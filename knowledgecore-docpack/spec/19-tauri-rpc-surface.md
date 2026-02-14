@@ -88,6 +88,7 @@ Versioned RPC surface v1, envelope schema, and determinism notes.
          - ask_question
          - events_list, jobs_list
          - sync_status, sync_push, sync_pull
+         - lineage_query
 
          ## Determinism note
          - now_ms is passed by caller (UI/tests) to make snapshots deterministic.
