@@ -51,6 +51,10 @@ pub enum Command {
         #[command(subcommand)]
         cmd: SyncCmd,
     },
+    Lineage {
+        #[command(subcommand)]
+        cmd: LineageCmd,
+    },
     #[cfg(feature = "phase_l_preview")]
     Preview {
         #[command(subcommand)]
@@ -176,6 +180,38 @@ pub enum SyncCmd {
         target_path: String,
         #[arg(long = "now-ms")]
         now_ms: i64,
+    },
+}
+
+#[derive(Subcommand)]
+pub enum LineageCmd {
+    Overlay {
+        #[command(subcommand)]
+        cmd: LineageOverlayCmd,
+    },
+}
+
+#[derive(Subcommand)]
+pub enum LineageOverlayCmd {
+    Add {
+        vault_path: String,
+        doc_id: String,
+        from_node_id: String,
+        to_node_id: String,
+        relation: String,
+        evidence: String,
+        #[arg(long, default_value = "cli")]
+        created_by: String,
+        #[arg(long = "now-ms")]
+        now_ms: i64,
+    },
+    Remove {
+        vault_path: String,
+        overlay_id: String,
+    },
+    List {
+        vault_path: String,
+        doc_id: String,
     },
 }
 

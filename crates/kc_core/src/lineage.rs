@@ -1,4 +1,5 @@
 use crate::app_error::{AppError, AppResult};
+use crate::hashing::blake3_hex_prefixed;
 use rusqlite::{params, Connection};
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, BTreeSet};
@@ -27,6 +28,37 @@ pub struct LineageQueryResV1 {
     pub generated_at_ms: i64,
     pub nodes: Vec<LineageNodeV1>,
     pub edges: Vec<LineageEdgeV1>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct LineageOverlayEntryV1 {
+    pub overlay_id: String,
+    pub doc_id: String,
+    pub from_node_id: String,
+    pub to_node_id: String,
+    pub relation: String,
+    pub evidence: String,
+    pub created_at_ms: i64,
+    pub created_by: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct LineageEdgeV2 {
+    pub from_node_id: String,
+    pub to_node_id: String,
+    pub relation: String,
+    pub evidence: String,
+    pub origin: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct LineageQueryResV2 {
+    pub schema_version: i64,
+    pub seed_doc_id: String,
+    pub depth: i64,
+    pub generated_at_ms: i64,
+    pub nodes: Vec<LineageNodeV1>,
+    pub edges: Vec<LineageEdgeV2>,
 }
 
 #[derive(Debug, Clone)]
@@ -511,6 +543,273 @@ pub fn query_lineage(
 
     Ok(LineageQueryResV1 {
         schema_version: 1,
+        seed_doc_id: seed_doc_id.to_string(),
+        depth,
+        generated_at_ms: now_ms,
+        nodes,
+        edges,
+    })
+}
+
+fn overlay_id_for(
+    doc_id: &str,
+    from_node_id: &str,
+    to_node_id: &str,
+    relation: &str,
+    evidence: &str,
+) -> String {
+    blake3_hex_prefixed(
+        format!(
+            "kc.lineage.overlay.v1\n{}\n{}\n{}\n{}\n{}",
+            doc_id, from_node_id, to_node_id, relation, evidence
+        )
+        .as_bytes(),
+    )
+}
+
+fn validate_overlay_fields(
+    doc_id: &str,
+    from_node_id: &str,
+    to_node_id: &str,
+    relation: &str,
+    evidence: &str,
+    created_by: &str,
+) -> AppResult<()> {
+    let fields = [
+        ("doc_id", doc_id),
+        ("from_node_id", from_node_id),
+        ("to_node_id", to_node_id),
+        ("relation", relation),
+        ("evidence", evidence),
+        ("created_by", created_by),
+    ];
+    if let Some((name, _)) = fields.iter().find(|(_, v)| v.trim().is_empty()) {
+        return Err(lineage_error(
+            "KC_LINEAGE_OVERLAY_INVALID",
+            "overlay field must not be empty",
+            serde_json::json!({ "field": name }),
+        ));
+    }
+    Ok(())
+}
+
+pub fn lineage_overlay_add(
+    conn: &Connection,
+    doc_id: &str,
+    from_node_id: &str,
+    to_node_id: &str,
+    relation: &str,
+    evidence: &str,
+    created_at_ms: i64,
+    created_by: &str,
+) -> AppResult<LineageOverlayEntryV1> {
+    validate_overlay_fields(
+        doc_id,
+        from_node_id,
+        to_node_id,
+        relation,
+        evidence,
+        created_by,
+    )?;
+    let overlay_id = overlay_id_for(doc_id, from_node_id, to_node_id, relation, evidence);
+    let inserted = conn.execute(
+        "INSERT INTO lineage_overlays(
+            overlay_id, doc_id, from_node_id, to_node_id, relation, evidence, created_at_ms, created_by
+         ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)",
+        params![
+            overlay_id,
+            doc_id,
+            from_node_id,
+            to_node_id,
+            relation,
+            evidence,
+            created_at_ms,
+            created_by
+        ],
+    );
+    match inserted {
+        Ok(_) => Ok(LineageOverlayEntryV1 {
+            overlay_id: overlay_id_for(doc_id, from_node_id, to_node_id, relation, evidence),
+            doc_id: doc_id.to_string(),
+            from_node_id: from_node_id.to_string(),
+            to_node_id: to_node_id.to_string(),
+            relation: relation.to_string(),
+            evidence: evidence.to_string(),
+            created_at_ms,
+            created_by: created_by.to_string(),
+        }),
+        Err(rusqlite::Error::SqliteFailure(err, _))
+            if err.extended_code == rusqlite::ffi::SQLITE_CONSTRAINT_UNIQUE =>
+        {
+            Err(lineage_error(
+                "KC_LINEAGE_OVERLAY_CONFLICT",
+                "overlay already exists",
+                serde_json::json!({
+                    "overlay_id": overlay_id_for(doc_id, from_node_id, to_node_id, relation, evidence),
+                    "doc_id": doc_id,
+                    "from_node_id": from_node_id,
+                    "to_node_id": to_node_id,
+                    "relation": relation,
+                    "evidence": evidence
+                }),
+            ))
+        }
+        Err(e) => Err(lineage_error(
+            "KC_LINEAGE_QUERY_FAILED",
+            "failed inserting lineage overlay",
+            serde_json::json!({ "error": e.to_string() }),
+        )),
+    }
+}
+
+pub fn lineage_overlay_remove(conn: &Connection, overlay_id: &str) -> AppResult<()> {
+    let removed = conn
+        .execute(
+            "DELETE FROM lineage_overlays WHERE overlay_id=?1",
+            params![overlay_id],
+        )
+        .map_err(|e| {
+            lineage_error(
+                "KC_LINEAGE_QUERY_FAILED",
+                "failed deleting lineage overlay",
+                serde_json::json!({ "error": e.to_string(), "overlay_id": overlay_id }),
+            )
+        })?;
+    if removed == 0 {
+        return Err(lineage_error(
+            "KC_LINEAGE_OVERLAY_NOT_FOUND",
+            "lineage overlay not found",
+            serde_json::json!({ "overlay_id": overlay_id }),
+        ));
+    }
+    Ok(())
+}
+
+pub fn lineage_overlay_list(conn: &Connection, doc_id: &str) -> AppResult<Vec<LineageOverlayEntryV1>> {
+    let mut stmt = conn
+        .prepare(
+            "SELECT overlay_id, doc_id, from_node_id, to_node_id, relation, evidence, created_at_ms, created_by
+             FROM lineage_overlays
+             WHERE doc_id=?1
+             ORDER BY from_node_id ASC, to_node_id ASC, relation ASC, evidence ASC, overlay_id ASC",
+        )
+        .map_err(|e| {
+            lineage_error(
+                "KC_LINEAGE_QUERY_FAILED",
+                "failed preparing lineage overlay list query",
+                serde_json::json!({ "error": e.to_string() }),
+            )
+        })?;
+    let rows = stmt
+        .query_map(params![doc_id], |row| {
+            Ok(LineageOverlayEntryV1 {
+                overlay_id: row.get(0)?,
+                doc_id: row.get(1)?,
+                from_node_id: row.get(2)?,
+                to_node_id: row.get(3)?,
+                relation: row.get(4)?,
+                evidence: row.get(5)?,
+                created_at_ms: row.get(6)?,
+                created_by: row.get(7)?,
+            })
+        })
+        .map_err(|e| {
+            lineage_error(
+                "KC_LINEAGE_QUERY_FAILED",
+                "failed querying lineage overlays",
+                serde_json::json!({ "error": e.to_string() }),
+            )
+        })?;
+    let mut overlays = Vec::new();
+    for row in rows {
+        overlays.push(row.map_err(|e| {
+            lineage_error(
+                "KC_LINEAGE_QUERY_FAILED",
+                "failed decoding lineage overlay row",
+                serde_json::json!({ "error": e.to_string() }),
+            )
+        })?);
+    }
+    Ok(overlays)
+}
+
+fn inferred_node_kind(node_id: &str) -> String {
+    node_id
+        .split_once(':')
+        .map(|(prefix, _)| prefix.to_string())
+        .unwrap_or_else(|| "overlay".to_string())
+}
+
+pub fn query_lineage_v2(
+    conn: &Connection,
+    seed_doc_id: &str,
+    depth: i64,
+    now_ms: i64,
+) -> AppResult<LineageQueryResV2> {
+    let base = query_lineage(conn, seed_doc_id, depth, now_ms)?;
+    let overlays = lineage_overlay_list(conn, seed_doc_id)?;
+
+    let mut nodes_by_id: BTreeMap<String, LineageNodeV1> =
+        base.nodes.into_iter().map(|n| (n.node_id.clone(), n)).collect();
+    let mut edges: Vec<LineageEdgeV2> = base
+        .edges
+        .into_iter()
+        .map(|e| LineageEdgeV2 {
+            from_node_id: e.from_node_id,
+            to_node_id: e.to_node_id,
+            relation: e.relation,
+            evidence: e.evidence,
+            origin: "system".to_string(),
+        })
+        .collect();
+
+    for overlay in overlays {
+        if !nodes_by_id.contains_key(&overlay.from_node_id) {
+            let kind = inferred_node_kind(&overlay.from_node_id);
+            nodes_by_id.insert(
+                overlay.from_node_id.clone(),
+                LineageNodeV1 {
+                    node_id: overlay.from_node_id.clone(),
+                    kind,
+                    label: overlay.from_node_id.clone(),
+                    metadata: serde_json::json!({ "overlay_only": true }),
+                },
+            );
+        }
+        if !nodes_by_id.contains_key(&overlay.to_node_id) {
+            let kind = inferred_node_kind(&overlay.to_node_id);
+            nodes_by_id.insert(
+                overlay.to_node_id.clone(),
+                LineageNodeV1 {
+                    node_id: overlay.to_node_id.clone(),
+                    kind,
+                    label: overlay.to_node_id.clone(),
+                    metadata: serde_json::json!({ "overlay_only": true }),
+                },
+            );
+        }
+        edges.push(LineageEdgeV2 {
+            from_node_id: overlay.from_node_id,
+            to_node_id: overlay.to_node_id,
+            relation: overlay.relation,
+            evidence: overlay.evidence,
+            origin: "overlay".to_string(),
+        });
+    }
+
+    let mut nodes: Vec<LineageNodeV1> = nodes_by_id.into_values().collect();
+    nodes.sort_by(|a, b| a.kind.cmp(&b.kind).then(a.node_id.cmp(&b.node_id)));
+    edges.sort_by(|a, b| {
+        a.from_node_id
+            .cmp(&b.from_node_id)
+            .then(a.to_node_id.cmp(&b.to_node_id))
+            .then(a.relation.cmp(&b.relation))
+            .then(a.evidence.cmp(&b.evidence))
+            .then(a.origin.cmp(&b.origin))
+    });
+
+    Ok(LineageQueryResV2 {
+        schema_version: 2,
         seed_doc_id: seed_doc_id.to_string(),
         depth,
         generated_at_ms: now_ms,

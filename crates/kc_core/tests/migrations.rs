@@ -1,13 +1,13 @@
 use kc_core::db::{open_db, schema_version};
 
 #[test]
-fn migrations_apply_schema_v2() {
+fn migrations_apply_schema_v3() {
     let temp = tempfile::tempdir().expect("tempdir");
     let db_path = temp.path().join("db/knowledge.sqlite");
 
     let conn = open_db(&db_path).expect("open db");
     let version = schema_version(&conn).expect("schema version");
-    assert_eq!(version, 2);
+    assert_eq!(version, 3);
 
     let names: Vec<String> = [
         "objects",
@@ -18,6 +18,7 @@ fn migrations_apply_schema_v2() {
         "events",
         "sync_state",
         "sync_snapshots",
+        "lineage_overlays",
     ]
         .iter()
         .map(|table| {
@@ -30,5 +31,5 @@ fn migrations_apply_schema_v2() {
         })
         .collect();
 
-    assert_eq!(names.len(), 8);
+    assert_eq!(names.len(), 9);
 }

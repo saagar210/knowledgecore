@@ -7,6 +7,7 @@ mod commands {
     pub mod gc;
     pub mod ingest;
     pub mod index;
+    pub mod lineage;
     #[cfg(feature = "phase_l_preview")]
     pub mod preview;
     pub mod sync;
@@ -18,7 +19,7 @@ mod verifier;
 use clap::Parser;
 use cli::{
     BenchCmd, Cli, Command, DepsCmd, FixturesCmd, GcCmd, IndexCmd, IngestCmd, VaultCmd,
-    SyncCmd, VaultDbEncryptCmd, VaultEncryptCmd,
+    LineageCmd, LineageOverlayCmd, SyncCmd, VaultDbEncryptCmd, VaultEncryptCmd,
 };
 #[cfg(feature = "phase_l_preview")]
 use cli::PreviewCmd;
@@ -138,6 +139,36 @@ fn main() {
                 target_path,
                 now_ms,
             } => commands::sync::run_pull(&vault_path, &target_path, now_ms),
+        },
+        Command::Lineage { cmd } => match cmd {
+            LineageCmd::Overlay { cmd } => match cmd {
+                LineageOverlayCmd::Add {
+                    vault_path,
+                    doc_id,
+                    from_node_id,
+                    to_node_id,
+                    relation,
+                    evidence,
+                    created_by,
+                    now_ms,
+                } => commands::lineage::run_overlay_add(
+                    &vault_path,
+                    &doc_id,
+                    &from_node_id,
+                    &to_node_id,
+                    &relation,
+                    &evidence,
+                    &created_by,
+                    now_ms,
+                ),
+                LineageOverlayCmd::Remove {
+                    vault_path,
+                    overlay_id,
+                } => commands::lineage::run_overlay_remove(&vault_path, &overlay_id),
+                LineageOverlayCmd::List { vault_path, doc_id } => {
+                    commands::lineage::run_overlay_list(&vault_path, &doc_id)
+                }
+            },
         },
         #[cfg(feature = "phase_l_preview")]
         Command::Preview { cmd } => match cmd {

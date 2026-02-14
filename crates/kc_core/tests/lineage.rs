@@ -2,7 +2,9 @@ use kc_core::db::open_db;
 use kc_core::events::append_event;
 use kc_core::hashing::blake3_hex_prefixed;
 use kc_core::ingest::ingest_bytes;
-use kc_core::lineage::query_lineage;
+use kc_core::lineage::{
+    lineage_overlay_add, lineage_overlay_list, lineage_overlay_remove, query_lineage, query_lineage_v2,
+};
 use kc_core::object_store::ObjectStore;
 use kc_core::vault::vault_init;
 use rusqlite::params;
@@ -159,4 +161,74 @@ fn lineage_query_reports_missing_seed_doc() {
 
     let err = query_lineage(&conn, "does-not-exist", 1, 1).expect_err("missing doc must fail");
     assert_eq!(err.code, "KC_LINEAGE_DOC_NOT_FOUND");
+}
+
+#[test]
+fn lineage_overlay_add_list_remove_and_query_v2_are_deterministic() {
+    let root = tempfile::tempdir().expect("tempdir").keep();
+    let vault_root = root.join("vault");
+    vault_init(&vault_root, "demo", 1).expect("vault init");
+    let conn = open_db(&vault_root.join("db/knowledge.sqlite")).expect("open db");
+    let store = ObjectStore::new(vault_root.join("store/objects"));
+    let ingested = ingest_bytes(
+        &conn,
+        &store,
+        b"overlay lineage",
+        "text/plain",
+        "notes",
+        1,
+        None,
+        10,
+    )
+    .expect("ingest");
+
+    let doc_node = format!("doc:{}", ingested.doc_id.0);
+    let chunk_node = "chunk:overlay-1";
+    let added = lineage_overlay_add(
+        &conn,
+        &ingested.doc_id.0,
+        &doc_node,
+        chunk_node,
+        "related_to",
+        "manual-link",
+        20,
+        "cli",
+    )
+    .expect("add overlay");
+    assert_eq!(added.created_by, "cli");
+
+    let listed = lineage_overlay_list(&conn, &ingested.doc_id.0).expect("list overlays");
+    assert_eq!(listed.len(), 1);
+    assert_eq!(listed[0].overlay_id, added.overlay_id);
+
+    let v2_a = query_lineage_v2(&conn, &ingested.doc_id.0, 1, 30).expect("query v2 a");
+    let v2_b = query_lineage_v2(&conn, &ingested.doc_id.0, 1, 30).expect("query v2 b");
+    assert_eq!(v2_a, v2_b);
+    assert_eq!(v2_a.schema_version, 2);
+    assert!(
+        v2_a
+            .edges
+            .iter()
+            .any(|e| e.origin == "overlay" && e.relation == "related_to")
+    );
+
+    lineage_overlay_remove(&conn, &added.overlay_id).expect("remove overlay");
+    assert!(lineage_overlay_list(&conn, &ingested.doc_id.0)
+        .expect("list after remove")
+        .is_empty());
+}
+
+#[test]
+fn lineage_overlay_remove_missing_returns_not_found() {
+    let root = tempfile::tempdir().expect("tempdir").keep();
+    let vault_root = root.join("vault");
+    vault_init(&vault_root, "demo", 1).expect("vault init");
+    let conn = open_db(&vault_root.join("db/knowledge.sqlite")).expect("open db");
+
+    let err = lineage_overlay_remove(
+        &conn,
+        "blake3:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    )
+    .expect_err("expected not found");
+    assert_eq!(err.code, "KC_LINEAGE_OVERLAY_NOT_FOUND");
 }

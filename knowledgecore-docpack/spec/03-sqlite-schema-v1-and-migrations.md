@@ -73,6 +73,14 @@ CREATE TABLE IF NOT EXISTS events (
 ## FTS5 contract
 - `chunks_fts` virtual table defined in spec/07.
 
+## Migration additions (current user_version=3)
+- `0002_sync.sql` adds:
+  - `sync_state`
+  - `sync_snapshots`
+- `0003_lineage_overlays.sql` adds:
+  - `lineage_overlays`
+  - deterministic uniqueness on `(doc_id, from_node_id, to_node_id, relation, evidence)`
+
 ## Error codes
 - `KC_DB_OPEN_FAILED`
 - `KC_DB_MIGRATION_FAILED`
