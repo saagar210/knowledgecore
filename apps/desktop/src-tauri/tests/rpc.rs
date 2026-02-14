@@ -1,23 +1,21 @@
 use apps_desktop_tauri::commands;
 use apps_desktop_tauri::rpc::{
-    ingest_inbox_start_rpc, ingest_inbox_stop_rpc, jobs_list_rpc, lineage_overlay_add_rpc,
+    ingest_inbox_start_rpc, ingest_inbox_stop_rpc, jobs_list_rpc, lineage_lock_acquire_rpc,
+    lineage_lock_release_rpc, lineage_lock_status_rpc, lineage_overlay_add_rpc,
     lineage_overlay_list_rpc, lineage_overlay_remove_rpc, lineage_query_rpc, lineage_query_v2_rpc,
-    lineage_lock_acquire_rpc, lineage_lock_release_rpc, lineage_lock_status_rpc,
-    sync_merge_preview_rpc, sync_pull_rpc, sync_push_rpc, sync_status_rpc,
-    trust_device_enroll_rpc, trust_device_list_rpc, trust_device_verify_chain_rpc,
-    trust_identity_complete_rpc, trust_identity_start_rpc,
-    vault_encryption_enable_rpc, vault_encryption_migrate_rpc, vault_encryption_status_rpc,
-    vault_init_rpc, vault_lock_rpc, vault_lock_status_rpc, vault_open_rpc,
-    vault_recovery_generate_rpc, vault_recovery_status_rpc, vault_recovery_verify_rpc,
-    vault_unlock_rpc, IngestInboxStartReq, IngestInboxStopReq, JobsListReq,
-    LineageLockAcquireReq, LineageLockReleaseReq, LineageLockStatusReq, LineageOverlayAddReq,
-    LineageOverlayListReq, LineageOverlayRemoveReq, LineageQueryReq, LineageQueryV2Req,
-    RpcResponse, SyncMergePreviewReq, SyncPullReq, SyncPushReq, SyncStatusReq,
-    TrustDeviceEnrollReq, TrustDeviceListReq, TrustDeviceVerifyChainReq,
-    TrustIdentityCompleteReq, TrustIdentityStartReq,
-    VaultEncryptionEnableReq, VaultEncryptionMigrateReq, VaultEncryptionStatusReq, VaultInitReq,
-    VaultLockReq, VaultLockStatusReq, VaultOpenReq, VaultRecoveryGenerateReq,
-    VaultRecoveryStatusReq, VaultRecoveryVerifyReq, VaultUnlockReq,
+    sync_merge_preview_rpc, sync_pull_rpc, sync_push_rpc, sync_status_rpc, trust_device_enroll_rpc,
+    trust_device_list_rpc, trust_device_verify_chain_rpc, trust_identity_complete_rpc,
+    trust_identity_start_rpc, vault_encryption_enable_rpc, vault_encryption_migrate_rpc,
+    vault_encryption_status_rpc, vault_init_rpc, vault_lock_rpc, vault_lock_status_rpc,
+    vault_open_rpc, vault_recovery_generate_rpc, vault_recovery_status_rpc,
+    vault_recovery_verify_rpc, vault_unlock_rpc, IngestInboxStartReq, IngestInboxStopReq,
+    JobsListReq, LineageLockAcquireReq, LineageLockReleaseReq, LineageLockStatusReq,
+    LineageOverlayAddReq, LineageOverlayListReq, LineageOverlayRemoveReq, LineageQueryReq,
+    LineageQueryV2Req, RpcResponse, SyncMergePreviewReq, SyncPullReq, SyncPushReq, SyncStatusReq,
+    TrustDeviceEnrollReq, TrustDeviceListReq, TrustDeviceVerifyChainReq, TrustIdentityCompleteReq,
+    TrustIdentityStartReq, VaultEncryptionEnableReq, VaultEncryptionMigrateReq,
+    VaultEncryptionStatusReq, VaultInitReq, VaultLockReq, VaultLockStatusReq, VaultOpenReq,
+    VaultRecoveryGenerateReq, VaultRecoveryStatusReq, VaultRecoveryVerifyReq, VaultUnlockReq,
 };
 use kc_core::app_error::AppError;
 use std::sync::{Mutex, OnceLock};
@@ -313,7 +311,7 @@ fn rpc_vault_recovery_status_generate_and_verify() {
     });
     let (bundle_path, phrase) = match generated {
         RpcResponse::Ok { data } => {
-            assert_eq!(data.manifest.schema_version, 1);
+            assert_eq!(data.manifest.schema_version, 2);
             (data.bundle_path, data.recovery_phrase)
         }
         RpcResponse::Err { error } => panic!("recovery generate failed: {}", error.code),
@@ -325,7 +323,7 @@ fn rpc_vault_recovery_status_generate_and_verify() {
         recovery_phrase: phrase,
     });
     match verified {
-        RpcResponse::Ok { data } => assert_eq!(data.manifest.schema_version, 1),
+        RpcResponse::Ok { data } => assert_eq!(data.manifest.schema_version, 2),
         RpcResponse::Err { error } => panic!("recovery verify failed: {}", error.code),
     }
 }

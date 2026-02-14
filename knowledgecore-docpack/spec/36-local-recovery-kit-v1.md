@@ -1,4 +1,4 @@
-# Local Recovery Kit v1
+# Local Recovery Kit v2
 
 ## Purpose
 Define local-only recovery bundle contracts for restoring vault encryption access using a user-held recovery phrase.
@@ -28,6 +28,11 @@ Define local-only recovery bundle contracts for restoring vault encryption acces
   - `created_at_ms`
   - `phrase_checksum`
   - `payload_hash`
+  - `escrow` (optional):
+    - `provider`
+    - `provider_ref`
+    - `key_id`
+    - `wrapped_at_ms`
 - CLI surface:
   - `kc_cli vault recovery generate <vault_path> --output <dir> --passphrase-env KC_VAULT_PASSPHRASE`
   - `kc_cli vault recovery verify <vault_path> --bundle <path> --phrase-env KC_RECOVERY_PHRASE`
@@ -35,12 +40,17 @@ Define local-only recovery bundle contracts for restoring vault encryption acces
 ## Determinism and version-boundary rules
 - Manifest bytes are canonical JSON and hash-stable for fixed inputs.
 - Checksum derivation input and encoding are versioned.
+- `escrow` descriptor (when present) is serialized in deterministic field order and validated as non-empty string fields plus deterministic timestamp.
 - Any change to bundle file names, checksum derivation, or verification semantics requires version boundary review.
 
 ## Failure modes and AppError mapping
 - `KC_RECOVERY_BUNDLE_INVALID`: bundle missing files, invalid schema, or payload hash mismatch.
 - `KC_RECOVERY_PHRASE_INVALID`: phrase checksum mismatch.
 - `KC_ENCRYPTION_REQUIRED`: passphrase input missing for generation.
+- `KC_RECOVERY_ESCROW_UNAVAILABLE`: escrow provider configured but unavailable.
+- `KC_RECOVERY_ESCROW_AUTH_FAILED`: escrow provider authentication failure.
+- `KC_RECOVERY_ESCROW_WRITE_FAILED`: escrow descriptor/payload store failure.
+- `KC_RECOVERY_ESCROW_RESTORE_FAILED`: escrow payload restore/validation failure.
 
 ## Acceptance tests
 - Bundle generation emits required files and valid manifest.

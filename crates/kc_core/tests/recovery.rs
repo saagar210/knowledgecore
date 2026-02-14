@@ -11,7 +11,7 @@ fn recovery_generate_and_verify_round_trip() {
     let generated = generate_recovery_bundle(&vault.vault_id, &output, "vault-passphrase", 100)
         .expect("generate recovery");
     assert!(generated.bundle_path.exists());
-    assert_eq!(generated.manifest.schema_version, 1);
+    assert_eq!(generated.manifest.schema_version, 2);
 
     let verified = verify_recovery_bundle(
         &vault.vault_id,
@@ -70,4 +70,31 @@ fn recovery_verify_rejects_tampered_blob() {
     )
     .expect_err("verify should fail");
     assert_eq!(err.code, "KC_RECOVERY_BUNDLE_INVALID");
+}
+
+#[test]
+fn recovery_verify_accepts_legacy_v1_manifest() {
+    let root = tempfile::tempdir().expect("tempdir").keep();
+    let vault = vault_init(&root.join("vault"), "demo", 1).expect("vault init");
+    let output = root.join("recovery-out");
+
+    let generated = generate_recovery_bundle(&vault.vault_id, &output, "vault-passphrase", 100)
+        .expect("generate recovery");
+    let manifest_path = generated.bundle_path.join("recovery_manifest.json");
+    let mut legacy = serde_json::to_value(&generated.manifest).expect("manifest value");
+    legacy["schema_version"] = serde_json::json!(1);
+    if let Some(obj) = legacy.as_object_mut() {
+        obj.remove("escrow");
+    }
+    let legacy_bytes = to_canonical_bytes(&legacy).expect("legacy canonical bytes");
+    std::fs::write(&manifest_path, legacy_bytes).expect("write legacy manifest");
+
+    let verified = verify_recovery_bundle(
+        &vault.vault_id,
+        &generated.bundle_path,
+        &generated.recovery_phrase,
+    )
+    .expect("verify legacy manifest");
+    assert_eq!(verified.schema_version, 1);
+    assert!(verified.escrow.is_none());
 }

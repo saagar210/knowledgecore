@@ -862,7 +862,7 @@ fn map_encryption_status(
     }
 }
 
-fn map_recovery_manifest(manifest: kc_core::recovery::RecoveryManifestV1) -> RecoveryManifestRes {
+fn map_recovery_manifest(manifest: kc_core::recovery::RecoveryManifestV2) -> RecoveryManifestRes {
     RecoveryManifestRes {
         schema_version: manifest.schema_version,
         vault_id: manifest.vault_id,

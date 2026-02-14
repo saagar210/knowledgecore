@@ -1,6 +1,7 @@
 use crate::app_error::{AppError, AppResult};
 use crate::canon_json::to_canonical_bytes;
 use crate::hashing::blake3_hex_prefixed;
+use crate::recovery_escrow::{validate_escrow_descriptor, RecoveryEscrowDescriptorV2};
 use chacha20poly1305::aead::{Aead, KeyInit};
 use chacha20poly1305::{Key, XChaCha20Poly1305, XNonce};
 use serde::{Deserialize, Serialize};
@@ -12,7 +13,21 @@ const RECOVERY_MAGIC: &[u8; 4] = b"KCR1";
 const RECOVERY_NONCE_LEN: usize = 24;
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
-pub struct RecoveryManifestV1 {
+pub struct RecoveryManifestV2 {
+    pub schema_version: i64,
+    pub vault_id: String,
+    pub created_at_ms: i64,
+    pub phrase_checksum: String,
+    pub payload_hash: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub escrow: Option<RecoveryEscrowDescriptorV2>,
+}
+
+// Alias kept for compatibility with existing crate references.
+pub type RecoveryManifestV1 = RecoveryManifestV2;
+
+#[derive(Debug, Clone, Deserialize)]
+struct RecoveryManifestLegacyV1 {
     pub schema_version: i64,
     pub vault_id: String,
     pub created_at_ms: i64,
@@ -23,7 +38,7 @@ pub struct RecoveryManifestV1 {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct RecoveryBundleGenerateResult {
     pub bundle_path: PathBuf,
-    pub manifest: RecoveryManifestV1,
+    pub manifest: RecoveryManifestV2,
     pub recovery_phrase: String,
 }
 
@@ -115,6 +130,16 @@ pub fn generate_recovery_bundle(
     passphrase: &str,
     created_at_ms: i64,
 ) -> AppResult<RecoveryBundleGenerateResult> {
+    generate_recovery_bundle_with_escrow(vault_id, output_dir, passphrase, created_at_ms, None)
+}
+
+pub fn generate_recovery_bundle_with_escrow(
+    vault_id: &str,
+    output_dir: &Path,
+    passphrase: &str,
+    created_at_ms: i64,
+    escrow: Option<RecoveryEscrowDescriptorV2>,
+) -> AppResult<RecoveryBundleGenerateResult> {
     if passphrase.is_empty() {
         return Err(recovery_error(
             "KC_ENCRYPTION_REQUIRED",
@@ -122,6 +147,10 @@ pub fn generate_recovery_bundle(
             serde_json::json!({}),
         ));
     }
+    if let Some(desc) = &escrow {
+        validate_escrow_descriptor(desc)?;
+    }
+
     let phrase = random_phrase()?;
     let blob = build_blob(vault_id, created_at_ms, passphrase, &phrase)?;
     let payload_hash = blake3_hex_prefixed(&blob);
@@ -145,12 +174,13 @@ pub fn generate_recovery_bundle(
         )
     })?;
 
-    let manifest = RecoveryManifestV1 {
-        schema_version: 1,
+    let manifest = RecoveryManifestV2 {
+        schema_version: 2,
         vault_id: vault_id.to_string(),
         created_at_ms,
         phrase_checksum: checksum,
         payload_hash,
+        escrow,
     };
     let manifest_bytes = to_canonical_bytes(&serde_json::to_value(&manifest).map_err(|e| {
         recovery_error(
@@ -175,11 +205,78 @@ pub fn generate_recovery_bundle(
     })
 }
 
+fn parse_recovery_manifest(
+    manifest_bytes: &[u8],
+    manifest_path: &Path,
+) -> AppResult<RecoveryManifestV2> {
+    let raw_value: serde_json::Value = serde_json::from_slice(manifest_bytes).map_err(|e| {
+        recovery_error(
+            "KC_RECOVERY_BUNDLE_INVALID",
+            "failed parsing recovery manifest json",
+            serde_json::json!({ "error": e.to_string(), "path": manifest_path }),
+        )
+    })?;
+
+    let schema_version = raw_value
+        .get("schema_version")
+        .and_then(|x| x.as_i64())
+        .ok_or_else(|| {
+            recovery_error(
+                "KC_RECOVERY_BUNDLE_INVALID",
+                "recovery manifest is missing schema_version",
+                serde_json::json!({ "path": manifest_path }),
+            )
+        })?;
+
+    match schema_version {
+        2 => {
+            let parsed: RecoveryManifestV2 = serde_json::from_value(raw_value).map_err(|e| {
+                recovery_error(
+                    "KC_RECOVERY_BUNDLE_INVALID",
+                    "failed parsing v2 recovery manifest",
+                    serde_json::json!({ "error": e.to_string(), "path": manifest_path }),
+                )
+            })?;
+            if let Some(desc) = &parsed.escrow {
+                validate_escrow_descriptor(desc)?;
+            }
+            Ok(parsed)
+        }
+        1 => {
+            let parsed: RecoveryManifestLegacyV1 =
+                serde_json::from_value(raw_value).map_err(|e| {
+                    recovery_error(
+                        "KC_RECOVERY_BUNDLE_INVALID",
+                        "failed parsing v1 recovery manifest",
+                        serde_json::json!({ "error": e.to_string(), "path": manifest_path }),
+                    )
+                })?;
+            Ok(RecoveryManifestV2 {
+                schema_version: parsed.schema_version,
+                vault_id: parsed.vault_id,
+                created_at_ms: parsed.created_at_ms,
+                phrase_checksum: parsed.phrase_checksum,
+                payload_hash: parsed.payload_hash,
+                escrow: None,
+            })
+        }
+        other => Err(recovery_error(
+            "KC_RECOVERY_BUNDLE_INVALID",
+            "unsupported recovery manifest schema version",
+            serde_json::json!({
+                "expected": [1, 2],
+                "actual": other,
+                "path": manifest_path
+            }),
+        )),
+    }
+}
+
 pub fn verify_recovery_bundle(
     expected_vault_id: &str,
     bundle_path: &Path,
     phrase: &str,
-) -> AppResult<RecoveryManifestV1> {
+) -> AppResult<RecoveryManifestV2> {
     let manifest_path = bundle_path.join("recovery_manifest.json");
     let manifest_bytes = fs::read(&manifest_path).map_err(|e| {
         recovery_error(
@@ -188,25 +285,8 @@ pub fn verify_recovery_bundle(
             serde_json::json!({ "error": e.to_string(), "path": manifest_path }),
         )
     })?;
-    let manifest: RecoveryManifestV1 = serde_json::from_slice(&manifest_bytes).map_err(|e| {
-        recovery_error(
-            "KC_RECOVERY_BUNDLE_INVALID",
-            "failed parsing recovery manifest",
-            serde_json::json!({ "error": e.to_string(), "path": manifest_path }),
-        )
-    })?;
+    let manifest = parse_recovery_manifest(&manifest_bytes, &manifest_path)?;
 
-    if manifest.schema_version != 1 {
-        return Err(recovery_error(
-            "KC_RECOVERY_BUNDLE_INVALID",
-            "unsupported recovery manifest schema version",
-            serde_json::json!({
-                "expected": 1,
-                "actual": manifest.schema_version,
-                "path": manifest_path
-            }),
-        ));
-    }
     if manifest.vault_id != expected_vault_id {
         return Err(recovery_error(
             "KC_RECOVERY_BUNDLE_INVALID",

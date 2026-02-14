@@ -8,8 +8,10 @@ use crate::hashing::blake3_hex_prefixed;
 use crate::ingest::ingest_bytes;
 use crate::locator::{resolve_locator_strict, LocatorV1};
 use crate::object_store::{is_encrypted_payload, ObjectStore};
-use crate::recovery::{generate_recovery_bundle, verify_recovery_bundle, RecoveryManifestV1};
-use crate::trust::{trust_device_init, trust_device_list, trust_device_verify, TrustedDeviceRecord};
+use crate::recovery::{generate_recovery_bundle, verify_recovery_bundle, RecoveryManifestV2};
+use crate::trust::{
+    trust_device_init, trust_device_list, trust_device_verify, TrustedDeviceRecord,
+};
 use crate::trust_identity::{
     trust_device_enroll, trust_device_verify_chain, trust_identity_complete, trust_identity_start,
     DeviceCertificateRecord, IdentitySessionRecord, IdentityStartResult,
@@ -78,12 +80,12 @@ pub struct VaultRecoveryStatus {
 pub struct VaultRecoveryGenerateResult {
     pub bundle_path: PathBuf,
     pub recovery_phrase: String,
-    pub manifest: RecoveryManifestV1,
+    pub manifest: RecoveryManifestV2,
 }
 
 #[derive(Debug, Clone)]
 pub struct VaultRecoveryVerifyResult {
-    pub manifest: RecoveryManifestV1,
+    pub manifest: RecoveryManifestV2,
 }
 
 #[derive(Debug, Clone)]
