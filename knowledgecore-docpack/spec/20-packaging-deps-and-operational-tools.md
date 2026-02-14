@@ -21,6 +21,28 @@ Dev vs release toolchain strategy and operational CLI tools.
 - bench run with baseline threshold checking
 - dependency check with version output
 
+## Operational command contracts (v1)
+- `kc_cli deps check`
+  - prints tool identities (`pdftotext`, `pdftoppm`, `tesseract`) when all required tools exist
+  - hard-fails with deterministic AppError codes:
+    - `KC_PDFIUM_UNAVAILABLE` if PDF text/image tooling is missing
+    - `KC_TESSERACT_UNAVAILABLE` if OCR tooling is missing
+- `kc_cli index rebuild <vault_path>`
+  - rebuilds FTS and vector artifacts deterministically from canonical/chunk rows
+  - persists vectors under `index/vectors/lancedb-v1`
+- `kc_cli gc run <vault_path>`
+  - removes only orphan object files not referenced by the SQLite `objects` table
+  - does not mutate canonical rows or chunk/index metadata
+- `kc_cli vault verify <vault_path>`
+  - runs SQLite integrity checks and validates required directory topology
+  - prints deterministic JSON summary on success
+
+## Desktop packaging note
+- Desktop build gate uses real Tauri CLI invocation (`pnpm tauri build`) with:
+  - config: `apps/desktop/src-tauri/tauri.conf.json`
+  - isolated frontend dist: `apps/desktop/ui/tauri-dist`
+  - generated app artifacts under `target/release/`
+
 ## Error codes
 - `KC_PDFIUM_UNAVAILABLE`
 - `KC_TESSERACT_UNAVAILABLE`

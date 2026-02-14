@@ -52,3 +52,9 @@ When a gate fails: capture output, isolate root cause, fix minimal correct chang
 - No boundary violations
 - Specs/registry updated where required
 - Acceptance tests exist and pass
+
+## Phase K gate additions
+- Must run benchmark smoke command:
+  - `cargo run -p kc_cli -- bench run --corpus v1`
+- Desktop packaging gate must execute real Tauri CLI path:
+  - `pnpm lint && pnpm test && pnpm tauri build`
