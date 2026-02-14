@@ -32,12 +32,27 @@ pub fn write_trace_log(
         )
     })?;
 
-    let mut sorted = citations.to_vec();
+    let mut sorted: Vec<(i64, Vec<LocatorV1>)> = citations
+        .iter()
+        .map(|(paragraph_idx, locators)| {
+            let mut locators_sorted = locators.clone();
+            locators_sorted.sort_by(|a, b| {
+                a.doc_id
+                    .0
+                    .cmp(&b.doc_id.0)
+                    .then(a.range.start.cmp(&b.range.start))
+                    .then(a.range.end.cmp(&b.range.end))
+            });
+            (*paragraph_idx, locators_sorted)
+        })
+        .collect();
     sorted.sort_by(|a, b| {
         let la = a.1.first();
         let lb = b.1.first();
-        la.map(|x| (&x.doc_id.0, x.range.start, x.range.end))
-            .cmp(&lb.map(|x| (&x.doc_id.0, x.range.start, x.range.end)))
+        a.0.cmp(&b.0).then(
+            la.map(|x| (&x.doc_id.0, x.range.start, x.range.end))
+                .cmp(&lb.map(|x| (&x.doc_id.0, x.range.start, x.range.end))),
+        )
     });
 
     let mut value = serde_json::to_value(trace).map_err(|e| {

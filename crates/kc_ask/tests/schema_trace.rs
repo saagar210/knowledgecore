@@ -22,9 +22,17 @@ fn trace_schema() -> serde_json::Value {
       "required": ["schema_version", "trace_id", "ts_ms", "vault_id", "question", "retrieval", "model", "answer", "redaction"],
       "properties": {
         "schema_version": { "const": 1 },
-        "trace_id": { "type": "string" },
+        "trace_id": {
+          "type": "string",
+          "format": "uuid",
+          "pattern": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-5][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$"
+        },
         "ts_ms": { "type": "integer" },
-        "vault_id": { "type": "string" },
+        "vault_id": {
+          "type": "string",
+          "format": "uuid",
+          "pattern": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-5][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$"
+        },
         "question": { "type": "string" },
         "retrieval": { "type": "object" },
         "model": { "type": "object" },
@@ -57,4 +65,21 @@ fn schema_trace_accepts_written_trace() {
         .expect("parse trace");
     let schema = JSONSchema::compile(&trace_schema()).expect("compile trace schema");
     assert!(schema.is_valid(&value));
+}
+
+#[test]
+fn schema_trace_rejects_non_uuid_ids() {
+    let schema = JSONSchema::compile(&trace_schema()).expect("compile trace schema");
+    let invalid = serde_json::json!({
+      "schema_version": 1,
+      "trace_id": "not-a-uuid",
+      "ts_ms": 1,
+      "vault_id": "not-a-uuid",
+      "question": "q",
+      "retrieval": {},
+      "model": {},
+      "answer": {},
+      "redaction": {}
+    });
+    assert!(!schema.is_valid(&invalid));
 }
