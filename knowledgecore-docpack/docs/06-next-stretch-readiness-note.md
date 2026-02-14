@@ -1,41 +1,48 @@
 # Next Stretch Readiness Note
 
 ## Purpose
-Record post-Phase-L execution status and provide a handoff index after completing Phases M, N1, N2, and N3.
+Record execution status after completing the post-N3 roadmap through Phases O, P, Q, and R.
 
 ## Current Readiness Status
 - D–K is complete on `master`.
 - Phase L design lock is complete.
-- Phase M (encryption-at-rest v1, object store scope) is complete.
-- Phase N1 (deterministic ZIP packaging) is complete.
-- Phase N2 (filesystem snapshot sync v1) is complete.
-- Phase N3 (advanced lineage UI v1, read-only) is complete.
-- Remaining deferred work is now narrowed to sub-items beyond current M/N scope.
+- Phase M is complete (object-store encryption + vault v2 rollout).
+- Phase N1 is complete (deterministic ZIP packaging).
+- Phase N2 is complete (sync v1 with filesystem snapshots).
+- Phase N3 is complete (lineage query surface).
+- Phase O is complete (URI-based sync target abstraction + S3 transport).
+- Phase P is complete (SQLCipher DB encryption + lock-session and migration UX).
+- Phase Q is complete (overlay-only lineage write model with deterministic `lineage_query_v2`).
+- Phase R1 is complete (preview scaffold retirement and runtime cleanup).
+- Phase R2 is complete (final consolidation docs + full gates + double bench smoke).
 
 ## Required Reference Set
-- D–K closure report:
-  - `knowledgecore-docpack/docs/03-phase-d-k-closure-report.md`
-- Post-D–K operations and follow-up policy:
-  - `knowledgecore-docpack/docs/04-post-dk-ops-and-followup-policy.md`
-- Next-stretch roadmap baseline:
-  - `knowledgecore-docpack/docs/05-next-stretch-plan.md`
-- Cross-phase execution notes:
-  - `knowledgecore-docpack/docs/07-phase-l-execution-notes.md`
-- Delivered specs and contracts:
-  - `knowledgecore-docpack/spec/27-encryption-at-rest-v1.md`
-  - `knowledgecore-docpack/spec/28-deterministic-zip-packaging-v1.md`
-  - `knowledgecore-docpack/spec/29-sync-v1-filesystem-snapshots.md`
-  - `knowledgecore-docpack/spec/30-advanced-lineage-ui-v1.md`
+- `knowledgecore-docpack/docs/03-phase-d-k-closure-report.md`
+- `knowledgecore-docpack/docs/04-post-dk-ops-and-followup-policy.md`
+- `knowledgecore-docpack/docs/05-next-stretch-plan.md`
+- `knowledgecore-docpack/docs/07-phase-l-execution-notes.md`
+- `knowledgecore-docpack/SCHEMA_REGISTRY.md`
 
-## Completion Evidence (L→N3)
-| Phase | Branch | Merge Commit | Notes |
+## Completion Evidence (L→R1)
+| Milestone | Branch | Merge Commit | Notes |
 |---|---|---|---|
-| L | `codex/l-phase-l-design-lock` | `51a8b2b` baseline + merged lineage | Design-lock specs `22`–`26`; preview scaffolds behind feature flags |
-| M1 | `codex/m1-phase-m-core-encryption` | `6db6b39` | `vault.json` v2 + object store encryption core |
-| M2 | `codex/m2-phase-m-ux-migration` | `07009f6` | CLI + desktop encryption UX, migration, manifest/verifier integration |
-| N1 | `codex/n1-phase-n-zip-packaging` | `56bd485` | Deterministic ZIP packaging + verifier coverage |
-| N2 | `codex/n2-phase-n-sync-filesystem` | `6d1162d` | Filesystem snapshot sync v1 + conflict artifacts |
-| N3 | `codex/n3-phase-n-lineage-ui` | `ef29732` | Read-only lineage query in core/RPC/UI with deterministic ordering |
+| L | `codex/l-phase-l-design-lock` | `51a8b2b` | Design-lock specs `22`–`26` |
+| M1 | `codex/m1-phase-m-core-encryption` | `6db6b39` | object-store encryption core + vault v2 |
+| M2 | `codex/m2-phase-m-ux-migration` | `07009f6` | CLI/RPC/UI encryption migration flows |
+| N1 | `codex/n1-phase-n-zip-packaging` | `56bd485` | deterministic ZIP export + verifier checks |
+| N2 | `codex/n2-phase-n-sync-filesystem` | `6d1162d` | filesystem snapshot sync v1 |
+| N3 | `codex/n3-phase-n-lineage-ui` | `ef29732` | lineage query desktop surface |
+| O0 | `codex/o0-contract-realignment` | `7f0bf3c` | post-N3 docs/spec activation alignment |
+| O1 | `codex/o1-sync-transport-foundation` | `a5e3b67` | sync transport abstraction + URI parse |
+| O2 | `codex/o2-sync-s3-execution` | `c67dcb3` | S3 lock/trust conflict-safe push/pull |
+| O3 | `codex/o3-sync-s3-surface` | `399bbd6` | CLI/Tauri/UI URI sync integration |
+| P1 | `codex/p1-sqlcipher-core` | `7bac439` | vault v3 + SQLCipher key handling |
+| P2 | `codex/p2-sqlcipher-migration-ux` | `0b9b72c` | DB unlock/lock session + migration UX |
+| P3 | `codex/p3-sqlcipher-export-verify` | `e5f4b35` | DB encryption manifest + verifier parity |
+| Q1 | `codex/q1-lineage-overlays-core` | `6e27675` | overlay storage + deterministic query merge |
+| Q2 | `codex/q2-lineage-overlays-ui` | `7477f47` | lineage v2 + overlay RPC/UI integration |
+| R1 | `codex/r1-preview-retirement` | `ee4098d` | preview scaffolding retired from runtime |
+| R2 | `codex/r2-final-consolidation` | this milestone commit | readiness/follow-up closure + final gate evidence |
 
 ## Gate Evidence (Source: `knowledgecore-docpack/AGENTS.md`)
 - Rust gate:
@@ -47,18 +54,19 @@ Record post-Phase-L execution status and provide a handoff index after completin
   - `cargo test -p apps_desktop_tauri -- rpc_schema`
   - `cargo test -p kc_core -- schema_`
   - `cargo test -p kc_cli -- schema_`
+- Final bench gate (R2 target):
+  - `cargo run -p kc_cli -- bench run --corpus v1` (twice)
 
-## Carry-Forward Deferred Table (Post-N3)
+## Carry-Forward Deferred Table (Post-R1)
 | Item | Status | Carry-Forward Target | Notes |
 |---|---|---|---|
-| SQLite file encryption | Deferred | Next security phase | Object-store encryption is active; SQLite encryption intentionally out of scope for M |
-| Sync transport beyond filesystem snapshots | Deferred | Next sync phase | N2 delivers local/attached folder snapshot sync only |
-| Lineage write/edit workflows | Deferred | Next lineage phase | N3 is explicitly read-only |
-| Cross-device trust/key exchange | Deferred | Next security/sync phase | No remote key exchange in current scope |
+| Device-key trust exchange | Deferred | Future sync/security phase | Current horizon remains passphrase-only trust |
+| SQLite encryption key escrow/recovery | Deferred | Future security phase | SQLCipher active; no key escrow in this horizon |
+| Sync auto-merge resolution | Deferred | Future sync phase | Current policy is hard-fail + conflict artifact |
+| Collaborative lineage editing | Deferred | Future lineage phase | Current lineage writes are overlay-only, single-writer intent |
 
 ## Git Hygiene Note
-- Fast-forward merge mode was used for each milestone.
-- Local milestone branch refs were removed after merge; `git branch --list 'codex/*'` now returns empty.
-- Cleanup used direct ref deletion fallback in this environment:
+- Fast-forward merge mode was used for every completed milestone.
+- Local milestone refs were removed after merge using direct ref deletion fallback where needed:
   - `git update-ref -d refs/heads/<merged-branch>`
-- `master` remains clean and is the only active local branch.
+- `master` remains the only active local branch between milestones.

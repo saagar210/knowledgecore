@@ -1,12 +1,17 @@
 # Post-D–K Operations and Follow-up Policy
 
 ## Purpose
-Define stable post-delivery operations policy for KnowledgeCore Desktop after Phases D–K, including benchmark baseline governance, hygiene policy, and branch lifecycle controls.
+Define stable post-delivery operations policy for KnowledgeCore Desktop, including benchmark governance, local git hygiene, and carry-forward follow-up handling after O/P/Q/R execution.
 
 ## Scope
 - Applies to local development and pre-release validation runs.
 - Applies to benchmark smoke policy (`kc_cli bench run --corpus v1`).
 - Applies to local git hygiene and branch lifecycle after milestone merges.
+
+## Horizon Update (R2)
+- O/P/Q capabilities are active runtime contracts.
+- Phase L preview scaffolding has been retired from runtime surfaces.
+- Carry-forward items now exclude previously delivered deferred capabilities.
 
 ## Bench Baseline Governance
 
@@ -64,19 +69,20 @@ Define stable post-delivery operations policy for KnowledgeCore Desktop after Ph
 - Lifecycle: create for milestone, merge fast-forward to `master`, delete immediately after merge.
 
 ### If automated deletion is blocked
-- Perform branch deletion directly in a local shell with equivalent commands.
+- Perform branch deletion with direct ref deletion fallback:
+  - `git update-ref -d refs/heads/<branch>`
 - Record fallback usage in closure/readiness notes.
 
 ### Long-lived branches
 - Avoid long-lived milestone branches once merged.
 - Keep only `master` unless there is an active in-progress milestone.
 
-## Deferred Items Carry-forward Policy
-- The following remain deferred until explicitly promoted to active scope:
-  - encryption at rest,
-  - deterministic ZIP packaging,
-  - cross-device sync,
-  - advanced lineage UI.
+## Deferred Items Carry-forward Policy (Post-R)
+- The following remain deferred until explicitly promoted:
+  - device-key or PKI-based trust exchange,
+  - deterministic multi-target sync conflict auto-resolution,
+  - collaborative lineage editing and governance workflows,
+  - encryption key escrow/recovery features.
 - Promotions must include:
   - explicit phase assignment,
   - schema/API impact statement,
