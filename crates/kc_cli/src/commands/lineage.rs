@@ -133,6 +133,7 @@ mod tests {
     use kc_core::db::open_db;
     use kc_core::ingest::ingest_bytes;
     use kc_core::lineage::{lineage_lock_acquire, lineage_overlay_list};
+    use kc_core::lineage_governance::lineage_role_grant;
     use kc_core::object_store::ObjectStore;
     use kc_core::vault::vault_init;
 
@@ -158,6 +159,7 @@ mod tests {
         let doc_id = ingested.doc_id.0.clone();
         let doc_node = format!("doc:{}", doc_id);
         let chunk_node = "chunk:cli-overlay";
+        lineage_role_grant(&conn, "cli-test", "editor", "test-harness", 2).expect("grant role");
         let lock = lineage_lock_acquire(&conn, &doc_id, "cli-test", 2).expect("acquire lock");
         let lock_token = lock.token.clone();
         drop(conn);
@@ -170,7 +172,7 @@ mod tests {
             "related_to",
             "cli",
             &lock_token,
-            "cli",
+            "cli-test",
             3,
         )
         .expect("overlay add");

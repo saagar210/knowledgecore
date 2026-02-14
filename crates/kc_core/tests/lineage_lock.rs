@@ -1,5 +1,6 @@
 use kc_core::db::open_db;
 use kc_core::ingest::ingest_bytes;
+use kc_core::lineage_governance::lineage_role_grant;
 use kc_core::lineage::{
     lineage_lock_acquire, lineage_lock_release, lineage_lock_status, lineage_overlay_add,
     lineage_overlay_list,
@@ -83,6 +84,7 @@ fn lineage_overlay_mutation_requires_valid_lock_token() {
     assert_eq!(err.code, "KC_LINEAGE_LOCK_INVALID");
 
     let lock = lineage_lock_acquire(&conn, &doc_id, "tester", 100).expect("acquire lock");
+    lineage_role_grant(&conn, "tester", "editor", "test-harness", 100).expect("grant editor");
     let _added = lineage_overlay_add(
         &conn,
         &doc_id,
@@ -92,7 +94,7 @@ fn lineage_overlay_mutation_requires_valid_lock_token() {
         "manual",
         &lock.token,
         101,
-        "test",
+        "tester",
     )
     .expect("overlay add with lock");
     let listed = lineage_overlay_list(&conn, &doc_id).expect("list");
@@ -107,6 +109,7 @@ fn lineage_overlay_mutation_rejects_expired_lock() {
     let doc_id = seed_doc(&conn, &root);
     let doc_node = format!("doc:{}", doc_id);
     let lock = lineage_lock_acquire(&conn, &doc_id, "tester", 100).expect("acquire lock");
+    lineage_role_grant(&conn, "tester", "editor", "test-harness", 100).expect("grant editor");
 
     let err = lineage_overlay_add(
         &conn,
@@ -117,7 +120,7 @@ fn lineage_overlay_mutation_rejects_expired_lock() {
         "manual",
         &lock.token,
         100 + 15 * 60 * 1000 + 1,
-        "test",
+        "tester",
     )
     .expect_err("expired lock should fail");
     assert_eq!(err.code, "KC_LINEAGE_LOCK_EXPIRED");

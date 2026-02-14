@@ -6,6 +6,7 @@ use kc_core::lineage::{
     lineage_lock_acquire, lineage_overlay_add, lineage_overlay_list, lineage_overlay_remove,
     query_lineage, query_lineage_v2,
 };
+use kc_core::lineage_governance::lineage_role_grant;
 use kc_core::object_store::ObjectStore;
 use kc_core::vault::vault_init;
 use rusqlite::params;
@@ -185,6 +186,7 @@ fn lineage_overlay_add_list_remove_and_query_v2_are_deterministic() {
 
     let doc_node = format!("doc:{}", ingested.doc_id.0);
     let chunk_node = "chunk:overlay-1";
+    lineage_role_grant(&conn, "lineage-test", "editor", "test-harness", 19).expect("grant role");
     let lock =
         lineage_lock_acquire(&conn, &ingested.doc_id.0, "lineage-test", 20).expect("acquire lock");
     let added = lineage_overlay_add(
@@ -196,10 +198,10 @@ fn lineage_overlay_add_list_remove_and_query_v2_are_deterministic() {
         "manual-link",
         &lock.token,
         21,
-        "cli",
+        "lineage-test",
     )
     .expect("add overlay");
-    assert_eq!(added.created_by, "cli");
+    assert_eq!(added.created_by, "lineage-test");
 
     let listed = lineage_overlay_list(&conn, &ingested.doc_id.0).expect("list overlays");
     assert_eq!(listed.len(), 1);

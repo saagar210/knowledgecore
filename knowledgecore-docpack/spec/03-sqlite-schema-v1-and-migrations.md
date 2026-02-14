@@ -73,13 +73,30 @@ CREATE TABLE IF NOT EXISTS events (
 ## FTS5 contract
 - `chunks_fts` virtual table defined in spec/07.
 
-## Migration additions (current user_version=3)
+## Migration additions (current user_version=8)
 - `0002_sync.sql` adds:
   - `sync_state`
   - `sync_snapshots`
 - `0003_lineage_overlays.sql` adds:
   - `lineage_overlays`
   - deterministic uniqueness on `(doc_id, from_node_id, to_node_id, relation, evidence)`
+- `0004_device_trust.sql` adds:
+  - `trusted_devices`
+  - `trust_events`
+- `0005_lineage_edit_locks.sql` adds:
+  - `lineage_edit_locks`
+- `0006_trust_identity_v2.sql` adds:
+  - `identity_providers`
+  - `identity_sessions`
+  - `device_certificates`
+- `0007_recovery_escrow_v2.sql` adds:
+  - `recovery_escrow_configs`
+  - `recovery_escrow_events`
+- `0008_lineage_rbac_v2.sql` adds:
+  - `lineage_roles`
+  - `lineage_permissions`
+  - `lineage_role_bindings`
+  - `lineage_lock_scopes`
 
 ## Error codes
 - `KC_DB_OPEN_FAILED`

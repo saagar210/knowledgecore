@@ -9,6 +9,7 @@ pub mod hashing;
 pub mod index_traits;
 pub mod ingest;
 pub mod lineage;
+pub mod lineage_governance;
 pub mod locator;
 pub mod object_store;
 pub mod recovery;
