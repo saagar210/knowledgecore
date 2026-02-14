@@ -1,0 +1,17 @@
+[
+  {
+    "name": "object_key_sorting",
+    "input": {"b": 2, "a": 1, "nested": {"z": true, "y": null}},
+    "expected": "{\"a\":1,\"b\":2,\"nested\":{\"y\":null,\"z\":true}}"
+  },
+  {
+    "name": "array_preserves_order",
+    "input": [3, 2, 1, "x"],
+    "expected": "[3,2,1,\"x\"]"
+  },
+  {
+    "name": "string_escaping",
+    "input": {"s": "line1\nline2\t\\\""},
+    "expected": "{\"s\":\"line1\\nline2\\t\\\\\\\"\"}"
+  }
+]
