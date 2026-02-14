@@ -85,6 +85,8 @@ AppError schema v1 and stable error taxonomy; UI branches on code only.
   - `KC_SYNC_AUTH_FAILED`
   - `KC_SYNC_NETWORK_FAILED`
   - `KC_SYNC_LOCKED`
+  - `KC_SYNC_MERGE_NOT_SAFE`
+  - `KC_SYNC_MERGE_PRECONDITION_FAILED`
 - Trust:
   - `KC_TRUST_DEVICE_UNVERIFIED`
   - `KC_TRUST_FINGERPRINT_MISMATCH`

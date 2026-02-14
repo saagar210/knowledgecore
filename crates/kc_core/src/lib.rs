@@ -17,6 +17,7 @@ pub mod rpc_service;
 pub mod services;
 pub mod snippet;
 pub mod sync;
+pub mod sync_merge;
 pub mod sync_s3;
 pub mod sync_transport;
 pub mod trust;
