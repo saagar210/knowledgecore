@@ -4,7 +4,7 @@
 Project overview: goals, success metrics, constraints, determinism tiers, phase map, stop/go criteria, and explicit deferrals.
 
 ## Invariants
-- Offline-first; no external APIs.
+- Local-first by default; optional remote sync adapters are allowed when explicitly configured.
 - Inspectable storage: SQLite + content-addressed object store.
 - Canonical text is ground truth for chunking/indexing/citations/snippets.
 - Determinism tiers enforced.
@@ -30,6 +30,6 @@ KnowledgeCore Desktop is a local-first RAG desktop app with a hardened determini
 - GO only when gates pass.
 
 ## Deferrals
-- Encryption at rest
-- Deterministic ZIP packaging
-- Cross-device sync
+- SQLCipher DB encryption expansion
+- S3 sync transport and passphrase trust metadata hardening
+- Lineage overlay write/edit workflows
