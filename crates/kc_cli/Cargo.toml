@@ -1,0 +1,13 @@
+[package]
+name = "kc_cli"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+clap.workspace = true
+kc_ask = { path = "../kc_ask" }
+kc_core = { path = "../kc_core" }
+kc_extract = { path = "../kc_extract" }
+kc_index = { path = "../kc_index" }
+serde_json.workspace = true

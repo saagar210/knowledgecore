@@ -1,0 +1,10 @@
+[package]
+name = "kc_extract"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+kc_core = { path = "../kc_core" }
+serde.workspace = true
+serde_json.workspace = true

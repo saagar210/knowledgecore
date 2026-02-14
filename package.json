@@ -1,0 +1,11 @@
+{
+  "name": "knowledgecore",
+  "private": true,
+  "version": "0.1.0",
+  "packageManager": "pnpm@10.29.2",
+  "scripts": {
+    "lint": "pnpm -C apps/desktop/ui lint",
+    "test": "pnpm -C apps/desktop/ui test",
+    "tauri": "pnpm -C apps/desktop/ui tauri"
+  }
+}
