@@ -2,6 +2,7 @@ use apps_desktop_tauri::rpc::{
     ingest_inbox_start_rpc, ingest_inbox_stop_rpc, jobs_list_rpc, vault_init_rpc, vault_open_rpc,
     IngestInboxStartReq, IngestInboxStopReq, JobsListReq, RpcResponse, VaultInitReq, VaultOpenReq,
 };
+use apps_desktop_tauri::commands;
 use kc_core::app_error::AppError;
 
 #[test]
@@ -118,4 +119,27 @@ fn rpc_ingest_inbox_start_and_stop() {
         RpcResponse::Ok { data } => assert!(data.stopped),
         RpcResponse::Err { error } => panic!("inbox stop failed: {}", error.code),
     }
+}
+
+#[test]
+fn tauri_command_wrappers_use_rpc_envelope_contract() {
+    let root = tempfile::tempdir().expect("tempdir").keep();
+    let via_command = commands::vault_init(VaultInitReq {
+        vault_path: root.to_string_lossy().to_string(),
+        vault_slug: "demo".to_string(),
+        now_ms: 1,
+    });
+    let via_rpc = vault_init_rpc(VaultInitReq {
+        vault_path: root.to_string_lossy().to_string(),
+        vault_slug: "demo".to_string(),
+        now_ms: 1,
+    });
+
+    let command_json = serde_json::to_value(via_command).expect("serialize command response");
+    let rpc_json = serde_json::to_value(via_rpc).expect("serialize rpc response");
+    assert_eq!(
+        command_json.get("ok").and_then(|v| v.as_bool()),
+        rpc_json.get("ok").and_then(|v| v.as_bool())
+    );
+    assert!(command_json.get("data").is_some());
 }

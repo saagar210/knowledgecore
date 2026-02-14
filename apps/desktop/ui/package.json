@@ -6,9 +6,10 @@
   "scripts": {
     "lint": "eslint \"src/**/*.{ts,tsx}\"",
     "test": "vitest run",
-    "tauri": "node scripts/tauri-build.mjs"
+    "tauri": "node scripts/tauri-cli.mjs"
   },
   "devDependencies": {
+    "@tauri-apps/cli": "^2.9.3",
     "@typescript-eslint/eslint-plugin": "^8.46.3",
     "@typescript-eslint/parser": "^8.46.3",
     "eslint": "^9.39.1",
