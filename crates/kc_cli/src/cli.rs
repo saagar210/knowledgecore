@@ -18,6 +18,13 @@ pub enum Command {
         #[command(subcommand)]
         cmd: IngestCmd,
     },
+    Export {
+        vault_path: String,
+        export_dir: String,
+    },
+    Verify {
+        bundle_path: String,
+    },
 }
 
 #[derive(Subcommand)]

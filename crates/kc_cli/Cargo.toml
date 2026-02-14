@@ -10,5 +10,9 @@ kc_ask = { path = "../kc_ask" }
 kc_core = { path = "../kc_core" }
 kc_extract = { path = "../kc_extract" }
 kc_index = { path = "../kc_index" }
+serde.workspace = true
 serde_json.workspace = true
 walkdir = "2.5"
+
+[dev-dependencies]
+tempfile = "3.23"

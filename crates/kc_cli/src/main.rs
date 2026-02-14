@@ -1,7 +1,10 @@
 mod cli;
 mod commands {
+    pub mod export;
     pub mod ingest;
+    pub mod verify;
 }
+mod verifier;
 
 use clap::Parser;
 use cli::{Cli, Command, IngestCmd, VaultCmd};
@@ -45,6 +48,18 @@ fn main() {
                 source_kind,
             } => commands::ingest::ingest_inbox_once(&vault_path, &file_path, &source_kind),
         },
+        Command::Export {
+            vault_path,
+            export_dir,
+        } => commands::export::run_export(&vault_path, &export_dir, now_ms()).map(|bundle| {
+            println!("exported bundle: {}", bundle.display());
+        }),
+        Command::Verify { bundle_path } => commands::verify::run_verify(&bundle_path).map(|(code, report)| {
+            println!("{}", serde_json::to_string(&report).unwrap_or_else(|_| "{}".to_string()));
+            if code != 0 {
+                std::process::exit(code as i32);
+            }
+        }),
     };
 
     if let Err(err) = result {
