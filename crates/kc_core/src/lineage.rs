@@ -42,6 +42,27 @@ pub struct LineageOverlayEntryV1 {
     pub created_by: String,
 }
 
+pub const LINEAGE_LOCK_LEASE_MS: i64 = 15 * 60 * 1000;
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct LineageLockLeaseV1 {
+    pub doc_id: String,
+    pub owner: String,
+    pub token: String,
+    pub acquired_at_ms: i64,
+    pub expires_at_ms: i64,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct LineageLockStatusV1 {
+    pub doc_id: String,
+    pub held: bool,
+    pub owner: Option<String>,
+    pub acquired_at_ms: Option<i64>,
+    pub expires_at_ms: Option<i64>,
+    pub expired: bool,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct LineageEdgeV2 {
     pub from_node_id: String,
@@ -97,12 +118,7 @@ fn add_edge(
     relation: &str,
     evidence: String,
 ) {
-    edge_keys.insert((
-        from_node_id,
-        to_node_id,
-        relation.to_string(),
-        evidence,
-    ));
+    edge_keys.insert((from_node_id, to_node_id, relation.to_string(), evidence));
 }
 
 fn load_event_by_id(conn: &Connection, event_id: i64) -> AppResult<Option<EventRow>> {
@@ -225,6 +241,44 @@ fn append_event_chain(
     }
 
     Ok(())
+}
+
+#[derive(Debug, Clone)]
+struct LockRow {
+    owner: String,
+    token: String,
+    acquired_at_ms: i64,
+    expires_at_ms: i64,
+}
+
+fn lock_token_for(doc_id: &str, owner: &str, now_ms: i64) -> String {
+    blake3_hex_prefixed(format!("kc.lineage.lock.v1\n{doc_id}\n{owner}\n{now_ms}").as_bytes())
+}
+
+fn read_lock_row(conn: &Connection, doc_id: &str) -> AppResult<Option<LockRow>> {
+    let out = conn.query_row(
+        "SELECT owner, token, acquired_at_ms, expires_at_ms
+         FROM lineage_edit_locks
+         WHERE doc_id=?1",
+        params![doc_id],
+        |row| {
+            Ok(LockRow {
+                owner: row.get(0)?,
+                token: row.get(1)?,
+                acquired_at_ms: row.get(2)?,
+                expires_at_ms: row.get(3)?,
+            })
+        },
+    );
+    match out {
+        Ok(row) => Ok(Some(row)),
+        Err(rusqlite::Error::QueryReturnedNoRows) => Ok(None),
+        Err(e) => Err(lineage_error(
+            "KC_LINEAGE_QUERY_FAILED",
+            "failed reading lineage edit lock",
+            serde_json::json!({ "error": e.to_string(), "doc_id": doc_id }),
+        )),
+    }
 }
 
 pub fn query_lineage(
@@ -551,6 +605,151 @@ pub fn query_lineage(
     })
 }
 
+pub fn lineage_lock_acquire(
+    conn: &Connection,
+    doc_id: &str,
+    owner: &str,
+    now_ms: i64,
+) -> AppResult<LineageLockLeaseV1> {
+    if doc_id.trim().is_empty() || owner.trim().is_empty() {
+        return Err(lineage_error(
+            "KC_LINEAGE_LOCK_INVALID",
+            "lineage lock acquire requires non-empty doc_id and owner",
+            serde_json::json!({ "doc_id": doc_id, "owner": owner }),
+        ));
+    }
+
+    if let Some(lock) = read_lock_row(conn, doc_id)? {
+        if lock.expires_at_ms > now_ms {
+            return Err(lineage_error(
+                "KC_LINEAGE_LOCK_HELD",
+                "lineage edit lock is already held",
+                serde_json::json!({
+                    "doc_id": doc_id,
+                    "owner": lock.owner,
+                    "expires_at_ms": lock.expires_at_ms
+                }),
+            ));
+        }
+    }
+
+    let token = lock_token_for(doc_id, owner, now_ms);
+    let expires_at_ms = now_ms + LINEAGE_LOCK_LEASE_MS;
+    conn.execute(
+        "INSERT INTO lineage_edit_locks(doc_id, owner, token, acquired_at_ms, expires_at_ms)
+         VALUES (?1, ?2, ?3, ?4, ?5)
+         ON CONFLICT(doc_id) DO UPDATE SET
+           owner=excluded.owner,
+           token=excluded.token,
+           acquired_at_ms=excluded.acquired_at_ms,
+           expires_at_ms=excluded.expires_at_ms",
+        params![doc_id, owner, token, now_ms, expires_at_ms],
+    )
+    .map_err(|e| {
+        lineage_error(
+            "KC_LINEAGE_QUERY_FAILED",
+            "failed writing lineage edit lock",
+            serde_json::json!({ "error": e.to_string(), "doc_id": doc_id }),
+        )
+    })?;
+
+    Ok(LineageLockLeaseV1 {
+        doc_id: doc_id.to_string(),
+        owner: owner.to_string(),
+        token,
+        acquired_at_ms: now_ms,
+        expires_at_ms,
+    })
+}
+
+pub fn lineage_lock_release(conn: &Connection, doc_id: &str, token: &str) -> AppResult<()> {
+    let Some(lock) = read_lock_row(conn, doc_id)? else {
+        return Err(lineage_error(
+            "KC_LINEAGE_LOCK_INVALID",
+            "lineage edit lock does not exist",
+            serde_json::json!({ "doc_id": doc_id }),
+        ));
+    };
+    if lock.token != token {
+        return Err(lineage_error(
+            "KC_LINEAGE_LOCK_INVALID",
+            "lineage edit lock token is invalid",
+            serde_json::json!({ "doc_id": doc_id }),
+        ));
+    }
+    conn.execute(
+        "DELETE FROM lineage_edit_locks WHERE doc_id=?1",
+        params![doc_id],
+    )
+    .map_err(|e| {
+        lineage_error(
+            "KC_LINEAGE_QUERY_FAILED",
+            "failed deleting lineage edit lock",
+            serde_json::json!({ "error": e.to_string(), "doc_id": doc_id }),
+        )
+    })?;
+    Ok(())
+}
+
+pub fn lineage_lock_status(
+    conn: &Connection,
+    doc_id: &str,
+    now_ms: i64,
+) -> AppResult<LineageLockStatusV1> {
+    let Some(lock) = read_lock_row(conn, doc_id)? else {
+        return Ok(LineageLockStatusV1 {
+            doc_id: doc_id.to_string(),
+            held: false,
+            owner: None,
+            acquired_at_ms: None,
+            expires_at_ms: None,
+            expired: false,
+        });
+    };
+    let expired = lock.expires_at_ms <= now_ms;
+    Ok(LineageLockStatusV1 {
+        doc_id: doc_id.to_string(),
+        held: !expired,
+        owner: Some(lock.owner),
+        acquired_at_ms: Some(lock.acquired_at_ms),
+        expires_at_ms: Some(lock.expires_at_ms),
+        expired,
+    })
+}
+
+fn require_valid_lock(conn: &Connection, doc_id: &str, token: &str, now_ms: i64) -> AppResult<()> {
+    let status = lineage_lock_status(conn, doc_id, now_ms)?;
+    if !status.held {
+        return Err(lineage_error(
+            if status.expired {
+                "KC_LINEAGE_LOCK_EXPIRED"
+            } else {
+                "KC_LINEAGE_LOCK_INVALID"
+            },
+            "lineage edit lock is required for overlay mutation",
+            serde_json::json!({ "doc_id": doc_id }),
+        ));
+    }
+
+    let Some(lock) = read_lock_row(conn, doc_id)? else {
+        return Err(lineage_error(
+            "KC_LINEAGE_LOCK_INVALID",
+            "lineage edit lock is required for overlay mutation",
+            serde_json::json!({ "doc_id": doc_id }),
+        ));
+    };
+
+    if lock.token != token {
+        return Err(lineage_error(
+            "KC_LINEAGE_LOCK_INVALID",
+            "lineage edit lock token is invalid",
+            serde_json::json!({ "doc_id": doc_id }),
+        ));
+    }
+
+    Ok(())
+}
+
 fn overlay_id_for(
     doc_id: &str,
     from_node_id: &str,
@@ -600,6 +799,7 @@ pub fn lineage_overlay_add(
     to_node_id: &str,
     relation: &str,
     evidence: &str,
+    lock_token: &str,
     created_at_ms: i64,
     created_by: &str,
 ) -> AppResult<LineageOverlayEntryV1> {
@@ -611,6 +811,7 @@ pub fn lineage_overlay_add(
         evidence,
         created_by,
     )?;
+    require_valid_lock(conn, doc_id, lock_token, created_at_ms)?;
     let overlay_id = overlay_id_for(doc_id, from_node_id, to_node_id, relation, evidence);
     let inserted = conn.execute(
         "INSERT INTO lineage_overlays(
@@ -662,7 +863,35 @@ pub fn lineage_overlay_add(
     }
 }
 
-pub fn lineage_overlay_remove(conn: &Connection, overlay_id: &str) -> AppResult<()> {
+pub fn lineage_overlay_remove(
+    conn: &Connection,
+    overlay_id: &str,
+    lock_token: &str,
+    now_ms: i64,
+) -> AppResult<()> {
+    let doc_id = match conn.query_row(
+        "SELECT doc_id FROM lineage_overlays WHERE overlay_id=?1",
+        params![overlay_id],
+        |row| row.get::<_, String>(0),
+    ) {
+        Ok(doc_id) => doc_id,
+        Err(rusqlite::Error::QueryReturnedNoRows) => {
+            return Err(lineage_error(
+                "KC_LINEAGE_OVERLAY_NOT_FOUND",
+                "lineage overlay not found",
+                serde_json::json!({ "overlay_id": overlay_id }),
+            ));
+        }
+        Err(e) => {
+            return Err(lineage_error(
+                "KC_LINEAGE_QUERY_FAILED",
+                "failed loading lineage overlay before delete",
+                serde_json::json!({ "error": e.to_string(), "overlay_id": overlay_id }),
+            ));
+        }
+    };
+    require_valid_lock(conn, &doc_id, lock_token, now_ms)?;
+
     let removed = conn
         .execute(
             "DELETE FROM lineage_overlays WHERE overlay_id=?1",
@@ -685,7 +914,10 @@ pub fn lineage_overlay_remove(conn: &Connection, overlay_id: &str) -> AppResult<
     Ok(())
 }
 
-pub fn lineage_overlay_list(conn: &Connection, doc_id: &str) -> AppResult<Vec<LineageOverlayEntryV1>> {
+pub fn lineage_overlay_list(
+    conn: &Connection,
+    doc_id: &str,
+) -> AppResult<Vec<LineageOverlayEntryV1>> {
     let mut stmt = conn
         .prepare(
             "SELECT overlay_id, doc_id, from_node_id, to_node_id, relation, evidence, created_at_ms, created_by
@@ -749,8 +981,11 @@ pub fn query_lineage_v2(
     let base = query_lineage(conn, seed_doc_id, depth, now_ms)?;
     let overlays = lineage_overlay_list(conn, seed_doc_id)?;
 
-    let mut nodes_by_id: BTreeMap<String, LineageNodeV1> =
-        base.nodes.into_iter().map(|n| (n.node_id.clone(), n)).collect();
+    let mut nodes_by_id: BTreeMap<String, LineageNodeV1> = base
+        .nodes
+        .into_iter()
+        .map(|n| (n.node_id.clone(), n))
+        .collect();
     let mut edges: Vec<LineageEdgeV2> = base
         .edges
         .into_iter()

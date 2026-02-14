@@ -509,6 +509,7 @@ pub fn lineage_overlay_add_service(
     to_node_id: &str,
     relation: &str,
     evidence: &str,
+    lock_token: &str,
     created_at_ms: i64,
     created_by: Option<&str>,
 ) -> AppResult<crate::lineage::LineageOverlayEntryV1> {
@@ -521,15 +522,21 @@ pub fn lineage_overlay_add_service(
         to_node_id,
         relation,
         evidence,
+        lock_token,
         created_at_ms,
         created_by.unwrap_or("overlay"),
     )
 }
 
-pub fn lineage_overlay_remove_service(vault_path: &Path, overlay_id: &str) -> AppResult<()> {
+pub fn lineage_overlay_remove_service(
+    vault_path: &Path,
+    overlay_id: &str,
+    lock_token: &str,
+    now_ms: i64,
+) -> AppResult<()> {
     let vault = vault_open(vault_path)?;
     let conn = open_db(&vault_path.join(vault.db.relative_path))?;
-    crate::lineage::lineage_overlay_remove(&conn, overlay_id)
+    crate::lineage::lineage_overlay_remove(&conn, overlay_id, lock_token, now_ms)
 }
 
 pub fn lineage_overlay_list_service(

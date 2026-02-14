@@ -100,6 +100,9 @@ AppError schema v1 and stable error taxonomy; UI branches on code only.
   - `KC_LINEAGE_INVALID_DEPTH`
   - `KC_LINEAGE_DOC_NOT_FOUND`
   - `KC_LINEAGE_QUERY_FAILED`
+  - `KC_LINEAGE_LOCK_HELD`
+  - `KC_LINEAGE_LOCK_INVALID`
+  - `KC_LINEAGE_LOCK_EXPIRED`
 
 ## RPC mapping
 - RPC responses return either `{ ok: true, data }` or `{ ok: false, error: AppError }` without changing `error.code`.

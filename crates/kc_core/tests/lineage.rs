@@ -3,7 +3,8 @@ use kc_core::events::append_event;
 use kc_core::hashing::blake3_hex_prefixed;
 use kc_core::ingest::ingest_bytes;
 use kc_core::lineage::{
-    lineage_overlay_add, lineage_overlay_list, lineage_overlay_remove, query_lineage, query_lineage_v2,
+    lineage_lock_acquire, lineage_overlay_add, lineage_overlay_list, lineage_overlay_remove,
+    query_lineage, query_lineage_v2,
 };
 use kc_core::object_store::ObjectStore;
 use kc_core::vault::vault_init;
@@ -184,6 +185,8 @@ fn lineage_overlay_add_list_remove_and_query_v2_are_deterministic() {
 
     let doc_node = format!("doc:{}", ingested.doc_id.0);
     let chunk_node = "chunk:overlay-1";
+    let lock =
+        lineage_lock_acquire(&conn, &ingested.doc_id.0, "lineage-test", 20).expect("acquire lock");
     let added = lineage_overlay_add(
         &conn,
         &ingested.doc_id.0,
@@ -191,7 +194,8 @@ fn lineage_overlay_add_list_remove_and_query_v2_are_deterministic() {
         chunk_node,
         "related_to",
         "manual-link",
-        20,
+        &lock.token,
+        21,
         "cli",
     )
     .expect("add overlay");
@@ -205,14 +209,12 @@ fn lineage_overlay_add_list_remove_and_query_v2_are_deterministic() {
     let v2_b = query_lineage_v2(&conn, &ingested.doc_id.0, 1, 30).expect("query v2 b");
     assert_eq!(v2_a, v2_b);
     assert_eq!(v2_a.schema_version, 2);
-    assert!(
-        v2_a
-            .edges
-            .iter()
-            .any(|e| e.origin == "overlay" && e.relation == "related_to")
-    );
+    assert!(v2_a
+        .edges
+        .iter()
+        .any(|e| e.origin == "overlay" && e.relation == "related_to"));
 
-    lineage_overlay_remove(&conn, &added.overlay_id).expect("remove overlay");
+    lineage_overlay_remove(&conn, &added.overlay_id, &lock.token, 31).expect("remove overlay");
     assert!(lineage_overlay_list(&conn, &ingested.doc_id.0)
         .expect("list after remove")
         .is_empty());
@@ -228,6 +230,8 @@ fn lineage_overlay_remove_missing_returns_not_found() {
     let err = lineage_overlay_remove(
         &conn,
         "blake3:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "blake3:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        1,
     )
     .expect_err("expected not found");
     assert_eq!(err.code, "KC_LINEAGE_OVERLAY_NOT_FOUND");

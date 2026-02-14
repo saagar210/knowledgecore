@@ -186,6 +186,7 @@ fn main() {
                     to_node_id,
                     relation,
                     evidence,
+                    lock_token,
                     created_by,
                     now_ms,
                 } => commands::lineage::run_overlay_add(
@@ -195,13 +196,21 @@ fn main() {
                     &to_node_id,
                     &relation,
                     &evidence,
+                    &lock_token,
                     &created_by,
                     now_ms,
                 ),
                 LineageOverlayCmd::Remove {
                     vault_path,
                     overlay_id,
-                } => commands::lineage::run_overlay_remove(&vault_path, &overlay_id),
+                    lock_token,
+                    now_ms,
+                } => commands::lineage::run_overlay_remove(
+                    &vault_path,
+                    &overlay_id,
+                    &lock_token,
+                    now_ms,
+                ),
                 LineageOverlayCmd::List { vault_path, doc_id } => {
                     commands::lineage::run_overlay_list(&vault_path, &doc_id)
                 }

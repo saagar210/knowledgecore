@@ -245,6 +245,7 @@ pub enum LineageOverlayCmd {
         to_node_id: String,
         relation: String,
         evidence: String,
+        lock_token: String,
         #[arg(long, default_value = "cli")]
         created_by: String,
         #[arg(long = "now-ms")]
@@ -253,6 +254,9 @@ pub enum LineageOverlayCmd {
     Remove {
         vault_path: String,
         overlay_id: String,
+        lock_token: String,
+        #[arg(long = "now-ms")]
+        now_ms: i64,
     },
     List {
         vault_path: String,

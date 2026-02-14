@@ -11,6 +11,7 @@ pub fn run_overlay_add(
     to_node_id: &str,
     relation: &str,
     evidence: &str,
+    lock_token: &str,
     created_by: &str,
     now_ms: i64,
 ) -> AppResult<()> {
@@ -23,6 +24,7 @@ pub fn run_overlay_add(
         to_node_id,
         relation,
         evidence,
+        lock_token,
         now_ms,
         created_by,
     )?;
@@ -37,10 +39,15 @@ pub fn run_overlay_add(
     Ok(())
 }
 
-pub fn run_overlay_remove(vault_path: &str, overlay_id: &str) -> AppResult<()> {
+pub fn run_overlay_remove(
+    vault_path: &str,
+    overlay_id: &str,
+    lock_token: &str,
+    now_ms: i64,
+) -> AppResult<()> {
     let vault = vault_open(Path::new(vault_path))?;
     let conn = open_db(&Path::new(vault_path).join(vault.db.relative_path))?;
-    lineage_overlay_remove(&conn, overlay_id)?;
+    lineage_overlay_remove(&conn, overlay_id, lock_token, now_ms)?;
     println!(
         "{}",
         serde_json::to_string_pretty(&serde_json::json!({
@@ -73,7 +80,7 @@ mod tests {
     use super::{run_overlay_add, run_overlay_list, run_overlay_remove};
     use kc_core::db::open_db;
     use kc_core::ingest::ingest_bytes;
-    use kc_core::lineage::lineage_overlay_list;
+    use kc_core::lineage::{lineage_lock_acquire, lineage_overlay_list};
     use kc_core::object_store::ObjectStore;
     use kc_core::vault::vault_init;
 
@@ -95,11 +102,13 @@ mod tests {
             1,
         )
         .expect("ingest");
-        drop(conn);
 
         let doc_id = ingested.doc_id.0.clone();
         let doc_node = format!("doc:{}", doc_id);
         let chunk_node = "chunk:cli-overlay";
+        let lock = lineage_lock_acquire(&conn, &doc_id, "cli-test", 2).expect("acquire lock");
+        let lock_token = lock.token.clone();
+        drop(conn);
 
         run_overlay_add(
             root.to_string_lossy().as_ref(),
@@ -108,8 +117,9 @@ mod tests {
             chunk_node,
             "related_to",
             "cli",
+            &lock_token,
             "cli",
-            2,
+            3,
         )
         .expect("overlay add");
         run_overlay_list(root.to_string_lossy().as_ref(), &doc_id).expect("overlay list");
@@ -120,6 +130,7 @@ mod tests {
         let overlay_id = listed[0].overlay_id.clone();
         drop(conn);
 
-        run_overlay_remove(root.to_string_lossy().as_ref(), &overlay_id).expect("overlay remove");
+        run_overlay_remove(root.to_string_lossy().as_ref(), &overlay_id, &lock_token, 4)
+            .expect("overlay remove");
     }
 }
