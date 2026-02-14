@@ -9,6 +9,7 @@ mod commands {
     pub mod index;
     #[cfg(feature = "phase_l_preview")]
     pub mod preview;
+    pub mod sync;
     pub mod verify;
     pub mod vault;
 }
@@ -17,7 +18,7 @@ mod verifier;
 use clap::Parser;
 use cli::{
     BenchCmd, Cli, Command, DepsCmd, FixturesCmd, GcCmd, IndexCmd, IngestCmd, VaultCmd,
-    VaultEncryptCmd,
+    SyncCmd, VaultEncryptCmd,
 };
 #[cfg(feature = "phase_l_preview")]
 use cli::PreviewCmd;
@@ -103,6 +104,22 @@ fn main() {
             FixturesCmd::Generate { corpus } => commands::fixtures::generate_corpus(&corpus).map(|path| {
                 println!("generated fixtures at {}", path.display());
             }),
+        },
+        Command::Sync { cmd } => match cmd {
+            SyncCmd::Status {
+                vault_path,
+                target_path,
+            } => commands::sync::run_status(&vault_path, &target_path),
+            SyncCmd::Push {
+                vault_path,
+                target_path,
+                now_ms,
+            } => commands::sync::run_push(&vault_path, &target_path, now_ms),
+            SyncCmd::Pull {
+                vault_path,
+                target_path,
+                now_ms,
+            } => commands::sync::run_pull(&vault_path, &target_path, now_ms),
         },
         #[cfg(feature = "phase_l_preview")]
         Command::Preview { cmd } => match cmd {

@@ -2,7 +2,8 @@ use apps_desktop_tauri::rpc::{
     ingest_inbox_start_rpc, ingest_inbox_stop_rpc, jobs_list_rpc, vault_encryption_enable_rpc,
     vault_encryption_migrate_rpc, vault_encryption_status_rpc, vault_init_rpc, vault_open_rpc,
     IngestInboxStartReq, IngestInboxStopReq, JobsListReq, RpcResponse, VaultEncryptionEnableReq,
-    VaultEncryptionMigrateReq, VaultEncryptionStatusReq, VaultInitReq, VaultOpenReq,
+    VaultEncryptionMigrateReq, VaultEncryptionStatusReq, VaultInitReq, VaultOpenReq, SyncPushReq,
+    SyncStatusReq, sync_push_rpc, sync_status_rpc,
 };
 use apps_desktop_tauri::commands;
 use kc_core::app_error::AppError;
@@ -141,6 +142,54 @@ fn rpc_vault_encryption_status_enable_and_migrate() {
             assert_eq!(data.status.objects_encrypted, 1);
         }
         RpcResponse::Err { error } => panic!("migrate failed: {}", error.code),
+    }
+}
+
+#[test]
+fn rpc_sync_status_and_push() {
+    let root = tempfile::tempdir().expect("tempdir").keep();
+    let sync_target = root.join("sync-target");
+    let input = root.join("note-sync.txt");
+    std::fs::write(&input, b"hello sync").expect("write input");
+
+    let init = vault_init_rpc(VaultInitReq {
+        vault_path: root.to_string_lossy().to_string(),
+        vault_slug: "demo".to_string(),
+        now_ms: 1,
+    });
+    match init {
+        RpcResponse::Ok { .. } => {}
+        RpcResponse::Err { error } => panic!("vault init failed: {}", error.code),
+    }
+
+    let started = ingest_inbox_start_rpc(IngestInboxStartReq {
+        vault_path: root.to_string_lossy().to_string(),
+        file_path: input.to_string_lossy().to_string(),
+        source_kind: "notes".to_string(),
+        now_ms: 2,
+    });
+    match started {
+        RpcResponse::Ok { .. } => {}
+        RpcResponse::Err { error } => panic!("ingest failed: {}", error.code),
+    }
+
+    let status_before = sync_status_rpc(SyncStatusReq {
+        vault_path: root.to_string_lossy().to_string(),
+        target_path: sync_target.to_string_lossy().to_string(),
+    });
+    match status_before {
+        RpcResponse::Ok { data } => assert!(data.remote_head.is_none()),
+        RpcResponse::Err { error } => panic!("sync status failed: {}", error.code),
+    }
+
+    let pushed = sync_push_rpc(SyncPushReq {
+        vault_path: root.to_string_lossy().to_string(),
+        target_path: sync_target.to_string_lossy().to_string(),
+        now_ms: 3,
+    });
+    match pushed {
+        RpcResponse::Ok { data } => assert!(!data.snapshot_id.is_empty()),
+        RpcResponse::Err { error } => panic!("sync push failed: {}", error.code),
     }
 }
 

@@ -1,6 +1,6 @@
 use apps_desktop_tauri::rpc::{
     AskQuestionReq, SearchQueryReq, VaultEncryptionEnableReq, VaultEncryptionMigrateReq,
-    VaultEncryptionStatusReq, VaultInitReq,
+    VaultEncryptionStatusReq, VaultInitReq, SyncPushReq, SyncPullReq, SyncStatusReq,
 };
 
 #[test]
@@ -54,6 +54,23 @@ fn rpc_schema_requires_now_ms_for_encryption_migrate() {
         "passphrase": "secret"
     });
     assert!(serde_json::from_value::<VaultEncryptionMigrateReq>(missing_now).is_err());
+
+    let missing_sync_now = serde_json::json!({
+        "vault_path": "/tmp/vault",
+        "target_path": "/tmp/target"
+    });
+    assert!(serde_json::from_value::<SyncPushReq>(missing_sync_now.clone()).is_err());
+    assert!(serde_json::from_value::<SyncPullReq>(missing_sync_now).is_err());
+}
+
+#[test]
+fn rpc_schema_sync_rejects_unknown_fields() {
+    let invalid_status = serde_json::json!({
+        "vault_path": "/tmp/vault",
+        "target_path": "/tmp/target",
+        "extra": "nope"
+    });
+    assert!(serde_json::from_value::<SyncStatusReq>(invalid_status).is_err());
 }
 
 #[cfg(not(feature = "phase_l_preview"))]

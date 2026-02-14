@@ -14,8 +14,11 @@ import { runSearch } from "../src/features/search";
 import {
   enableVaultEncryption,
   loadSettingsDependencies,
+  loadSyncStatus,
   loadVaultEncryptionStatus,
-  migrateVaultEncryption
+  migrateVaultEncryption,
+  runSyncPull,
+  runSyncPush
 } from "../src/features/settings";
 import { vaultInit, vaultOpen } from "../src/features/vault";
 
@@ -70,7 +73,38 @@ function mockApi(): DesktopRpcApi {
     verifyBundle: () => ok({ exit_code: 0, report: {} }),
     askQuestion: () => ok({ answer_text: "a", trace_path: "/tmp/trace" }),
     eventsList: () => ok({ events: [{ event_id: 1, ts_ms: 1, event_type: "ingest" }] }),
-    jobsList: () => ok({ jobs: ["j1"] })
+    jobsList: () => ok({ jobs: ["j1"] }),
+    syncStatus: () =>
+      ok({
+        target_path: "/tmp/sync",
+        remote_head: null,
+        seen_remote_snapshot_id: null,
+        last_applied_manifest_hash: null
+      }),
+    syncPush: () =>
+      ok({
+        snapshot_id: "snap-1",
+        manifest_hash: "blake3:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        remote_head: {
+          schema_version: 1,
+          snapshot_id: "snap-1",
+          manifest_hash:
+            "blake3:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          created_at_ms: 6
+        }
+      }),
+    syncPull: () =>
+      ok({
+        snapshot_id: "snap-1",
+        manifest_hash: "blake3:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        remote_head: {
+          schema_version: 1,
+          snapshot_id: "snap-1",
+          manifest_hash:
+            "blake3:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          created_at_ms: 6
+        }
+      })
   };
 }
 
@@ -176,6 +210,26 @@ describe("feature controllers", () => {
         vault_path: "/tmp/v",
         passphrase: "pass",
         now_ms: 6
+      })
+    ).toMatchObject({ kind: "data" });
+    expect(
+      await loadSyncStatus(api, {
+        vault_path: "/tmp/v",
+        target_path: "/tmp/sync"
+      })
+    ).toMatchObject({ kind: "data" });
+    expect(
+      await runSyncPush(api, {
+        vault_path: "/tmp/v",
+        target_path: "/tmp/sync",
+        now_ms: 7
+      })
+    ).toMatchObject({ kind: "data" });
+    expect(
+      await runSyncPull(api, {
+        vault_path: "/tmp/v",
+        target_path: "/tmp/sync",
+        now_ms: 8
       })
     ).toMatchObject({ kind: "data" });
   });

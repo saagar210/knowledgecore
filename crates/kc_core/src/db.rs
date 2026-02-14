@@ -3,7 +3,7 @@ use rusqlite::Connection;
 use std::fs;
 use std::path::Path;
 
-const LATEST_SCHEMA_VERSION: i64 = 1;
+const LATEST_SCHEMA_VERSION: i64 = 2;
 
 pub fn open_db(db_path: &Path) -> AppResult<Connection> {
     if let Some(parent) = db_path.parent() {
@@ -72,6 +72,51 @@ pub fn apply_migrations(conn: &Connection) -> AppResult<()> {
                     "KC_DB_MIGRATION_FAILED",
                     "db",
                     "failed to apply migration 0001",
+                    false,
+                    serde_json::json!({ "error": e.to_string() }),
+                )
+            })?;
+
+        tx.pragma_update(None, "user_version", 1i64)
+            .map_err(|e| {
+                AppError::new(
+                    "KC_DB_MIGRATION_FAILED",
+                    "db",
+                    "failed to set schema user_version",
+                    false,
+                    serde_json::json!({ "error": e.to_string() }),
+                )
+            })?;
+
+        tx.commit().map_err(|e| {
+            AppError::new(
+                "KC_DB_MIGRATION_FAILED",
+                "db",
+                "failed to commit migration transaction",
+                false,
+                serde_json::json!({ "error": e.to_string() }),
+            )
+        })?;
+    }
+
+    let current_after_v1 = schema_version(conn)?;
+    if current_after_v1 < 2 {
+        let tx = conn.unchecked_transaction().map_err(|e| {
+            AppError::new(
+                "KC_DB_MIGRATION_FAILED",
+                "db",
+                "failed to begin migration transaction",
+                false,
+                serde_json::json!({ "error": e.to_string() }),
+            )
+        })?;
+
+        tx.execute_batch(include_str!("../migrations/0002_sync.sql"))
+            .map_err(|e| {
+                AppError::new(
+                    "KC_DB_MIGRATION_FAILED",
+                    "db",
+                    "failed to apply migration 0002",
                     false,
                     serde_json::json!({ "error": e.to_string() }),
                 )

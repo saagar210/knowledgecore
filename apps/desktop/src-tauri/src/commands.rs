@@ -81,6 +81,21 @@ pub fn jobs_list(req: rpc::JobsListReq) -> rpc::RpcResponse<rpc::JobsListRes> {
     rpc::jobs_list_rpc(req)
 }
 
+#[tauri::command]
+pub fn sync_status(req: rpc::SyncStatusReq) -> rpc::RpcResponse<rpc::SyncStatusRes> {
+    rpc::sync_status_rpc(req)
+}
+
+#[tauri::command]
+pub fn sync_push(req: rpc::SyncPushReq) -> rpc::RpcResponse<rpc::SyncPushRes> {
+    rpc::sync_push_rpc(req)
+}
+
+#[tauri::command]
+pub fn sync_pull(req: rpc::SyncPullReq) -> rpc::RpcResponse<rpc::SyncPullRes> {
+    rpc::sync_pull_rpc(req)
+}
+
 #[cfg(feature = "phase_l_preview")]
 #[tauri::command]
 pub fn preview_status(req: rpc::PreviewStatusReq) -> rpc::RpcResponse<rpc::PreviewStatusRes> {

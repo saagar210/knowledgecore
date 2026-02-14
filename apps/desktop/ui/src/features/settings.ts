@@ -7,7 +7,13 @@ import type {
   VaultEncryptionMigrateReq,
   VaultEncryptionMigrateRes,
   VaultEncryptionStatusReq,
-  VaultEncryptionStatusRes
+  VaultEncryptionStatusRes,
+  SyncPullReq,
+  SyncPullRes,
+  SyncPushReq,
+  SyncPushRes,
+  SyncStatusReq,
+  SyncStatusRes
 } from "../api/rpc";
 import { nextStateFromRpc, type ViewState } from "../state/appState";
 
@@ -37,4 +43,25 @@ export async function migrateVaultEncryption(
   req: VaultEncryptionMigrateReq
 ): Promise<ViewState<VaultEncryptionMigrateRes>> {
   return nextStateFromRpc(await api.vaultEncryptionMigrate(req));
+}
+
+export async function loadSyncStatus(
+  api: DesktopRpcApi,
+  req: SyncStatusReq
+): Promise<ViewState<SyncStatusRes>> {
+  return nextStateFromRpc(await api.syncStatus(req));
+}
+
+export async function runSyncPush(
+  api: DesktopRpcApi,
+  req: SyncPushReq
+): Promise<ViewState<SyncPushRes>> {
+  return nextStateFromRpc(await api.syncPush(req));
+}
+
+export async function runSyncPull(
+  api: DesktopRpcApi,
+  req: SyncPullReq
+): Promise<ViewState<SyncPullRes>> {
+  return nextStateFromRpc(await api.syncPull(req));
 }

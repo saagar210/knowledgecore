@@ -301,6 +301,59 @@ pub struct JobsListRes {
     pub jobs: Vec<String>,
 }
 
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct SyncStatusReq {
+    pub vault_path: String,
+    pub target_path: String,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct SyncHeadRes {
+    pub schema_version: i64,
+    pub snapshot_id: String,
+    pub manifest_hash: String,
+    pub created_at_ms: i64,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct SyncStatusRes {
+    pub target_path: String,
+    pub remote_head: Option<SyncHeadRes>,
+    pub seen_remote_snapshot_id: Option<String>,
+    pub last_applied_manifest_hash: Option<String>,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct SyncPushReq {
+    pub vault_path: String,
+    pub target_path: String,
+    pub now_ms: i64,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct SyncPushRes {
+    pub snapshot_id: String,
+    pub manifest_hash: String,
+    pub remote_head: SyncHeadRes,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct SyncPullReq {
+    pub vault_path: String,
+    pub target_path: String,
+    pub now_ms: i64,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct SyncPullRes {
+    pub snapshot_id: String,
+    pub manifest_hash: String,
+    pub remote_head: SyncHeadRes,
+}
+
 #[cfg(feature = "phase_l_preview")]
 #[derive(Debug, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -509,6 +562,60 @@ pub fn events_list_rpc(req: EventsListReq) -> RpcResponse<EventsListRes> {
 pub fn jobs_list_rpc(req: JobsListReq) -> RpcResponse<JobsListRes> {
     match rpc_service::jobs_list_service(std::path::Path::new(&req.vault_path)) {
         Ok(jobs) => RpcResponse::ok(JobsListRes { jobs }),
+        Err(error) => RpcResponse::err(error),
+    }
+}
+
+fn map_sync_head(head: kc_core::sync::SyncHeadV1) -> SyncHeadRes {
+    SyncHeadRes {
+        schema_version: head.schema_version,
+        snapshot_id: head.snapshot_id,
+        manifest_hash: head.manifest_hash,
+        created_at_ms: head.created_at_ms,
+    }
+}
+
+pub fn sync_status_rpc(req: SyncStatusReq) -> RpcResponse<SyncStatusRes> {
+    match rpc_service::sync_status_service(
+        std::path::Path::new(&req.vault_path),
+        std::path::Path::new(&req.target_path),
+    ) {
+        Ok(status) => RpcResponse::ok(SyncStatusRes {
+            target_path: status.target_path,
+            remote_head: status.remote_head.map(map_sync_head),
+            seen_remote_snapshot_id: status.seen_remote_snapshot_id,
+            last_applied_manifest_hash: status.last_applied_manifest_hash,
+        }),
+        Err(error) => RpcResponse::err(error),
+    }
+}
+
+pub fn sync_push_rpc(req: SyncPushReq) -> RpcResponse<SyncPushRes> {
+    match rpc_service::sync_push_service(
+        std::path::Path::new(&req.vault_path),
+        std::path::Path::new(&req.target_path),
+        req.now_ms,
+    ) {
+        Ok(out) => RpcResponse::ok(SyncPushRes {
+            snapshot_id: out.snapshot_id,
+            manifest_hash: out.manifest_hash,
+            remote_head: map_sync_head(out.remote_head),
+        }),
+        Err(error) => RpcResponse::err(error),
+    }
+}
+
+pub fn sync_pull_rpc(req: SyncPullReq) -> RpcResponse<SyncPullRes> {
+    match rpc_service::sync_pull_service(
+        std::path::Path::new(&req.vault_path),
+        std::path::Path::new(&req.target_path),
+        req.now_ms,
+    ) {
+        Ok(out) => RpcResponse::ok(SyncPullRes {
+            snapshot_id: out.snapshot_id,
+            manifest_hash: out.manifest_hash,
+            remote_head: map_sync_head(out.remote_head),
+        }),
         Err(error) => RpcResponse::err(error),
     }
 }

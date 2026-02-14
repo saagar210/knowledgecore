@@ -71,6 +71,11 @@ AppError schema v1 and stable error taxonomy; UI branches on code only.
   - `KC_ENCRYPTION_UNSUPPORTED`
   - `KC_ENCRYPTION_REQUIRED`
   - `KC_ENCRYPTION_MIGRATION_FAILED`
+- Sync:
+  - `KC_SYNC_TARGET_INVALID`
+  - `KC_SYNC_STATE_FAILED`
+  - `KC_SYNC_CONFLICT`
+  - `KC_SYNC_APPLY_FAILED`
 
 ## RPC mapping
 - RPC responses return either `{ ok: true, data }` or `{ ok: false, error: AppError }` without changing `error.code`.

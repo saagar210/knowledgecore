@@ -15,6 +15,7 @@ pub mod locator;
 pub mod snippet;
 pub mod chunking;
 pub mod export;
+pub mod sync;
 pub mod rpc_service;
 #[cfg(feature = "phase_l_preview")]
 pub mod deferred;

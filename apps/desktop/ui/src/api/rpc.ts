@@ -139,6 +139,31 @@ export type EventItem = { event_id: number; ts_ms: number; event_type: string };
 export type EventsListRes = { events: EventItem[] };
 export type JobsListReq = { vault_path: string };
 export type JobsListRes = { jobs: string[] };
+export type SyncHead = {
+  schema_version: number;
+  snapshot_id: string;
+  manifest_hash: string;
+  created_at_ms: number;
+};
+export type SyncStatusReq = { vault_path: string; target_path: string };
+export type SyncStatusRes = {
+  target_path: string;
+  remote_head: SyncHead | null;
+  seen_remote_snapshot_id: string | null;
+  last_applied_manifest_hash: string | null;
+};
+export type SyncPushReq = { vault_path: string; target_path: string; now_ms: number };
+export type SyncPushRes = {
+  snapshot_id: string;
+  manifest_hash: string;
+  remote_head: SyncHead;
+};
+export type SyncPullReq = { vault_path: string; target_path: string; now_ms: number };
+export type SyncPullRes = {
+  snapshot_id: string;
+  manifest_hash: string;
+  remote_head: SyncHead;
+};
 export type PreviewStatusReq = Record<string, never>;
 export type PreviewCapabilityDraft = {
   schema_version: number;
@@ -174,7 +199,10 @@ export const rpcMethods = {
   verifyBundle: (req: VerifyBundleReq) => rpc<VerifyBundleReq, VerifyBundleRes>("verify_bundle", req),
   askQuestion: (req: AskQuestionReq) => rpc<AskQuestionReq, AskQuestionRes>("ask_question", req),
   eventsList: (req: EventsListReq) => rpc<EventsListReq, EventsListRes>("events_list", req),
-  jobsList: (req: JobsListReq) => rpc<JobsListReq, JobsListRes>("jobs_list", req)
+  jobsList: (req: JobsListReq) => rpc<JobsListReq, JobsListRes>("jobs_list", req),
+  syncStatus: (req: SyncStatusReq) => rpc<SyncStatusReq, SyncStatusRes>("sync_status", req),
+  syncPush: (req: SyncPushReq) => rpc<SyncPushReq, SyncPushRes>("sync_push", req),
+  syncPull: (req: SyncPullReq) => rpc<SyncPullReq, SyncPullRes>("sync_pull", req)
 };
 
 export function previewRpcEnabled(): boolean {

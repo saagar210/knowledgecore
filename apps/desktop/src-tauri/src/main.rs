@@ -20,6 +20,9 @@ fn main() {
         commands::ask_question,
         commands::events_list,
         commands::jobs_list,
+        commands::sync_status,
+        commands::sync_push,
+        commands::sync_pull,
         commands::preview_status,
         commands::preview_capability,
     ]);
@@ -41,6 +44,9 @@ fn main() {
         commands::ask_question,
         commands::events_list,
         commands::jobs_list,
+        commands::sync_status,
+        commands::sync_push,
+        commands::sync_pull,
     ]);
 
     builder.run(tauri::generate_context!()).expect("failed to run tauri app");

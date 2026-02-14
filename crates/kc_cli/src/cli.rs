@@ -47,6 +47,10 @@ pub enum Command {
         #[command(subcommand)]
         cmd: FixturesCmd,
     },
+    Sync {
+        #[command(subcommand)]
+        cmd: SyncCmd,
+    },
     #[cfg(feature = "phase_l_preview")]
     Preview {
         #[command(subcommand)]
@@ -124,6 +128,26 @@ pub enum FixturesCmd {
     Generate {
         #[arg(long)]
         corpus: String,
+    },
+}
+
+#[derive(Subcommand)]
+pub enum SyncCmd {
+    Status {
+        vault_path: String,
+        target_path: String,
+    },
+    Push {
+        vault_path: String,
+        target_path: String,
+        #[arg(long = "now-ms")]
+        now_ms: i64,
+    },
+    Pull {
+        vault_path: String,
+        target_path: String,
+        #[arg(long = "now-ms")]
+        now_ms: i64,
     },
 }
 

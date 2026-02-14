@@ -356,6 +356,32 @@ pub fn jobs_list_service(_vault_path: &Path) -> AppResult<Vec<String>> {
     Ok(jobs.iter().cloned().collect())
 }
 
+pub fn sync_status_service(vault_path: &Path, target_path: &Path) -> AppResult<crate::sync::SyncStatusV1> {
+    let vault = vault_open(vault_path)?;
+    let conn = open_db(&vault_path.join(vault.db.relative_path))?;
+    crate::sync::sync_status(&conn, target_path)
+}
+
+pub fn sync_push_service(
+    vault_path: &Path,
+    target_path: &Path,
+    now_ms: i64,
+) -> AppResult<crate::sync::SyncPushResultV1> {
+    let vault = vault_open(vault_path)?;
+    let conn = open_db(&vault_path.join(vault.db.relative_path))?;
+    crate::sync::sync_push(&conn, vault_path, target_path, now_ms)
+}
+
+pub fn sync_pull_service(
+    vault_path: &Path,
+    target_path: &Path,
+    now_ms: i64,
+) -> AppResult<crate::sync::SyncPullResultV1> {
+    let vault = vault_open(vault_path)?;
+    let conn = open_db(&vault_path.join(vault.db.relative_path))?;
+    crate::sync::sync_pull(&conn, vault_path, target_path, now_ms)
+}
+
 fn load_object_hashes(conn: &rusqlite::Connection) -> AppResult<Vec<ObjectHash>> {
     let mut stmt = conn
         .prepare("SELECT object_hash FROM objects ORDER BY object_hash ASC")

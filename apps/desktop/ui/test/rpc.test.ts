@@ -26,7 +26,10 @@ describe("rpc client", () => {
       "verifyBundle",
       "askQuestion",
       "eventsList",
-      "jobsList"
+      "jobsList",
+      "syncStatus",
+      "syncPush",
+      "syncPull"
     ]);
   });
 
