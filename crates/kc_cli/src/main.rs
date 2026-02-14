@@ -8,8 +8,6 @@ mod commands {
     pub mod ingest;
     pub mod index;
     pub mod lineage;
-    #[cfg(feature = "phase_l_preview")]
-    pub mod preview;
     pub mod sync;
     pub mod verify;
     pub mod vault;
@@ -21,8 +19,6 @@ use cli::{
     BenchCmd, Cli, Command, DepsCmd, FixturesCmd, GcCmd, IndexCmd, IngestCmd, VaultCmd,
     LineageCmd, LineageOverlayCmd, SyncCmd, VaultDbEncryptCmd, VaultEncryptCmd,
 };
-#[cfg(feature = "phase_l_preview")]
-use cli::PreviewCmd;
 use kc_core::vault::{vault_init, vault_open};
 
 fn now_ms() -> i64 {
@@ -169,11 +165,6 @@ fn main() {
                     commands::lineage::run_overlay_list(&vault_path, &doc_id)
                 }
             },
-        },
-        #[cfg(feature = "phase_l_preview")]
-        Command::Preview { cmd } => match cmd {
-            PreviewCmd::Status => commands::preview::run_status(),
-            PreviewCmd::Capability { name } => commands::preview::run_capability(&name),
         },
     };
 

@@ -34,14 +34,13 @@ Authoritative registry of all versioned schemas and contracts. Any schema additi
 
 ## Draft Schemas (Phase L, non-runtime)
 
-- No remaining draft schemas. Phase L draft lineage contract was promoted to active in N3 (`spec/30-advanced-lineage-ui-v1.md`).
+- Phase L draft runtime scaffolding was retired in R1 after O/P/Q activation.
+- Design-lock specs `22`–`26` remain archival references and are not runtime contracts.
 
 ## Schema validation workflow
 - JSON schema validation tests (Rust `jsonschema` crate):
   - `cargo test -p kc_core -- schema_*`
   - `cargo test -p kc_cli -- schema_*`
-- Draft schema validation tests (Phase L scaffolding):
-  - `cargo test -p kc_core -- schema_draft_*`
 - RPC round-trip serialization tests:
   - `cargo test -p apps_desktop_tauri -- rpc_*`
   - Deterministic RPC request schema tests:

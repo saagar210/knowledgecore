@@ -4,10 +4,6 @@ version.workspace = true
 edition.workspace = true
 license.workspace = true
 
-[features]
-default = []
-phase_l_preview = ["kc_core/phase_l_preview"]
-
 [dependencies]
 kc_ask = { path = "../../../crates/kc_ask" }
 kc_cli = { path = "../../../crates/kc_cli" }

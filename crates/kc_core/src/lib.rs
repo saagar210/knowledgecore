@@ -20,7 +20,5 @@ pub mod sync_s3;
 pub mod sync_transport;
 pub mod lineage;
 pub mod rpc_service;
-#[cfg(feature = "phase_l_preview")]
-pub mod deferred;
 
 pub use app_error::AppError;

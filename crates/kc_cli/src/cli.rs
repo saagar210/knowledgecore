@@ -55,11 +55,6 @@ pub enum Command {
         #[command(subcommand)]
         cmd: LineageCmd,
     },
-    #[cfg(feature = "phase_l_preview")]
-    Preview {
-        #[command(subcommand)]
-        cmd: PreviewCmd,
-    },
 }
 
 #[derive(Subcommand)]
@@ -212,15 +207,5 @@ pub enum LineageOverlayCmd {
     List {
         vault_path: String,
         doc_id: String,
-    },
-}
-
-#[cfg(feature = "phase_l_preview")]
-#[derive(Subcommand)]
-pub enum PreviewCmd {
-    Status,
-    Capability {
-        #[arg(long)]
-        name: String,
     },
 }
