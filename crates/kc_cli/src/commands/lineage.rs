@@ -4,6 +4,9 @@ use kc_core::lineage::{
     lineage_lock_acquire, lineage_lock_release, lineage_lock_status, lineage_overlay_add,
     lineage_overlay_list, lineage_overlay_remove,
 };
+use kc_core::lineage_governance::{
+    lineage_lock_acquire_scope, lineage_role_grant, lineage_role_list, lineage_role_revoke,
+};
 use kc_core::vault::vault_open;
 use std::path::Path;
 
@@ -78,10 +81,84 @@ pub fn run_overlay_list(vault_path: &str, doc_id: &str) -> AppResult<()> {
     Ok(())
 }
 
+pub fn run_role_grant(
+    vault_path: &str,
+    subject: &str,
+    role: &str,
+    granted_by: &str,
+    now_ms: i64,
+) -> AppResult<()> {
+    let vault = vault_open(Path::new(vault_path))?;
+    let conn = open_db(&Path::new(vault_path).join(vault.db.relative_path))?;
+    let binding = lineage_role_grant(&conn, subject, role, granted_by, now_ms)?;
+    println!(
+        "{}",
+        serde_json::to_string_pretty(&serde_json::json!({
+            "status": "ok",
+            "binding": binding
+        }))
+        .unwrap_or_else(|_| "{}".to_string())
+    );
+    Ok(())
+}
+
+pub fn run_role_revoke(vault_path: &str, subject: &str, role: &str) -> AppResult<()> {
+    let vault = vault_open(Path::new(vault_path))?;
+    let conn = open_db(&Path::new(vault_path).join(vault.db.relative_path))?;
+    lineage_role_revoke(&conn, subject, role)?;
+    println!(
+        "{}",
+        serde_json::to_string_pretty(&serde_json::json!({
+            "status": "ok",
+            "revoked": true,
+            "subject": subject,
+            "role": role
+        }))
+        .unwrap_or_else(|_| "{}".to_string())
+    );
+    Ok(())
+}
+
+pub fn run_role_list(vault_path: &str) -> AppResult<()> {
+    let vault = vault_open(Path::new(vault_path))?;
+    let conn = open_db(&Path::new(vault_path).join(vault.db.relative_path))?;
+    let bindings = lineage_role_list(&conn)?;
+    println!(
+        "{}",
+        serde_json::to_string_pretty(&serde_json::json!({
+            "status": "ok",
+            "bindings": bindings
+        }))
+        .unwrap_or_else(|_| "{}".to_string())
+    );
+    Ok(())
+}
+
 pub fn run_lock_acquire(vault_path: &str, doc_id: &str, owner: &str, now_ms: i64) -> AppResult<()> {
     let vault = vault_open(Path::new(vault_path))?;
     let conn = open_db(&Path::new(vault_path).join(vault.db.relative_path))?;
     let lease = lineage_lock_acquire(&conn, doc_id, owner, now_ms)?;
+    println!(
+        "{}",
+        serde_json::to_string_pretty(&serde_json::json!({
+            "status": "ok",
+            "lease": lease
+        }))
+        .unwrap_or_else(|_| "{}".to_string())
+    );
+    Ok(())
+}
+
+pub fn run_lock_acquire_scope(
+    vault_path: &str,
+    scope_kind: &str,
+    scope_value: &str,
+    owner: &str,
+    now_ms: i64,
+) -> AppResult<()> {
+    let vault = vault_open(Path::new(vault_path))?;
+    let conn = open_db(&Path::new(vault_path).join(vault.db.relative_path))?;
+    let lease = lineage_lock_acquire_scope(&conn, scope_kind, scope_value, owner, now_ms)?;
     println!(
         "{}",
         serde_json::to_string_pretty(&serde_json::json!({
@@ -127,13 +204,16 @@ pub fn run_lock_status(vault_path: &str, doc_id: &str, now_ms: i64) -> AppResult
 #[cfg(test)]
 mod tests {
     use super::{
-        run_lock_acquire, run_lock_release, run_lock_status, run_overlay_add, run_overlay_list,
-        run_overlay_remove,
+        run_lock_acquire, run_lock_acquire_scope, run_lock_release, run_lock_status,
+        run_overlay_add, run_overlay_list, run_overlay_remove, run_role_grant, run_role_list,
+        run_role_revoke,
     };
     use kc_core::db::open_db;
     use kc_core::ingest::ingest_bytes;
     use kc_core::lineage::{lineage_lock_acquire, lineage_overlay_list};
-    use kc_core::lineage_governance::lineage_role_grant;
+    use kc_core::lineage_governance::{
+        lineage_lock_scope_status, lineage_role_grant, lineage_role_list,
+    };
     use kc_core::object_store::ObjectStore;
     use kc_core::vault::vault_init;
 
@@ -192,5 +272,47 @@ mod tests {
             .expect("lock release");
         run_lock_acquire(root.to_string_lossy().as_ref(), &doc_id, "cli-test", 6)
             .expect("lock acquire");
+    }
+
+    #[test]
+    fn role_and_scope_commands_round_trip() {
+        let root = tempfile::tempdir().expect("tempdir").keep();
+        vault_init(&root, "demo", 1).expect("vault init");
+
+        run_role_grant(
+            root.to_string_lossy().as_ref(),
+            "subject-a",
+            "editor",
+            "cli-test",
+            10,
+        )
+        .expect("role grant");
+        run_role_list(root.to_string_lossy().as_ref()).expect("role list");
+
+        let conn = open_db(&root.join("db/knowledge.sqlite")).expect("open db");
+        let listed = lineage_role_list(&conn).expect("direct role list");
+        assert!(listed
+            .iter()
+            .any(|binding| binding.subject_id == "subject-a" && binding.role_name == "editor"));
+        drop(conn);
+
+        run_lock_acquire_scope(
+            root.to_string_lossy().as_ref(),
+            "doc",
+            "doc-scope",
+            "scope-owner",
+            11,
+        )
+        .expect("acquire scope");
+
+        let conn = open_db(&root.join("db/knowledge.sqlite")).expect("open db");
+        let status =
+            lineage_lock_scope_status(&conn, "doc", "doc-scope", 12).expect("scope status");
+        assert!(status.held);
+        assert_eq!(status.owner.as_deref(), Some("scope-owner"));
+        drop(conn);
+
+        run_role_revoke(root.to_string_lossy().as_ref(), "subject-a", "editor")
+            .expect("role revoke");
     }
 }

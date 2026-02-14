@@ -1,7 +1,8 @@
 use apps_desktop_tauri::rpc::{
-    AskQuestionReq, LineageLockAcquireReq, LineageLockReleaseReq, LineageLockStatusReq,
-    LineageOverlayAddReq, LineageOverlayListReq, LineageOverlayRemoveReq, LineageQueryReq,
-    LineageQueryV2Req, SearchQueryReq, SyncMergePreviewReq, SyncPullReq, SyncPushReq,
+    AskQuestionReq, LineageLockAcquireReq, LineageLockAcquireScopeReq, LineageLockReleaseReq,
+    LineageLockStatusReq, LineageOverlayAddReq, LineageOverlayListReq, LineageOverlayRemoveReq,
+    LineageQueryReq, LineageQueryV2Req, LineageRoleGrantReq, LineageRoleListReq,
+    LineageRoleRevokeReq, SearchQueryReq, SyncMergePreviewReq, SyncPullReq, SyncPushReq,
     SyncStatusReq, TrustDeviceEnrollReq, TrustDeviceListReq, TrustDeviceVerifyChainReq,
     TrustIdentityCompleteReq, TrustIdentityStartReq, VaultEncryptionEnableReq,
     VaultEncryptionMigrateReq, VaultEncryptionStatusReq, VaultInitReq, VaultLockReq,
@@ -455,4 +456,60 @@ fn rpc_schema_lineage_lock_rejects_unknown_fields() {
         "extra": "nope"
     });
     assert!(serde_json::from_value::<LineageLockAcquireReq>(invalid).is_err());
+}
+
+#[test]
+fn rpc_schema_lineage_role_requests_validate_shapes() {
+    let grant = serde_json::json!({
+        "vault_path": "/tmp/vault",
+        "subject": "user-a",
+        "role": "editor",
+        "granted_by": "desktop",
+        "now_ms": 200
+    });
+    assert!(serde_json::from_value::<LineageRoleGrantReq>(grant).is_ok());
+
+    let list = serde_json::json!({
+        "vault_path": "/tmp/vault"
+    });
+    assert!(serde_json::from_value::<LineageRoleListReq>(list).is_ok());
+
+    let revoke = serde_json::json!({
+        "vault_path": "/tmp/vault",
+        "subject": "user-a",
+        "role": "editor"
+    });
+    assert!(serde_json::from_value::<LineageRoleRevokeReq>(revoke).is_ok());
+}
+
+#[test]
+fn rpc_schema_lineage_role_rejects_unknown_fields() {
+    let invalid = serde_json::json!({
+        "vault_path": "/tmp/vault",
+        "subject": "user-a",
+        "role": "editor",
+        "now_ms": 200,
+        "extra": "nope"
+    });
+    assert!(serde_json::from_value::<LineageRoleGrantReq>(invalid).is_err());
+}
+
+#[test]
+fn rpc_schema_lineage_lock_acquire_scope_requires_fields() {
+    let missing_scope = serde_json::json!({
+        "vault_path": "/tmp/vault",
+        "scope_value": "doc-1",
+        "owner": "desktop",
+        "now_ms": 100
+    });
+    assert!(serde_json::from_value::<LineageLockAcquireScopeReq>(missing_scope).is_err());
+
+    let valid = serde_json::json!({
+        "vault_path": "/tmp/vault",
+        "scope_kind": "doc",
+        "scope_value": "doc-1",
+        "owner": "desktop",
+        "now_ms": 100
+    });
+    assert!(serde_json::from_value::<LineageLockAcquireScopeReq>(valid).is_ok());
 }

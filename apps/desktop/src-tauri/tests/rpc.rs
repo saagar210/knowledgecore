@@ -1,8 +1,10 @@
 use apps_desktop_tauri::commands;
 use apps_desktop_tauri::rpc::{
     ingest_inbox_start_rpc, ingest_inbox_stop_rpc, jobs_list_rpc, lineage_lock_acquire_rpc,
+    lineage_lock_acquire_scope_rpc,
     lineage_lock_release_rpc, lineage_lock_status_rpc, lineage_overlay_add_rpc,
     lineage_overlay_list_rpc, lineage_overlay_remove_rpc, lineage_query_rpc, lineage_query_v2_rpc,
+    lineage_role_grant_rpc, lineage_role_list_rpc, lineage_role_revoke_rpc,
     sync_merge_preview_rpc, sync_pull_rpc, sync_push_rpc, sync_status_rpc, trust_device_enroll_rpc,
     trust_device_list_rpc, trust_device_verify_chain_rpc, trust_identity_complete_rpc,
     trust_identity_start_rpc, vault_encryption_enable_rpc, vault_encryption_migrate_rpc,
@@ -11,10 +13,11 @@ use apps_desktop_tauri::rpc::{
     vault_recovery_escrow_rotate_rpc, vault_recovery_escrow_status_rpc,
     vault_recovery_generate_rpc, vault_recovery_status_rpc, vault_recovery_verify_rpc,
     vault_unlock_rpc, IngestInboxStartReq, IngestInboxStopReq, JobsListReq, LineageLockAcquireReq,
-    LineageLockReleaseReq, LineageLockStatusReq, LineageOverlayAddReq, LineageOverlayListReq,
-    LineageOverlayRemoveReq, LineageQueryReq, LineageQueryV2Req, RpcResponse, SyncMergePreviewReq,
-    SyncPullReq, SyncPushReq, SyncStatusReq, TrustDeviceEnrollReq, TrustDeviceListReq,
-    TrustDeviceVerifyChainReq, TrustIdentityCompleteReq, TrustIdentityStartReq,
+    LineageLockAcquireScopeReq, LineageLockReleaseReq, LineageLockStatusReq, LineageOverlayAddReq,
+    LineageOverlayListReq, LineageOverlayRemoveReq, LineageQueryReq, LineageQueryV2Req,
+    LineageRoleGrantReq, LineageRoleListReq, LineageRoleRevokeReq, RpcResponse,
+    SyncMergePreviewReq, SyncPullReq, SyncPushReq, SyncStatusReq, TrustDeviceEnrollReq,
+    TrustDeviceListReq, TrustDeviceVerifyChainReq, TrustIdentityCompleteReq, TrustIdentityStartReq,
     VaultEncryptionEnableReq, VaultEncryptionMigrateReq, VaultEncryptionStatusReq, VaultInitReq,
     VaultLockReq, VaultLockStatusReq, VaultOpenReq, VaultRecoveryEscrowEnableReq,
     VaultRecoveryEscrowRestoreReq, VaultRecoveryEscrowRotateReq, VaultRecoveryEscrowStatusReq,
@@ -703,11 +706,26 @@ fn rpc_lineage_v2_overlay_round_trip_is_deterministic() {
         RpcResponse::Err { error } => panic!("ingest failed: {}", error.code),
     };
 
+    let granted = lineage_role_grant_rpc(LineageRoleGrantReq {
+        vault_path: root.to_string_lossy().to_string(),
+        subject: "desktop-test".to_string(),
+        role: "editor".to_string(),
+        granted_by: Some("rpc-test".to_string()),
+        now_ms: 3,
+    });
+    match granted {
+        RpcResponse::Ok { data } => {
+            assert_eq!(data.binding.subject_id, "desktop-test");
+            assert_eq!(data.binding.role_name, "editor");
+        }
+        RpcResponse::Err { error } => panic!("lineage role grant failed: {}", error.code),
+    }
+
     let acquired = lineage_lock_acquire_rpc(LineageLockAcquireReq {
         vault_path: root.to_string_lossy().to_string(),
         doc_id: seed_doc_id.clone(),
         owner: "desktop-test".to_string(),
-        now_ms: 3,
+        now_ms: 4,
     });
     let lock_token = match acquired {
         RpcResponse::Ok { data } => data.lease.token,
@@ -717,7 +735,7 @@ fn rpc_lineage_v2_overlay_round_trip_is_deterministic() {
     let lock_status = lineage_lock_status_rpc(LineageLockStatusReq {
         vault_path: root.to_string_lossy().to_string(),
         doc_id: seed_doc_id.clone(),
-        now_ms: 4,
+        now_ms: 5,
     });
     match lock_status {
         RpcResponse::Ok { data } => {
@@ -735,7 +753,7 @@ fn rpc_lineage_v2_overlay_round_trip_is_deterministic() {
         relation: "supports".to_string(),
         evidence: "manual".to_string(),
         lock_token: lock_token.clone(),
-        created_at_ms: 5,
+        created_at_ms: 6,
         created_by: Some("desktop-test".to_string()),
     });
     let overlay_id = match added {
@@ -762,14 +780,14 @@ fn rpc_lineage_v2_overlay_round_trip_is_deterministic() {
         vault_path: root.to_string_lossy().to_string(),
         seed_doc_id: seed_doc_id.clone(),
         depth: 2,
-        now_ms: 6,
+        now_ms: 7,
     };
     let res_a = lineage_query_v2_rpc(req);
     let res_b = lineage_query_v2_rpc(LineageQueryV2Req {
         vault_path: root.to_string_lossy().to_string(),
         seed_doc_id: seed_doc_id.clone(),
         depth: 2,
-        now_ms: 6,
+        now_ms: 7,
     });
     assert_eq!(
         serde_json::to_value(&res_a).expect("serialize lineage a"),
@@ -805,7 +823,7 @@ fn rpc_lineage_v2_overlay_round_trip_is_deterministic() {
         vault_path: root.to_string_lossy().to_string(),
         overlay_id: overlay_id.clone(),
         lock_token: lock_token.clone(),
-        now_ms: 7,
+        now_ms: 8,
     });
     match removed {
         RpcResponse::Ok { data } => assert_eq!(data.removed_overlay_id, overlay_id),
@@ -829,6 +847,75 @@ fn rpc_lineage_v2_overlay_round_trip_is_deterministic() {
     match listed_after_remove {
         RpcResponse::Ok { data } => assert!(data.overlays.is_empty()),
         RpcResponse::Err { error } => panic!("overlay list after remove failed: {}", error.code),
+    }
+}
+
+#[test]
+fn rpc_lineage_role_and_scope_lock_round_trip() {
+    let root = tempfile::tempdir().expect("tempdir").keep();
+
+    let init = vault_init_rpc(VaultInitReq {
+        vault_path: root.to_string_lossy().to_string(),
+        vault_slug: "demo".to_string(),
+        now_ms: 1,
+    });
+    match init {
+        RpcResponse::Ok { .. } => {}
+        RpcResponse::Err { error } => panic!("vault init failed: {}", error.code),
+    }
+
+    let granted = lineage_role_grant_rpc(LineageRoleGrantReq {
+        vault_path: root.to_string_lossy().to_string(),
+        subject: "team-user".to_string(),
+        role: "viewer".to_string(),
+        granted_by: Some("desktop".to_string()),
+        now_ms: 2,
+    });
+    match granted {
+        RpcResponse::Ok { data } => {
+            assert_eq!(data.binding.subject_id, "team-user");
+            assert_eq!(data.binding.role_name, "viewer");
+        }
+        RpcResponse::Err { error } => panic!("role grant failed: {}", error.code),
+    }
+
+    let listed = lineage_role_list_rpc(LineageRoleListReq {
+        vault_path: root.to_string_lossy().to_string(),
+    });
+    match listed {
+        RpcResponse::Ok { data } => {
+            assert!(data
+                .bindings
+                .iter()
+                .any(|binding| binding.subject_id == "team-user" && binding.role_name == "viewer"));
+        }
+        RpcResponse::Err { error } => panic!("role list failed: {}", error.code),
+    }
+
+    let scoped = lineage_lock_acquire_scope_rpc(LineageLockAcquireScopeReq {
+        vault_path: root.to_string_lossy().to_string(),
+        scope_kind: "doc".to_string(),
+        scope_value: "doc-42".to_string(),
+        owner: "team-user".to_string(),
+        now_ms: 3,
+    });
+    match scoped {
+        RpcResponse::Ok { data } => {
+            assert_eq!(data.lease.scope_kind, "doc");
+            assert_eq!(data.lease.scope_value, "doc-42");
+            assert_eq!(data.lease.owner, "team-user");
+        }
+        RpcResponse::Err { error } => panic!("scope lock acquire failed: {}", error.code),
+    }
+
+    let revoked = lineage_role_revoke_rpc(LineageRoleRevokeReq {
+        vault_path: root.to_string_lossy().to_string(),
+        subject: "team-user".to_string(),
+        role: "viewer".to_string(),
+    });
+    match revoked {
+        RpcResponse::Ok { data } => assert!(data.revoked),
+        RpcResponse::Err { error } => panic!("role revoke failed: {}", error.code),
     }
 }
 

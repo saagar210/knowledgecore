@@ -802,6 +802,80 @@ pub struct LineageLockStatusRes {
     pub expired: bool,
 }
 
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct LineageRoleGrantReq {
+    pub vault_path: String,
+    pub subject: String,
+    pub role: String,
+    #[serde(default)]
+    pub granted_by: Option<String>,
+    pub now_ms: i64,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct LineageRoleBindingRes {
+    pub subject_id: String,
+    pub role_name: String,
+    pub role_rank: i64,
+    pub granted_by: String,
+    pub granted_at_ms: i64,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct LineageRoleGrantRes {
+    pub binding: LineageRoleBindingRes,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct LineageRoleRevokeReq {
+    pub vault_path: String,
+    pub subject: String,
+    pub role: String,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct LineageRoleRevokeRes {
+    pub revoked: bool,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct LineageRoleListReq {
+    pub vault_path: String,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct LineageRoleListRes {
+    pub bindings: Vec<LineageRoleBindingRes>,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct LineageLockAcquireScopeReq {
+    pub vault_path: String,
+    pub scope_kind: String,
+    pub scope_value: String,
+    pub owner: String,
+    pub now_ms: i64,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct LineageScopeLockLeaseRes {
+    pub scope_kind: String,
+    pub scope_value: String,
+    pub owner: String,
+    pub token: String,
+    pub acquired_at_ms: i64,
+    pub expires_at_ms: i64,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct LineageLockAcquireScopeRes {
+    pub lease: LineageScopeLockLeaseRes,
+}
+
 pub fn vault_init_rpc(req: VaultInitReq) -> RpcResponse<VaultInitRes> {
     match rpc_service::vault_init_service(
         std::path::Path::new(&req.vault_path),
@@ -1424,6 +1498,31 @@ fn map_lineage_lock_status(status: kc_core::lineage::LineageLockStatusV1) -> Lin
     }
 }
 
+fn map_lineage_role_binding(
+    binding: kc_core::lineage_governance::LineageRoleBindingV2,
+) -> LineageRoleBindingRes {
+    LineageRoleBindingRes {
+        subject_id: binding.subject_id,
+        role_name: binding.role_name,
+        role_rank: binding.role_rank,
+        granted_by: binding.granted_by,
+        granted_at_ms: binding.granted_at_ms,
+    }
+}
+
+fn map_lineage_scope_lock_lease(
+    lease: kc_core::lineage_governance::LineageScopeLockLeaseV2,
+) -> LineageScopeLockLeaseRes {
+    LineageScopeLockLeaseRes {
+        scope_kind: lease.scope_kind,
+        scope_value: lease.scope_value,
+        owner: lease.owner,
+        token: lease.token,
+        acquired_at_ms: lease.acquired_at_ms,
+        expires_at_ms: lease.expires_at_ms,
+    }
+}
+
 pub fn lineage_query_v2_rpc(req: LineageQueryV2Req) -> RpcResponse<LineageQueryV2Res> {
     match rpc_service::lineage_query_v2_service(
         std::path::Path::new(&req.vault_path),
@@ -1544,6 +1643,58 @@ pub fn lineage_lock_status_rpc(req: LineageLockStatusReq) -> RpcResponse<Lineage
         req.now_ms,
     ) {
         Ok(status) => RpcResponse::ok(map_lineage_lock_status(status)),
+        Err(error) => RpcResponse::err(error),
+    }
+}
+
+pub fn lineage_role_grant_rpc(req: LineageRoleGrantReq) -> RpcResponse<LineageRoleGrantRes> {
+    match rpc_service::lineage_role_grant_service(
+        std::path::Path::new(&req.vault_path),
+        &req.subject,
+        &req.role,
+        req.granted_by.as_deref().unwrap_or("rpc"),
+        req.now_ms,
+    ) {
+        Ok(binding) => RpcResponse::ok(LineageRoleGrantRes {
+            binding: map_lineage_role_binding(binding),
+        }),
+        Err(error) => RpcResponse::err(error),
+    }
+}
+
+pub fn lineage_role_revoke_rpc(req: LineageRoleRevokeReq) -> RpcResponse<LineageRoleRevokeRes> {
+    match rpc_service::lineage_role_revoke_service(
+        std::path::Path::new(&req.vault_path),
+        &req.subject,
+        &req.role,
+    ) {
+        Ok(()) => RpcResponse::ok(LineageRoleRevokeRes { revoked: true }),
+        Err(error) => RpcResponse::err(error),
+    }
+}
+
+pub fn lineage_role_list_rpc(req: LineageRoleListReq) -> RpcResponse<LineageRoleListRes> {
+    match rpc_service::lineage_role_list_service(std::path::Path::new(&req.vault_path)) {
+        Ok(bindings) => RpcResponse::ok(LineageRoleListRes {
+            bindings: bindings.into_iter().map(map_lineage_role_binding).collect(),
+        }),
+        Err(error) => RpcResponse::err(error),
+    }
+}
+
+pub fn lineage_lock_acquire_scope_rpc(
+    req: LineageLockAcquireScopeReq,
+) -> RpcResponse<LineageLockAcquireScopeRes> {
+    match rpc_service::lineage_lock_acquire_scope_service(
+        std::path::Path::new(&req.vault_path),
+        &req.scope_kind,
+        &req.scope_value,
+        &req.owner,
+        req.now_ms,
+    ) {
+        Ok(lease) => RpcResponse::ok(LineageLockAcquireScopeRes {
+            lease: map_lineage_scope_lock_lease(lease),
+        }),
         Err(error) => RpcResponse::err(error),
     }
 }

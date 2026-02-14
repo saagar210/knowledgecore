@@ -32,6 +32,11 @@ Define deterministic vault-level RBAC and scoped lock governance for lineage ove
   - `lineage_lock_acquire_scope(conn, scope_kind, scope_value, owner, now_ms)`
   - `lineage_lock_release_scope(conn, scope_kind, scope_value, token)`
   - `lineage_lock_scope_status(conn, scope_kind, scope_value, now_ms)`
+- Surface contracts:
+  - CLI governance: `kc_cli lineage role grant|revoke|list`
+  - CLI scoped lock: `kc_cli lineage lock acquire-scope`
+  - RPC governance: `lineage_role_grant|revoke|list`
+  - RPC scoped lock: `lineage_lock_acquire_scope`
 - DB schema additions:
   - `lineage_roles`
   - `lineage_permissions`

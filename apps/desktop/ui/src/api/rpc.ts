@@ -433,6 +433,45 @@ export type LineageLockStatusRes = {
   expires_at_ms: number | null;
   expired: boolean;
 };
+export type LineageRoleBinding = {
+  subject_id: string;
+  role_name: string;
+  role_rank: number;
+  granted_by: string;
+  granted_at_ms: number;
+};
+export type LineageRoleGrantReq = {
+  vault_path: string;
+  subject: string;
+  role: string;
+  granted_by?: string | null;
+  now_ms: number;
+};
+export type LineageRoleGrantRes = { binding: LineageRoleBinding };
+export type LineageRoleRevokeReq = {
+  vault_path: string;
+  subject: string;
+  role: string;
+};
+export type LineageRoleRevokeRes = { revoked: boolean };
+export type LineageRoleListReq = { vault_path: string };
+export type LineageRoleListRes = { bindings: LineageRoleBinding[] };
+export type LineageScopeLockLease = {
+  scope_kind: string;
+  scope_value: string;
+  owner: string;
+  token: string;
+  acquired_at_ms: number;
+  expires_at_ms: number;
+};
+export type LineageLockAcquireScopeReq = {
+  vault_path: string;
+  scope_kind: string;
+  scope_value: string;
+  owner: string;
+  now_ms: number;
+};
+export type LineageLockAcquireScopeRes = { lease: LineageScopeLockLease };
 export const rpcMethods = {
   vaultInit: (req: VaultInitReqV1) => rpc<VaultInitReqV1, VaultInitRes>("vault_init", req),
   vaultOpen: (req: VaultOpenReq) => rpc<VaultOpenReq, VaultOpenRes>("vault_open", req),
@@ -512,7 +551,18 @@ export const rpcMethods = {
   lineageLockRelease: (req: LineageLockReleaseReq) =>
     rpc<LineageLockReleaseReq, LineageLockReleaseRes>("lineage_lock_release", req),
   lineageLockStatus: (req: LineageLockStatusReq) =>
-    rpc<LineageLockStatusReq, LineageLockStatusRes>("lineage_lock_status", req)
+    rpc<LineageLockStatusReq, LineageLockStatusRes>("lineage_lock_status", req),
+  lineageRoleGrant: (req: LineageRoleGrantReq) =>
+    rpc<LineageRoleGrantReq, LineageRoleGrantRes>("lineage_role_grant", req),
+  lineageRoleRevoke: (req: LineageRoleRevokeReq) =>
+    rpc<LineageRoleRevokeReq, LineageRoleRevokeRes>("lineage_role_revoke", req),
+  lineageRoleList: (req: LineageRoleListReq) =>
+    rpc<LineageRoleListReq, LineageRoleListRes>("lineage_role_list", req),
+  lineageLockAcquireScope: (req: LineageLockAcquireScopeReq) =>
+    rpc<LineageLockAcquireScopeReq, LineageLockAcquireScopeRes>(
+      "lineage_lock_acquire_scope",
+      req
+    )
 };
 
 export type DesktopRpcApi = typeof rpcMethods;

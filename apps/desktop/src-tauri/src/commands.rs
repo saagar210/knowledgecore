@@ -261,3 +261,31 @@ pub fn lineage_lock_status(
 ) -> rpc::RpcResponse<rpc::LineageLockStatusRes> {
     rpc::lineage_lock_status_rpc(req)
 }
+
+#[tauri::command]
+pub fn lineage_role_grant(
+    req: rpc::LineageRoleGrantReq,
+) -> rpc::RpcResponse<rpc::LineageRoleGrantRes> {
+    rpc::lineage_role_grant_rpc(req)
+}
+
+#[tauri::command]
+pub fn lineage_role_revoke(
+    req: rpc::LineageRoleRevokeReq,
+) -> rpc::RpcResponse<rpc::LineageRoleRevokeRes> {
+    rpc::lineage_role_revoke_rpc(req)
+}
+
+#[tauri::command]
+pub fn lineage_role_list(
+    req: rpc::LineageRoleListReq,
+) -> rpc::RpcResponse<rpc::LineageRoleListRes> {
+    rpc::lineage_role_list_rpc(req)
+}
+
+#[tauri::command]
+pub fn lineage_lock_acquire_scope(
+    req: rpc::LineageLockAcquireScopeReq,
+) -> rpc::RpcResponse<rpc::LineageLockAcquireScopeRes> {
+    rpc::lineage_lock_acquire_scope_rpc(req)
+}

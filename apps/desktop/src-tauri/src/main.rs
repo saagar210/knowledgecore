@@ -46,6 +46,10 @@ fn main() {
         commands::lineage_lock_acquire,
         commands::lineage_lock_release,
         commands::lineage_lock_status,
+        commands::lineage_role_grant,
+        commands::lineage_role_revoke,
+        commands::lineage_role_list,
+        commands::lineage_lock_acquire_scope,
     ]);
 
     builder

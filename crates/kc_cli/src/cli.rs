@@ -325,6 +325,10 @@ pub enum LineageCmd {
         #[command(subcommand)]
         cmd: LineageOverlayCmd,
     },
+    Role {
+        #[command(subcommand)]
+        cmd: LineageRoleCmd,
+    },
     Lock {
         #[command(subcommand)]
         cmd: LineageLockCmd,
@@ -368,6 +372,16 @@ pub enum LineageLockCmd {
         #[arg(long = "now-ms")]
         now_ms: i64,
     },
+    AcquireScope {
+        vault_path: String,
+        #[arg(long = "scope")]
+        scope_kind: String,
+        #[arg(long = "scope-value")]
+        scope_value: String,
+        owner: String,
+        #[arg(long = "now-ms")]
+        now_ms: i64,
+    },
     Release {
         vault_path: String,
         doc_id: String,
@@ -378,5 +392,30 @@ pub enum LineageLockCmd {
         doc_id: String,
         #[arg(long = "now-ms")]
         now_ms: i64,
+    },
+}
+
+#[derive(Subcommand)]
+pub enum LineageRoleCmd {
+    Grant {
+        vault_path: String,
+        #[arg(long)]
+        subject: String,
+        #[arg(long)]
+        role: String,
+        #[arg(long, default_value = "cli")]
+        granted_by: String,
+        #[arg(long = "now-ms")]
+        now_ms: i64,
+    },
+    Revoke {
+        vault_path: String,
+        #[arg(long)]
+        subject: String,
+        #[arg(long)]
+        role: String,
+    },
+    List {
+        vault_path: String,
     },
 }

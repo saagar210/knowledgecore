@@ -53,7 +53,11 @@ describe("rpc client", () => {
       "lineageOverlayList",
       "lineageLockAcquire",
       "lineageLockRelease",
-      "lineageLockStatus"
+      "lineageLockStatus",
+      "lineageRoleGrant",
+      "lineageRoleRevoke",
+      "lineageRoleList",
+      "lineageLockAcquireScope"
     ]);
   });
 

@@ -10,13 +10,17 @@ import {
   ingestScanFolder
 } from "../src/features/ingest";
 import {
+  acquireLineageScopeLock,
   acquireLineageLock,
   addLineageOverlay,
+  grantLineageRole,
+  listLineageRoles,
   listLineageOverlays,
   loadLineageLockStatus,
   queryLineage,
   queryLineageV2,
   releaseLineageLock,
+  revokeLineageRole,
   removeLineageOverlay
 } from "../src/features/lineage";
 import { loadRelated } from "../src/features/related";
@@ -397,6 +401,43 @@ function mockApi(): DesktopRpcApi {
         expires_at_ms: 10 + 15 * 60 * 1000,
         expired: false
       }),
+    lineageRoleGrant: () =>
+      ok({
+        binding: {
+          subject_id: "tester",
+          role_name: "editor",
+          role_rank: 20,
+          granted_by: "desktop",
+          granted_at_ms: 10
+        }
+      }),
+    lineageRoleRevoke: () =>
+      ok({
+        revoked: true
+      }),
+    lineageRoleList: () =>
+      ok({
+        bindings: [
+          {
+            subject_id: "tester",
+            role_name: "editor",
+            role_rank: 20,
+            granted_by: "desktop",
+            granted_at_ms: 10
+          }
+        ]
+      }),
+    lineageLockAcquireScope: () =>
+      ok({
+        lease: {
+          scope_kind: "doc",
+          scope_value: "d1",
+          owner: "tester",
+          token: "blake3:scope-lock-token",
+          acquired_at_ms: 10,
+          expires_at_ms: 10 + 15 * 60 * 1000
+        }
+      }),
     lineageOverlayRemove: () =>
       ok({
         removed_overlay_id: "blake3:overlay"
@@ -676,6 +717,36 @@ describe("feature controllers", () => {
       await loadLineageLockStatus(api, {
         vault_path: "/tmp/v",
         doc_id: "d1",
+        now_ms: 10
+      })
+    ).toMatchObject({ kind: "data" });
+    expect(
+      await grantLineageRole(api, {
+        vault_path: "/tmp/v",
+        subject: "tester",
+        role: "editor",
+        granted_by: "desktop",
+        now_ms: 10
+      })
+    ).toMatchObject({ kind: "data" });
+    expect(
+      await listLineageRoles(api, {
+        vault_path: "/tmp/v"
+      })
+    ).toMatchObject({ kind: "data" });
+    expect(
+      await revokeLineageRole(api, {
+        vault_path: "/tmp/v",
+        subject: "tester",
+        role: "editor"
+      })
+    ).toMatchObject({ kind: "data" });
+    expect(
+      await acquireLineageScopeLock(api, {
+        vault_path: "/tmp/v",
+        scope_kind: "doc",
+        scope_value: "d1",
+        owner: "tester",
         now_ms: 10
       })
     ).toMatchObject({ kind: "data" });

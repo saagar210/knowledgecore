@@ -18,7 +18,8 @@ mod verifier;
 use clap::Parser;
 use cli::{
     BenchCmd, Cli, Command, DepsCmd, FixturesCmd, GcCmd, IndexCmd, IngestCmd, LineageCmd,
-    LineageLockCmd, LineageOverlayCmd, SyncCmd, TrustCmd, TrustDeviceCmd, TrustIdentityCmd,
+    LineageLockCmd, LineageOverlayCmd, LineageRoleCmd, SyncCmd, TrustCmd, TrustDeviceCmd,
+    TrustIdentityCmd,
     VaultCmd, VaultDbEncryptCmd, VaultEncryptCmd, VaultRecoveryCmd, VaultRecoveryEscrowCmd,
 };
 use kc_core::vault::{vault_init, vault_open};
@@ -255,6 +256,27 @@ fn main() {
                     commands::lineage::run_overlay_list(&vault_path, &doc_id)
                 }
             },
+            LineageCmd::Role { cmd } => match cmd {
+                LineageRoleCmd::Grant {
+                    vault_path,
+                    subject,
+                    role,
+                    granted_by,
+                    now_ms,
+                } => commands::lineage::run_role_grant(
+                    &vault_path,
+                    &subject,
+                    &role,
+                    &granted_by,
+                    now_ms,
+                ),
+                LineageRoleCmd::Revoke {
+                    vault_path,
+                    subject,
+                    role,
+                } => commands::lineage::run_role_revoke(&vault_path, &subject, &role),
+                LineageRoleCmd::List { vault_path } => commands::lineage::run_role_list(&vault_path),
+            },
             LineageCmd::Lock { cmd } => match cmd {
                 LineageLockCmd::Acquire {
                     vault_path,
@@ -262,6 +284,19 @@ fn main() {
                     owner,
                     now_ms,
                 } => commands::lineage::run_lock_acquire(&vault_path, &doc_id, &owner, now_ms),
+                LineageLockCmd::AcquireScope {
+                    vault_path,
+                    scope_kind,
+                    scope_value,
+                    owner,
+                    now_ms,
+                } => commands::lineage::run_lock_acquire_scope(
+                    &vault_path,
+                    &scope_kind,
+                    &scope_value,
+                    &owner,
+                    now_ms,
+                ),
                 LineageLockCmd::Release {
                     vault_path,
                     doc_id,

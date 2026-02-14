@@ -1,6 +1,8 @@
 import type {
   DesktopRpcApi,
   LineageLockAcquireReq,
+  LineageLockAcquireScopeReq,
+  LineageLockAcquireScopeRes,
   LineageLockAcquireRes,
   LineageLockReleaseReq,
   LineageLockReleaseRes,
@@ -15,7 +17,13 @@ import type {
   LineageQueryReq,
   LineageQueryRes,
   LineageQueryV2Req,
-  LineageQueryV2Res
+  LineageQueryV2Res,
+  LineageRoleGrantReq,
+  LineageRoleGrantRes,
+  LineageRoleListReq,
+  LineageRoleListRes,
+  LineageRoleRevokeReq,
+  LineageRoleRevokeRes
 } from "../api/rpc";
 import { nextStateFromRpc, type ViewState } from "../state/appState";
 
@@ -73,4 +81,32 @@ export async function loadLineageLockStatus(
   req: LineageLockStatusReq
 ): Promise<ViewState<LineageLockStatusRes>> {
   return nextStateFromRpc(await api.lineageLockStatus(req));
+}
+
+export async function grantLineageRole(
+  api: DesktopRpcApi,
+  req: LineageRoleGrantReq
+): Promise<ViewState<LineageRoleGrantRes>> {
+  return nextStateFromRpc(await api.lineageRoleGrant(req));
+}
+
+export async function revokeLineageRole(
+  api: DesktopRpcApi,
+  req: LineageRoleRevokeReq
+): Promise<ViewState<LineageRoleRevokeRes>> {
+  return nextStateFromRpc(await api.lineageRoleRevoke(req));
+}
+
+export async function listLineageRoles(
+  api: DesktopRpcApi,
+  req: LineageRoleListReq
+): Promise<ViewState<LineageRoleListRes>> {
+  return nextStateFromRpc(await api.lineageRoleList(req));
+}
+
+export async function acquireLineageScopeLock(
+  api: DesktopRpcApi,
+  req: LineageLockAcquireScopeReq
+): Promise<ViewState<LineageLockAcquireScopeRes>> {
+  return nextStateFromRpc(await api.lineageLockAcquireScope(req));
 }

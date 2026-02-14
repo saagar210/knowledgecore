@@ -7,6 +7,10 @@ use crate::events::append_event;
 use crate::hashing::blake3_hex_prefixed;
 use crate::ingest::ingest_bytes;
 use crate::locator::{resolve_locator_strict, LocatorV1};
+use crate::lineage_governance::{
+    lineage_lock_acquire_scope, lineage_role_grant, lineage_role_list, lineage_role_revoke,
+    LineageRoleBindingV2, LineageScopeLockLeaseV2,
+};
 use crate::object_store::{is_encrypted_payload, ObjectStore};
 use crate::recovery::{
     generate_recovery_bundle, read_recovery_manifest, verify_recovery_bundle,
@@ -907,6 +911,46 @@ pub fn lineage_lock_status_service(
     let vault = vault_open(vault_path)?;
     let conn = open_db(&vault_path.join(vault.db.relative_path))?;
     crate::lineage::lineage_lock_status(&conn, doc_id, now_ms)
+}
+
+pub fn lineage_role_grant_service(
+    vault_path: &Path,
+    subject_id: &str,
+    role_name: &str,
+    granted_by: &str,
+    now_ms: i64,
+) -> AppResult<LineageRoleBindingV2> {
+    let vault = vault_open(vault_path)?;
+    let conn = open_db(&vault_path.join(vault.db.relative_path))?;
+    lineage_role_grant(&conn, subject_id, role_name, granted_by, now_ms)
+}
+
+pub fn lineage_role_revoke_service(
+    vault_path: &Path,
+    subject_id: &str,
+    role_name: &str,
+) -> AppResult<()> {
+    let vault = vault_open(vault_path)?;
+    let conn = open_db(&vault_path.join(vault.db.relative_path))?;
+    lineage_role_revoke(&conn, subject_id, role_name)
+}
+
+pub fn lineage_role_list_service(vault_path: &Path) -> AppResult<Vec<LineageRoleBindingV2>> {
+    let vault = vault_open(vault_path)?;
+    let conn = open_db(&vault_path.join(vault.db.relative_path))?;
+    lineage_role_list(&conn)
+}
+
+pub fn lineage_lock_acquire_scope_service(
+    vault_path: &Path,
+    scope_kind: &str,
+    scope_value: &str,
+    owner: &str,
+    now_ms: i64,
+) -> AppResult<LineageScopeLockLeaseV2> {
+    let vault = vault_open(vault_path)?;
+    let conn = open_db(&vault_path.join(vault.db.relative_path))?;
+    lineage_lock_acquire_scope(&conn, scope_kind, scope_value, owner, now_ms)
 }
 
 fn load_object_hashes(conn: &rusqlite::Connection) -> AppResult<Vec<ObjectHash>> {
