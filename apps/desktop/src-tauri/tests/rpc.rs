@@ -4,13 +4,17 @@ use apps_desktop_tauri::rpc::{
     lineage_overlay_list_rpc, lineage_overlay_remove_rpc, lineage_query_rpc, lineage_query_v2_rpc,
     lineage_lock_acquire_rpc, lineage_lock_release_rpc, lineage_lock_status_rpc,
     sync_merge_preview_rpc, sync_pull_rpc, sync_push_rpc, sync_status_rpc,
+    trust_device_enroll_rpc, trust_device_list_rpc, trust_device_verify_chain_rpc,
+    trust_identity_complete_rpc, trust_identity_start_rpc,
     vault_encryption_enable_rpc, vault_encryption_migrate_rpc, vault_encryption_status_rpc,
     vault_init_rpc, vault_lock_rpc, vault_lock_status_rpc, vault_open_rpc,
     vault_recovery_generate_rpc, vault_recovery_status_rpc, vault_recovery_verify_rpc,
-    vault_unlock_rpc, IngestInboxStartReq, IngestInboxStopReq, JobsListReq, LineageLockAcquireReq,
-    LineageLockReleaseReq, LineageLockStatusReq, LineageOverlayAddReq, LineageOverlayListReq,
-    LineageOverlayRemoveReq, LineageQueryReq, LineageQueryV2Req,
+    vault_unlock_rpc, IngestInboxStartReq, IngestInboxStopReq, JobsListReq,
+    LineageLockAcquireReq, LineageLockReleaseReq, LineageLockStatusReq, LineageOverlayAddReq,
+    LineageOverlayListReq, LineageOverlayRemoveReq, LineageQueryReq, LineageQueryV2Req,
     RpcResponse, SyncMergePreviewReq, SyncPullReq, SyncPushReq, SyncStatusReq,
+    TrustDeviceEnrollReq, TrustDeviceListReq, TrustDeviceVerifyChainReq,
+    TrustIdentityCompleteReq, TrustIdentityStartReq,
     VaultEncryptionEnableReq, VaultEncryptionMigrateReq, VaultEncryptionStatusReq, VaultInitReq,
     VaultLockReq, VaultLockStatusReq, VaultOpenReq, VaultRecoveryGenerateReq,
     VaultRecoveryStatusReq, VaultRecoveryVerifyReq, VaultUnlockReq,
@@ -95,6 +99,79 @@ fn rpc_vault_open_and_jobs_list() {
     match jobs {
         RpcResponse::Ok { data } => assert!(data.jobs.is_empty()),
         RpcResponse::Err { error } => panic!("jobs list failed: {}", error.code),
+    }
+}
+
+#[test]
+fn rpc_trust_identity_and_device_workflow_round_trip() {
+    let root = tempfile::tempdir().expect("tempdir").keep();
+
+    let init = vault_init_rpc(VaultInitReq {
+        vault_path: root.to_string_lossy().to_string(),
+        vault_slug: "demo".to_string(),
+        now_ms: 1,
+    });
+    match init {
+        RpcResponse::Ok { .. } => {}
+        RpcResponse::Err { error } => panic!("vault init failed: {}", error.code),
+    }
+
+    let started = trust_identity_start_rpc(TrustIdentityStartReq {
+        vault_path: root.to_string_lossy().to_string(),
+        provider: "default".to_string(),
+        now_ms: 2,
+    });
+    match started {
+        RpcResponse::Ok { data } => {
+            assert_eq!(data.provider_id, "default");
+            assert!(data.authorization_url.contains("state="));
+        }
+        RpcResponse::Err { error } => panic!("trust identity start failed: {}", error.code),
+    }
+
+    let completed = trust_identity_complete_rpc(TrustIdentityCompleteReq {
+        vault_path: root.to_string_lossy().to_string(),
+        provider: "default".to_string(),
+        code: "sub:alice@example.com".to_string(),
+        now_ms: 3,
+    });
+    match completed {
+        RpcResponse::Ok { data } => {
+            assert_eq!(data.provider_id, "default");
+            assert_eq!(data.subject, "alice@example.com");
+        }
+        RpcResponse::Err { error } => panic!("trust identity complete failed: {}", error.code),
+    }
+
+    let enrolled = trust_device_enroll_rpc(TrustDeviceEnrollReq {
+        vault_path: root.to_string_lossy().to_string(),
+        device_label: "desktop".to_string(),
+        now_ms: 4,
+    });
+    let device_id = match enrolled {
+        RpcResponse::Ok { data } => {
+            assert_eq!(data.label, "desktop");
+            data.device_id
+        }
+        RpcResponse::Err { error } => panic!("trust device enroll failed: {}", error.code),
+    };
+
+    let verified = trust_device_verify_chain_rpc(TrustDeviceVerifyChainReq {
+        vault_path: root.to_string_lossy().to_string(),
+        device_id: device_id.clone(),
+        now_ms: 5,
+    });
+    match verified {
+        RpcResponse::Ok { data } => assert_eq!(data.device_id, device_id),
+        RpcResponse::Err { error } => panic!("trust device verify-chain failed: {}", error.code),
+    }
+
+    let listed = trust_device_list_rpc(TrustDeviceListReq {
+        vault_path: root.to_string_lossy().to_string(),
+    });
+    match listed {
+        RpcResponse::Ok { data } => assert!(data.devices.iter().any(|d| d.device_id == device_id)),
+        RpcResponse::Err { error } => panic!("trust device list failed: {}", error.code),
     }
 }
 
@@ -347,11 +424,46 @@ fn rpc_sync_supports_s3_uri_targets_via_emulation() {
         RpcResponse::Err { error } => panic!("ingest failed: {}", error.code),
     }
 
+    match trust_identity_start_rpc(TrustIdentityStartReq {
+        vault_path: root.to_string_lossy().to_string(),
+        provider: "default".to_string(),
+        now_ms: 3,
+    }) {
+        RpcResponse::Ok { .. } => {}
+        RpcResponse::Err { error } => panic!("trust identity start failed: {}", error.code),
+    }
+    match trust_identity_complete_rpc(TrustIdentityCompleteReq {
+        vault_path: root.to_string_lossy().to_string(),
+        provider: "default".to_string(),
+        code: "sub:sync@example.com".to_string(),
+        now_ms: 4,
+    }) {
+        RpcResponse::Ok { .. } => {}
+        RpcResponse::Err { error } => panic!("trust identity complete failed: {}", error.code),
+    }
+    let enrolled = trust_device_enroll_rpc(TrustDeviceEnrollReq {
+        vault_path: root.to_string_lossy().to_string(),
+        device_label: "sync-source".to_string(),
+        now_ms: 5,
+    });
+    let source_device_id = match enrolled {
+        RpcResponse::Ok { data } => data.device_id,
+        RpcResponse::Err { error } => panic!("trust device enroll failed: {}", error.code),
+    };
+    match trust_device_verify_chain_rpc(TrustDeviceVerifyChainReq {
+        vault_path: root.to_string_lossy().to_string(),
+        device_id: source_device_id,
+        now_ms: 6,
+    }) {
+        RpcResponse::Ok { .. } => {}
+        RpcResponse::Err { error } => panic!("trust device verify-chain failed: {}", error.code),
+    }
+
     let target_uri = "s3://demo-bucket/kc";
     let pushed = sync_push_rpc(SyncPushReq {
         vault_path: root.to_string_lossy().to_string(),
         target_path: target_uri.to_string(),
-        now_ms: 3,
+        now_ms: 7,
     });
     let pushed_snapshot_id = match pushed {
         RpcResponse::Ok { data } => data.snapshot_id,

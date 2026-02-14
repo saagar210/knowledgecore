@@ -1,10 +1,12 @@
 use apps_desktop_tauri::rpc::{
     AskQuestionReq, LineageOverlayAddReq, LineageOverlayListReq, LineageOverlayRemoveReq,
     LineageLockAcquireReq, LineageLockReleaseReq, LineageLockStatusReq, LineageQueryReq,
-    LineageQueryV2Req, SearchQueryReq, SyncMergePreviewReq, SyncPullReq, SyncPushReq, SyncStatusReq,
-    VaultEncryptionEnableReq, VaultEncryptionMigrateReq, VaultEncryptionStatusReq, VaultInitReq,
-    VaultLockReq, VaultLockStatusReq, VaultRecoveryGenerateReq, VaultRecoveryStatusReq,
-    VaultRecoveryVerifyReq, VaultUnlockReq,
+    LineageQueryV2Req, SearchQueryReq, SyncMergePreviewReq, SyncPullReq, SyncPushReq,
+    SyncStatusReq, TrustDeviceEnrollReq, TrustDeviceListReq, TrustDeviceVerifyChainReq,
+    TrustIdentityCompleteReq, TrustIdentityStartReq, VaultEncryptionEnableReq,
+    VaultEncryptionMigrateReq, VaultEncryptionStatusReq, VaultInitReq, VaultLockReq,
+    VaultLockStatusReq, VaultRecoveryGenerateReq, VaultRecoveryStatusReq, VaultRecoveryVerifyReq,
+    VaultUnlockReq,
 };
 
 #[test]
@@ -185,6 +187,73 @@ fn rpc_schema_lock_requests_validate_shapes() {
         "passphrase": "secret"
     });
     assert!(serde_json::from_value::<VaultUnlockReq>(unlock).is_ok());
+}
+
+#[test]
+fn rpc_schema_trust_identity_requests_validate_shapes() {
+    let start = serde_json::json!({
+        "vault_path": "/tmp/vault",
+        "provider": "default",
+        "now_ms": 100
+    });
+    assert!(serde_json::from_value::<TrustIdentityStartReq>(start).is_ok());
+
+    let complete = serde_json::json!({
+        "vault_path": "/tmp/vault",
+        "provider": "default",
+        "code": "auth-code",
+        "now_ms": 101
+    });
+    assert!(serde_json::from_value::<TrustIdentityCompleteReq>(complete).is_ok());
+}
+
+#[test]
+fn rpc_schema_trust_identity_requires_now_ms() {
+    let missing_now_start = serde_json::json!({
+        "vault_path": "/tmp/vault",
+        "provider": "default"
+    });
+    assert!(serde_json::from_value::<TrustIdentityStartReq>(missing_now_start).is_err());
+
+    let missing_now_complete = serde_json::json!({
+        "vault_path": "/tmp/vault",
+        "provider": "default",
+        "code": "auth-code"
+    });
+    assert!(serde_json::from_value::<TrustIdentityCompleteReq>(missing_now_complete).is_err());
+}
+
+#[test]
+fn rpc_schema_trust_device_requests_validate_shapes() {
+    let enroll = serde_json::json!({
+        "vault_path": "/tmp/vault",
+        "device_label": "desktop",
+        "now_ms": 102
+    });
+    assert!(serde_json::from_value::<TrustDeviceEnrollReq>(enroll).is_ok());
+
+    let verify_chain = serde_json::json!({
+        "vault_path": "/tmp/vault",
+        "device_id": "device-1",
+        "now_ms": 103
+    });
+    assert!(serde_json::from_value::<TrustDeviceVerifyChainReq>(verify_chain).is_ok());
+
+    let list = serde_json::json!({
+        "vault_path": "/tmp/vault"
+    });
+    assert!(serde_json::from_value::<TrustDeviceListReq>(list).is_ok());
+}
+
+#[test]
+fn rpc_schema_trust_device_rejects_unknown_fields() {
+    let invalid = serde_json::json!({
+        "vault_path": "/tmp/vault",
+        "device_label": "desktop",
+        "now_ms": 102,
+        "extra": "nope"
+    });
+    assert!(serde_json::from_value::<TrustDeviceEnrollReq>(invalid).is_err());
 }
 
 #[test]

@@ -22,7 +22,10 @@ import {
 import { loadRelated } from "../src/features/related";
 import { runSearch } from "../src/features/search";
 import {
+  completeTrustIdentity,
+  enrollTrustDevice,
   enableVaultEncryption,
+  listTrustDevices,
   generateVaultRecovery,
   lockVault,
   loadVaultLockStatus,
@@ -34,7 +37,9 @@ import {
   migrateVaultEncryption,
   runSyncPull,
   runSyncPush,
+  startTrustIdentity,
   verifyVaultRecovery,
+  verifyTrustDeviceChain,
   unlockVault
 } from "../src/features/settings";
 import { vaultInit, vaultOpen } from "../src/features/vault";
@@ -47,6 +52,52 @@ function mockApi(): DesktopRpcApi {
   return {
     vaultInit: () => ok({ vault_id: "v1" }),
     vaultOpen: () => ok({ vault_id: "v1", vault_slug: "demo" }),
+    trustIdentityStart: () =>
+      ok({
+        provider_id: "default",
+        state: "blake3:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        authorization_url: "https://default.oidc.knowledgecore.local?aud=kc-desktop:default"
+      }),
+    trustIdentityComplete: () =>
+      ok({
+        session_id: "11111111-1111-1111-1111-111111111111",
+        provider_id: "default",
+        subject: "alice@example.com",
+        expires_at_ms: 12345
+      }),
+    trustDeviceEnroll: () =>
+      ok({
+        device_id: "22222222-2222-2222-2222-222222222222",
+        label: "desktop",
+        fingerprint: "aaaaaaaa:bbbbbbbb:cccccccc:dddddddd:eeeeeeee:ffffffff:11111111:22222222",
+        cert_id: "33333333-3333-3333-3333-333333333333",
+        cert_chain_hash:
+          "blake3:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+      }),
+    trustDeviceVerifyChain: () =>
+      ok({
+        cert_id: "33333333-3333-3333-3333-333333333333",
+        device_id: "22222222-2222-2222-2222-222222222222",
+        provider_id: "default",
+        subject: "alice@example.com",
+        cert_chain_hash:
+          "blake3:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+        verified_at_ms: 42,
+        expires_at_ms: 12345
+      }),
+    trustDeviceList: () =>
+      ok({
+        devices: [
+          {
+            device_id: "22222222-2222-2222-2222-222222222222",
+            label: "desktop",
+            fingerprint:
+              "aaaaaaaa:bbbbbbbb:cccccccc:dddddddd:eeeeeeee:ffffffff:11111111:22222222",
+            verified_at_ms: 42,
+            created_at_ms: 41
+          }
+        ]
+      }),
     vaultLockStatus: () =>
       ok({
         db_encryption_enabled: true,
@@ -386,6 +437,40 @@ describe("feature controllers", () => {
     });
     expect(
       await loadSettingsDependencies(api, {
+        vault_path: "/tmp/v"
+      })
+    ).toMatchObject({ kind: "data" });
+    expect(
+      await startTrustIdentity(api, {
+        vault_path: "/tmp/v",
+        provider: "default",
+        now_ms: 1
+      })
+    ).toMatchObject({ kind: "data" });
+    expect(
+      await completeTrustIdentity(api, {
+        vault_path: "/tmp/v",
+        provider: "default",
+        code: "auth-code",
+        now_ms: 1
+      })
+    ).toMatchObject({ kind: "data" });
+    expect(
+      await enrollTrustDevice(api, {
+        vault_path: "/tmp/v",
+        device_label: "desktop",
+        now_ms: 1
+      })
+    ).toMatchObject({ kind: "data" });
+    expect(
+      await verifyTrustDeviceChain(api, {
+        vault_path: "/tmp/v",
+        device_id: "22222222-2222-2222-2222-222222222222",
+        now_ms: 1
+      })
+    ).toMatchObject({ kind: "data" });
+    expect(
+      await listTrustDevices(api, {
         vault_path: "/tmp/v"
       })
     ).toMatchObject({ kind: "data" });

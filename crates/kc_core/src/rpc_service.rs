@@ -9,6 +9,11 @@ use crate::ingest::ingest_bytes;
 use crate::locator::{resolve_locator_strict, LocatorV1};
 use crate::object_store::{is_encrypted_payload, ObjectStore};
 use crate::recovery::{generate_recovery_bundle, verify_recovery_bundle, RecoveryManifestV1};
+use crate::trust::{trust_device_init, trust_device_list, trust_device_verify, TrustedDeviceRecord};
+use crate::trust_identity::{
+    trust_device_enroll, trust_device_verify_chain, trust_identity_complete, trust_identity_start,
+    DeviceCertificateRecord, IdentitySessionRecord, IdentityStartResult,
+};
 use crate::types::{DocId, ObjectHash};
 use crate::vault::{vault_init, vault_open, vault_paths, vault_save};
 use std::collections::BTreeSet;
@@ -102,6 +107,12 @@ pub struct VaultDbEncryptMigrateResult {
     pub status: VaultDbEncryptStatus,
     pub outcome: String,
     pub event_id: i64,
+}
+
+#[derive(Debug, Clone)]
+pub struct TrustDeviceEnrollResult {
+    pub device: TrustedDeviceRecord,
+    pub certificate: DeviceCertificateRecord,
 }
 
 fn jobs_set() -> &'static Mutex<BTreeSet<String>> {
@@ -478,6 +489,67 @@ pub fn sync_merge_preview_service(
     let vault = vault_open(vault_path)?;
     let conn = open_db(&vault_path.join(vault.db.relative_path))?;
     crate::sync::sync_merge_preview_target(&conn, vault_path, target_uri, now_ms)
+}
+
+pub fn trust_identity_start_service(
+    vault_path: &Path,
+    provider_id: &str,
+    now_ms: i64,
+) -> AppResult<IdentityStartResult> {
+    let vault = vault_open(vault_path)?;
+    let conn = open_db(&vault_path.join(vault.db.relative_path))?;
+    trust_identity_start(&conn, provider_id, now_ms)
+}
+
+pub fn trust_identity_complete_service(
+    vault_path: &Path,
+    provider_id: &str,
+    auth_code: &str,
+    now_ms: i64,
+) -> AppResult<IdentitySessionRecord> {
+    let vault = vault_open(vault_path)?;
+    let conn = open_db(&vault_path.join(vault.db.relative_path))?;
+    trust_identity_complete(&conn, provider_id, auth_code, now_ms)
+}
+
+pub fn trust_device_enroll_service(
+    vault_path: &Path,
+    device_label: &str,
+    now_ms: i64,
+) -> AppResult<TrustDeviceEnrollResult> {
+    let vault = vault_open(vault_path)?;
+    let conn = open_db(&vault_path.join(vault.db.relative_path))?;
+
+    let created = trust_device_init(&conn, device_label, "trust_device_enroll", now_ms)?;
+    let verified = trust_device_verify(
+        &conn,
+        &created.device_id,
+        &created.fingerprint,
+        "trust_device_enroll",
+        now_ms + 1,
+    )?;
+    let certificate = trust_device_enroll(&conn, "default", &verified.device_id, now_ms + 2)?;
+
+    Ok(TrustDeviceEnrollResult {
+        device: verified,
+        certificate,
+    })
+}
+
+pub fn trust_device_verify_chain_service(
+    vault_path: &Path,
+    device_id: &str,
+    now_ms: i64,
+) -> AppResult<DeviceCertificateRecord> {
+    let vault = vault_open(vault_path)?;
+    let conn = open_db(&vault_path.join(vault.db.relative_path))?;
+    trust_device_verify_chain(&conn, device_id, now_ms)
+}
+
+pub fn trust_device_list_service(vault_path: &Path) -> AppResult<Vec<TrustedDeviceRecord>> {
+    let vault = vault_open(vault_path)?;
+    let conn = open_db(&vault_path.join(vault.db.relative_path))?;
+    trust_device_list(&conn)
 }
 
 pub fn lineage_query_service(

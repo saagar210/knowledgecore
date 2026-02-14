@@ -11,6 +11,41 @@ pub fn vault_open(req: rpc::VaultOpenReq) -> rpc::RpcResponse<rpc::VaultOpenRes>
 }
 
 #[tauri::command]
+pub fn trust_identity_start(
+    req: rpc::TrustIdentityStartReq,
+) -> rpc::RpcResponse<rpc::TrustIdentityStartRes> {
+    rpc::trust_identity_start_rpc(req)
+}
+
+#[tauri::command]
+pub fn trust_identity_complete(
+    req: rpc::TrustIdentityCompleteReq,
+) -> rpc::RpcResponse<rpc::TrustIdentityCompleteRes> {
+    rpc::trust_identity_complete_rpc(req)
+}
+
+#[tauri::command]
+pub fn trust_device_enroll(
+    req: rpc::TrustDeviceEnrollReq,
+) -> rpc::RpcResponse<rpc::TrustDeviceEnrollRes> {
+    rpc::trust_device_enroll_rpc(req)
+}
+
+#[tauri::command]
+pub fn trust_device_verify_chain(
+    req: rpc::TrustDeviceVerifyChainReq,
+) -> rpc::RpcResponse<rpc::TrustDeviceVerifyChainRes> {
+    rpc::trust_device_verify_chain_rpc(req)
+}
+
+#[tauri::command]
+pub fn trust_device_list(
+    req: rpc::TrustDeviceListReq,
+) -> rpc::RpcResponse<rpc::TrustDeviceListRes> {
+    rpc::trust_device_list_rpc(req)
+}
+
+#[tauri::command]
 pub fn vault_lock_status(
     req: rpc::VaultLockStatusReq,
 ) -> rpc::RpcResponse<rpc::VaultLockStatusRes> {

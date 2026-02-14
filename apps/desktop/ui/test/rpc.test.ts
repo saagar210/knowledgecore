@@ -14,6 +14,11 @@ describe("rpc client", () => {
     expect(Object.keys(rpcMethods)).toEqual([
       "vaultInit",
       "vaultOpen",
+      "trustIdentityStart",
+      "trustIdentityComplete",
+      "trustDeviceEnroll",
+      "trustDeviceVerifyChain",
+      "trustDeviceList",
       "vaultLockStatus",
       "vaultUnlock",
       "vaultLock",

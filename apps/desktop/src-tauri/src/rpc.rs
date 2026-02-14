@@ -113,6 +113,94 @@ pub struct VaultOpenRes {
 
 #[derive(Debug, Deserialize)]
 #[serde(deny_unknown_fields)]
+pub struct TrustIdentityStartReq {
+    pub vault_path: String,
+    pub provider: String,
+    pub now_ms: i64,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct TrustIdentityStartRes {
+    pub provider_id: String,
+    pub state: String,
+    pub authorization_url: String,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct TrustIdentityCompleteReq {
+    pub vault_path: String,
+    pub provider: String,
+    pub code: String,
+    pub now_ms: i64,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct TrustIdentityCompleteRes {
+    pub session_id: String,
+    pub provider_id: String,
+    pub subject: String,
+    pub expires_at_ms: i64,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct TrustDeviceEnrollReq {
+    pub vault_path: String,
+    pub device_label: String,
+    pub now_ms: i64,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct TrustDeviceEnrollRes {
+    pub device_id: String,
+    pub label: String,
+    pub fingerprint: String,
+    pub cert_id: String,
+    pub cert_chain_hash: String,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct TrustDeviceVerifyChainReq {
+    pub vault_path: String,
+    pub device_id: String,
+    pub now_ms: i64,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct TrustDeviceVerifyChainRes {
+    pub cert_id: String,
+    pub device_id: String,
+    pub provider_id: String,
+    pub subject: String,
+    pub cert_chain_hash: String,
+    pub verified_at_ms: Option<i64>,
+    pub expires_at_ms: i64,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct TrustDeviceListReq {
+    pub vault_path: String,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct TrustDeviceListItemRes {
+    pub device_id: String,
+    pub label: String,
+    pub fingerprint: String,
+    pub verified_at_ms: Option<i64>,
+    pub created_at_ms: i64,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct TrustDeviceListRes {
+    pub devices: Vec<TrustDeviceListItemRes>,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct VaultLockStatusReq {
     pub vault_path: String,
 }
@@ -666,6 +754,96 @@ pub fn vault_open_rpc(req: VaultOpenReq) -> RpcResponse<VaultOpenRes> {
         Ok(vault) => RpcResponse::ok(VaultOpenRes {
             vault_id: vault.vault_id,
             vault_slug: vault.vault_slug,
+        }),
+        Err(error) => RpcResponse::err(error),
+    }
+}
+
+pub fn trust_identity_start_rpc(req: TrustIdentityStartReq) -> RpcResponse<TrustIdentityStartRes> {
+    match rpc_service::trust_identity_start_service(
+        std::path::Path::new(&req.vault_path),
+        &req.provider,
+        req.now_ms,
+    ) {
+        Ok(out) => RpcResponse::ok(TrustIdentityStartRes {
+            provider_id: out.provider_id,
+            state: out.state,
+            authorization_url: out.authorization_url,
+        }),
+        Err(error) => RpcResponse::err(error),
+    }
+}
+
+pub fn trust_identity_complete_rpc(
+    req: TrustIdentityCompleteReq,
+) -> RpcResponse<TrustIdentityCompleteRes> {
+    match rpc_service::trust_identity_complete_service(
+        std::path::Path::new(&req.vault_path),
+        &req.provider,
+        &req.code,
+        req.now_ms,
+    ) {
+        Ok(out) => RpcResponse::ok(TrustIdentityCompleteRes {
+            session_id: out.session_id,
+            provider_id: out.provider_id,
+            subject: out.subject,
+            expires_at_ms: out.expires_at_ms,
+        }),
+        Err(error) => RpcResponse::err(error),
+    }
+}
+
+pub fn trust_device_enroll_rpc(req: TrustDeviceEnrollReq) -> RpcResponse<TrustDeviceEnrollRes> {
+    match rpc_service::trust_device_enroll_service(
+        std::path::Path::new(&req.vault_path),
+        &req.device_label,
+        req.now_ms,
+    ) {
+        Ok(out) => RpcResponse::ok(TrustDeviceEnrollRes {
+            device_id: out.device.device_id,
+            label: out.device.label,
+            fingerprint: out.device.fingerprint,
+            cert_id: out.certificate.cert_id,
+            cert_chain_hash: out.certificate.cert_chain_hash,
+        }),
+        Err(error) => RpcResponse::err(error),
+    }
+}
+
+pub fn trust_device_verify_chain_rpc(
+    req: TrustDeviceVerifyChainReq,
+) -> RpcResponse<TrustDeviceVerifyChainRes> {
+    match rpc_service::trust_device_verify_chain_service(
+        std::path::Path::new(&req.vault_path),
+        &req.device_id,
+        req.now_ms,
+    ) {
+        Ok(out) => RpcResponse::ok(TrustDeviceVerifyChainRes {
+            cert_id: out.cert_id,
+            device_id: out.device_id,
+            provider_id: out.provider_id,
+            subject: out.subject,
+            cert_chain_hash: out.cert_chain_hash,
+            verified_at_ms: out.verified_at_ms,
+            expires_at_ms: out.expires_at_ms,
+        }),
+        Err(error) => RpcResponse::err(error),
+    }
+}
+
+pub fn trust_device_list_rpc(req: TrustDeviceListReq) -> RpcResponse<TrustDeviceListRes> {
+    match rpc_service::trust_device_list_service(std::path::Path::new(&req.vault_path)) {
+        Ok(devices) => RpcResponse::ok(TrustDeviceListRes {
+            devices: devices
+                .into_iter()
+                .map(|d| TrustDeviceListItemRes {
+                    device_id: d.device_id,
+                    label: d.label,
+                    fingerprint: d.fingerprint,
+                    verified_at_ms: d.verified_at_ms,
+                    created_at_ms: d.created_at_ms,
+                })
+                .collect(),
         }),
         Err(error) => RpcResponse::err(error),
     }

@@ -9,6 +9,7 @@ mod commands {
     pub mod ingest;
     pub mod lineage;
     pub mod sync;
+    pub mod trust;
     pub mod vault;
     pub mod verify;
 }
@@ -18,7 +19,7 @@ use clap::Parser;
 use cli::{
     BenchCmd, Cli, Command, DepsCmd, FixturesCmd, GcCmd, IndexCmd, IngestCmd, LineageCmd,
     LineageLockCmd, LineageOverlayCmd, SyncCmd, VaultCmd, VaultDbEncryptCmd, VaultEncryptCmd,
-    VaultRecoveryCmd,
+    VaultRecoveryCmd, TrustCmd, TrustDeviceCmd, TrustIdentityCmd,
 };
 use kc_core::vault::{vault_init, vault_open};
 
@@ -233,6 +234,36 @@ fn main() {
                     doc_id,
                     now_ms,
                 } => commands::lineage::run_lock_status(&vault_path, &doc_id, now_ms),
+            },
+        },
+        Command::Trust { cmd } => match cmd {
+            TrustCmd::Identity { cmd } => match cmd {
+                TrustIdentityCmd::Start {
+                    vault_path,
+                    provider,
+                    now_ms,
+                } => commands::trust::run_identity_start(&vault_path, &provider, now_ms),
+                TrustIdentityCmd::Complete {
+                    vault_path,
+                    provider,
+                    code,
+                    now_ms,
+                } => commands::trust::run_identity_complete(&vault_path, &provider, &code, now_ms),
+            },
+            TrustCmd::Device { cmd } => match cmd {
+                TrustDeviceCmd::Enroll {
+                    vault_path,
+                    device_label,
+                    now_ms,
+                } => commands::trust::run_device_enroll(&vault_path, &device_label, now_ms),
+                TrustDeviceCmd::VerifyChain {
+                    vault_path,
+                    device_id,
+                    now_ms,
+                } => commands::trust::run_device_verify_chain(&vault_path, &device_id, now_ms),
+                TrustDeviceCmd::List { vault_path } => {
+                    commands::trust::run_device_list(&vault_path)
+                }
             },
         },
     };

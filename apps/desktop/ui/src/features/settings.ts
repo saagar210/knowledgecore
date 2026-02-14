@@ -2,6 +2,16 @@ import type {
   DesktopRpcApi,
   JobsListReq,
   JobsListRes,
+  TrustIdentityStartReq,
+  TrustIdentityStartRes,
+  TrustIdentityCompleteReq,
+  TrustIdentityCompleteRes,
+  TrustDeviceEnrollReq,
+  TrustDeviceEnrollRes,
+  TrustDeviceVerifyChainReq,
+  TrustDeviceVerifyChainRes,
+  TrustDeviceListReq,
+  TrustDeviceListRes,
   VaultLockReq,
   VaultLockRes,
   VaultLockStatusReq,
@@ -36,6 +46,41 @@ export async function loadSettingsDependencies(
   req: JobsListReq
 ): Promise<ViewState<JobsListRes>> {
   return nextStateFromRpc(await api.jobsList(req));
+}
+
+export async function startTrustIdentity(
+  api: DesktopRpcApi,
+  req: TrustIdentityStartReq
+): Promise<ViewState<TrustIdentityStartRes>> {
+  return nextStateFromRpc(await api.trustIdentityStart(req));
+}
+
+export async function completeTrustIdentity(
+  api: DesktopRpcApi,
+  req: TrustIdentityCompleteReq
+): Promise<ViewState<TrustIdentityCompleteRes>> {
+  return nextStateFromRpc(await api.trustIdentityComplete(req));
+}
+
+export async function enrollTrustDevice(
+  api: DesktopRpcApi,
+  req: TrustDeviceEnrollReq
+): Promise<ViewState<TrustDeviceEnrollRes>> {
+  return nextStateFromRpc(await api.trustDeviceEnroll(req));
+}
+
+export async function verifyTrustDeviceChain(
+  api: DesktopRpcApi,
+  req: TrustDeviceVerifyChainReq
+): Promise<ViewState<TrustDeviceVerifyChainRes>> {
+  return nextStateFromRpc(await api.trustDeviceVerifyChain(req));
+}
+
+export async function listTrustDevices(
+  api: DesktopRpcApi,
+  req: TrustDeviceListReq
+): Promise<ViewState<TrustDeviceListRes>> {
+  return nextStateFromRpc(await api.trustDeviceList(req));
 }
 
 export async function loadVaultEncryptionStatus(

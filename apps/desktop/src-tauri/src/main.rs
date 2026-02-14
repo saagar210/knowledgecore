@@ -6,6 +6,11 @@ fn main() {
     let builder = tauri::Builder::default().invoke_handler(tauri::generate_handler![
         commands::vault_init,
         commands::vault_open,
+        commands::trust_identity_start,
+        commands::trust_identity_complete,
+        commands::trust_device_enroll,
+        commands::trust_device_verify_chain,
+        commands::trust_device_list,
         commands::vault_lock_status,
         commands::vault_unlock,
         commands::vault_lock,

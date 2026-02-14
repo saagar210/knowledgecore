@@ -14,6 +14,10 @@ pub enum Command {
         #[command(subcommand)]
         cmd: VaultCmd,
     },
+    Trust {
+        #[command(subcommand)]
+        cmd: TrustCmd,
+    },
     Ingest {
         #[command(subcommand)]
         cmd: IngestCmd,
@@ -152,6 +156,59 @@ pub enum VaultRecoveryCmd {
         bundle: String,
         #[arg(long = "phrase-env")]
         phrase_env: String,
+    },
+}
+
+#[derive(Subcommand)]
+pub enum TrustCmd {
+    Identity {
+        #[command(subcommand)]
+        cmd: TrustIdentityCmd,
+    },
+    Device {
+        #[command(subcommand)]
+        cmd: TrustDeviceCmd,
+    },
+}
+
+#[derive(Subcommand)]
+pub enum TrustIdentityCmd {
+    Start {
+        vault_path: String,
+        #[arg(long = "provider")]
+        provider: String,
+        #[arg(long = "now-ms")]
+        now_ms: Option<i64>,
+    },
+    Complete {
+        vault_path: String,
+        #[arg(long = "provider")]
+        provider: String,
+        #[arg(long = "code")]
+        code: String,
+        #[arg(long = "now-ms")]
+        now_ms: Option<i64>,
+    },
+}
+
+#[derive(Subcommand)]
+pub enum TrustDeviceCmd {
+    Enroll {
+        vault_path: String,
+        #[arg(long = "device-label")]
+        device_label: String,
+        #[arg(long = "now-ms")]
+        now_ms: Option<i64>,
+    },
+    VerifyChain {
+        vault_path: String,
+        #[arg(long = "device-id")]
+        device_id: String,
+        #[arg(long = "now-ms")]
+        now_ms: Option<i64>,
+    },
+    List {
+        vault_path: String,
     },
 }
 

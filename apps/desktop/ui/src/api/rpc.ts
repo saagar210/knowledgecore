@@ -78,6 +78,63 @@ export type VaultInitReqV1 = { vault_path: string; vault_slug: string; now_ms: n
 export type VaultInitRes = { vault_id: string };
 export type VaultOpenReq = { vault_path: string };
 export type VaultOpenRes = { vault_id: string; vault_slug: string };
+export type TrustIdentityStartReq = {
+  vault_path: string;
+  provider: string;
+  now_ms: number;
+};
+export type TrustIdentityStartRes = {
+  provider_id: string;
+  state: string;
+  authorization_url: string;
+};
+export type TrustIdentityCompleteReq = {
+  vault_path: string;
+  provider: string;
+  code: string;
+  now_ms: number;
+};
+export type TrustIdentityCompleteRes = {
+  session_id: string;
+  provider_id: string;
+  subject: string;
+  expires_at_ms: number;
+};
+export type TrustDeviceEnrollReq = {
+  vault_path: string;
+  device_label: string;
+  now_ms: number;
+};
+export type TrustDeviceEnrollRes = {
+  device_id: string;
+  label: string;
+  fingerprint: string;
+  cert_id: string;
+  cert_chain_hash: string;
+};
+export type TrustDeviceVerifyChainReq = {
+  vault_path: string;
+  device_id: string;
+  now_ms: number;
+};
+export type TrustDeviceVerifyChainRes = {
+  cert_id: string;
+  device_id: string;
+  provider_id: string;
+  subject: string;
+  cert_chain_hash: string;
+  verified_at_ms: number | null;
+  expires_at_ms: number;
+};
+export type TrustDeviceListReq = { vault_path: string };
+export type TrustDeviceListItem = {
+  device_id: string;
+  label: string;
+  fingerprint: string;
+  verified_at_ms: number | null;
+  created_at_ms: number;
+};
+export type TrustDeviceListRes = { devices: TrustDeviceListItem[] };
 export type VaultLockStatusReq = { vault_path: string };
 export type VaultLockStatusRes = {
   db_encryption_enabled: boolean;
@@ -341,6 +398,16 @@ export type LineageLockStatusRes = {
 export const rpcMethods = {
   vaultInit: (req: VaultInitReqV1) => rpc<VaultInitReqV1, VaultInitRes>("vault_init", req),
   vaultOpen: (req: VaultOpenReq) => rpc<VaultOpenReq, VaultOpenRes>("vault_open", req),
+  trustIdentityStart: (req: TrustIdentityStartReq) =>
+    rpc<TrustIdentityStartReq, TrustIdentityStartRes>("trust_identity_start", req),
+  trustIdentityComplete: (req: TrustIdentityCompleteReq) =>
+    rpc<TrustIdentityCompleteReq, TrustIdentityCompleteRes>("trust_identity_complete", req),
+  trustDeviceEnroll: (req: TrustDeviceEnrollReq) =>
+    rpc<TrustDeviceEnrollReq, TrustDeviceEnrollRes>("trust_device_enroll", req),
+  trustDeviceVerifyChain: (req: TrustDeviceVerifyChainReq) =>
+    rpc<TrustDeviceVerifyChainReq, TrustDeviceVerifyChainRes>("trust_device_verify_chain", req),
+  trustDeviceList: (req: TrustDeviceListReq) =>
+    rpc<TrustDeviceListReq, TrustDeviceListRes>("trust_device_list", req),
   vaultLockStatus: (req: VaultLockStatusReq) =>
     rpc<VaultLockStatusReq, VaultLockStatusRes>("vault_lock_status", req),
   vaultUnlock: (req: VaultUnlockReq) => rpc<VaultUnlockReq, VaultUnlockRes>("vault_unlock", req),
