@@ -20,8 +20,8 @@ Authoritative registry of all versioned schemas and contracts. Any schema additi
 | vault.json | 1 | `spec/02-vault-topology-and-vault-json.md` | kc_core | all | 1-adj | UUID vault_id; schema_version=1 | additive optional ok | bump on breaking change |
 | SQLite schema | 1 | `spec/03-sqlite-schema-v1-and-migrations.md` | kc_core | all | 1 | migrations deterministic | additive ok | bump user_version on change |
 | Locator v1 | 1 | `spec/10-locator-v1-and-resolver.md` | kc_core | all | 1 | [start,end) char indices; strict hash check | additive hints ok | bump on semantics change |
-| Export manifest | 1 | `spec/12-export-bundles-and-manifest.md` | kc_core | verifier/UI | 1 | deterministic ordering; db hash; chunking_config_hash uses canonical config hashing | additive blocks ok | bump on ordering/hash rule change |
-| Verifier report | 1 | `spec/13-verifier-and-reporting.md` | kc_cli | UI/automation | 1 | stable exit codes; deterministic ordering; schema-validated manifest input | additive ok | bump on exit/order/schema rule change |
+| Export manifest | 1 | `spec/12-export-bundles-and-manifest.md` | kc_core | verifier/UI | 1 | deterministic ordering; `vault_id` UUID; db hash; chunking_config_hash uses canonical config hashing | additive blocks ok | bump on ordering/hash rule change |
+| Verifier report | 1 | `spec/13-verifier-and-reporting.md` | kc_cli | UI/automation | 1 | stable exit codes (0/20/21/31/40/41/60); deterministic ordering; schema-validated manifest input | additive ok | bump on exit/order/schema rule change |
 | AppError | 1 | `spec/14-error-contract-app-error-taxonomy.md` | all | UI/CLI/RPC | 1-adj | UI branches on code only | additive codes ok | bump on struct change |
 | Trace log | 1 | `spec/17-trace-log-schema-and-redaction.md` | kc_ask | UI/automation | 1 | deterministic retrieval chunk ordering + locator ordering | additive ok | bump on struct change |
 | RPC envelope | 1 | `spec/19-tauri-rpc-surface.md` | src-tauri | UI | 1-adj | strict one-of envelope; methods include `ingest_inbox_start/stop`; deterministic reqs carry `now_ms` | additive methods ok | bump on breaking change |

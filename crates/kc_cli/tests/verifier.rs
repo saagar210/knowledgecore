@@ -17,7 +17,7 @@ fn verifier_ok_bundle() {
 
     let manifest = serde_json::json!({
         "manifest_version": 1,
-        "vault_id": "11111111-1111-1111-1111-111111111111",
+        "vault_id": "123e4567-e89b-12d3-a456-426614174000",
         "schema_versions": {
             "vault": 1,
             "locator": 1,
@@ -56,7 +56,7 @@ fn verifier_reports_db_mismatch_code() {
 
     let manifest = serde_json::json!({
         "manifest_version": 1,
-        "vault_id": "11111111-1111-1111-1111-111111111111",
+        "vault_id": "123e4567-e89b-12d3-a456-426614174000",
         "schema_versions": {
             "vault": 1,
             "locator": 1,
@@ -110,7 +110,7 @@ fn verifier_errors_are_sorted_by_code_then_path() {
 
     let manifest = serde_json::json!({
         "manifest_version": 1,
-        "vault_id": "11111111-1111-1111-1111-111111111111",
+        "vault_id": "123e4567-e89b-12d3-a456-426614174000",
         "schema_versions": {
             "vault": 1,
             "locator": 1,
@@ -149,7 +149,7 @@ fn verifier_checks_vector_index_files() {
 
     let manifest = serde_json::json!({
         "manifest_version": 1,
-        "vault_id": "11111111-1111-1111-1111-111111111111",
+        "vault_id": "123e4567-e89b-12d3-a456-426614174000",
         "schema_versions": {
             "vault": 1,
             "locator": 1,
@@ -176,4 +176,129 @@ fn verifier_checks_vector_index_files() {
     let (code, report) = verify_bundle(&bundle).expect("verify");
     assert_eq!(code, 0);
     assert_eq!(report.checked.indexes, 1);
+}
+
+#[test]
+fn verifier_reports_manifest_invalid_json_code() {
+    let root = tempfile::tempdir().expect("tempdir").keep();
+    let bundle = root.join("bundle6");
+    std::fs::create_dir_all(&bundle).expect("mkdir");
+    std::fs::write(bundle.join("manifest.json"), b"{ not-json").expect("write manifest");
+
+    let (code, report) = verify_bundle(&bundle).expect("verify");
+    assert_eq!(code, 20);
+    assert_eq!(report.errors[0].code, "MANIFEST_INVALID_JSON");
+}
+
+#[test]
+fn verifier_reports_object_missing_code() {
+    let root = tempfile::tempdir().expect("tempdir").keep();
+    let bundle = root.join("bundle7");
+    std::fs::create_dir_all(bundle.join("db")).expect("mkdir db");
+    std::fs::write(bundle.join("db/knowledge.sqlite"), b"db").expect("write db");
+
+    let missing_hash = "blake3:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
+    let manifest = serde_json::json!({
+        "manifest_version": 1,
+        "vault_id": "123e4567-e89b-12d3-a456-426614174000",
+        "schema_versions": {
+            "vault": 1,
+            "locator": 1,
+            "app_error": 1,
+            "rpc": 1
+        },
+        "chunking_config_hash": "blake3:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+        "db": {
+            "relative_path": "db/knowledge.sqlite",
+            "hash": blake3_hex_prefixed(b"db")
+        },
+        "objects": [{
+            "relative_path": "store/objects/aa/missing",
+            "hash": missing_hash,
+            "bytes": 1
+        }],
+        "indexes": {}
+    });
+    std::fs::write(bundle.join("manifest.json"), serde_json::to_vec(&manifest).expect("json"))
+        .expect("write manifest");
+
+    let (code, report) = verify_bundle(&bundle).expect("verify");
+    assert_eq!(code, 40);
+    assert!(report.errors.iter().any(|e| e.code == "OBJECT_MISSING"));
+}
+
+#[test]
+fn verifier_reports_object_hash_mismatch_code() {
+    let root = tempfile::tempdir().expect("tempdir").keep();
+    let bundle = root.join("bundle8");
+    std::fs::create_dir_all(bundle.join("db")).expect("mkdir db");
+    std::fs::create_dir_all(bundle.join("store/objects/aa")).expect("mkdir objects");
+    std::fs::write(bundle.join("db/knowledge.sqlite"), b"db").expect("write db");
+    std::fs::write(bundle.join("store/objects/aa/x"), b"actual").expect("write obj");
+
+    let manifest = serde_json::json!({
+        "manifest_version": 1,
+        "vault_id": "123e4567-e89b-12d3-a456-426614174000",
+        "schema_versions": {
+            "vault": 1,
+            "locator": 1,
+            "app_error": 1,
+            "rpc": 1
+        },
+        "chunking_config_hash": "blake3:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+        "db": {
+            "relative_path": "db/knowledge.sqlite",
+            "hash": blake3_hex_prefixed(b"db")
+        },
+        "objects": [{
+            "relative_path": "store/objects/aa/x",
+            "hash": "blake3:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+            "bytes": 6
+        }],
+        "indexes": {}
+    });
+    std::fs::write(bundle.join("manifest.json"), serde_json::to_vec(&manifest).expect("json"))
+        .expect("write manifest");
+
+    let (code, report) = verify_bundle(&bundle).expect("verify");
+    assert_eq!(code, 41);
+    assert!(report.errors.iter().any(|e| e.code == "OBJECT_HASH_MISMATCH"));
+}
+
+#[test]
+fn verifier_reports_internal_error_code_for_unreadable_object_path() {
+    let root = tempfile::tempdir().expect("tempdir").keep();
+    let bundle = root.join("bundle9");
+    std::fs::create_dir_all(bundle.join("db")).expect("mkdir db");
+    std::fs::create_dir_all(bundle.join("store/objects/aa/dir_as_object"))
+        .expect("mkdir object dir");
+    std::fs::write(bundle.join("db/knowledge.sqlite"), b"db").expect("write db");
+
+    let manifest = serde_json::json!({
+        "manifest_version": 1,
+        "vault_id": "123e4567-e89b-12d3-a456-426614174000",
+        "schema_versions": {
+            "vault": 1,
+            "locator": 1,
+            "app_error": 1,
+            "rpc": 1
+        },
+        "chunking_config_hash": "blake3:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+        "db": {
+            "relative_path": "db/knowledge.sqlite",
+            "hash": blake3_hex_prefixed(b"db")
+        },
+        "objects": [{
+            "relative_path": "store/objects/aa/dir_as_object",
+            "hash": "blake3:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+            "bytes": 1
+        }],
+        "indexes": {}
+    });
+    std::fs::write(bundle.join("manifest.json"), serde_json::to_vec(&manifest).expect("json"))
+        .expect("write manifest");
+
+    let (code, report) = verify_bundle(&bundle).expect("verify");
+    assert_eq!(code, 60);
+    assert!(report.errors.iter().any(|e| e.code == "INTERNAL_ERROR"));
 }

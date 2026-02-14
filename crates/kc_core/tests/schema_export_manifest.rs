@@ -11,7 +11,11 @@ fn export_manifest_schema() -> serde_json::Value {
       "required": ["manifest_version", "vault_id", "schema_versions", "chunking_config_hash", "db", "objects"],
       "properties": {
         "manifest_version": { "const": 1 },
-        "vault_id": { "type": "string" },
+        "vault_id": {
+          "type": "string",
+          "format": "uuid",
+          "pattern": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-5][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$"
+        },
         "schema_versions": { "type": "object" },
         "toolchain_registry": { "type": "object" },
         "chunking_config_id": { "type": "string" },
@@ -77,9 +81,24 @@ fn schema_export_manifest_rejects_bad_hash() {
     let schema = JSONSchema::compile(&export_manifest_schema()).expect("compile schema");
     let invalid = serde_json::json!({
       "manifest_version": 1,
-      "vault_id": "11111111-1111-1111-1111-111111111111",
+      "vault_id": "123e4567-e89b-12d3-a456-426614174000",
       "schema_versions": {},
       "chunking_config_hash": "not-a-hash",
+      "db": { "relative_path": "db/knowledge.sqlite", "hash": "blake3:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa" },
+      "objects": [],
+      "indexes": {}
+    });
+    assert!(!schema.is_valid(&invalid));
+}
+
+#[test]
+fn schema_export_manifest_rejects_non_uuid_vault_id() {
+    let schema = JSONSchema::compile(&export_manifest_schema()).expect("compile schema");
+    let invalid = serde_json::json!({
+      "manifest_version": 1,
+      "vault_id": "not-a-uuid",
+      "schema_versions": {},
+      "chunking_config_hash": "blake3:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
       "db": { "relative_path": "db/knowledge.sqlite", "hash": "blake3:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa" },
       "objects": [],
       "indexes": {}

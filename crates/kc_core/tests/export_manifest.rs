@@ -1,3 +1,4 @@
+use kc_core::chunking::{default_chunking_config_v1, hash_chunking_config};
 use kc_core::db::open_db;
 use kc_core::export::{export_bundle, ExportOptions};
 use kc_core::hashing::blake3_hex_prefixed;
@@ -59,6 +60,14 @@ fn export_manifest_has_deterministic_object_order() {
 
     let db_actual = blake3_hex_prefixed(&std::fs::read(bundle.join(db_rel)).expect("read db"));
     assert_eq!(db_hash, db_actual);
+
+    let chunking_hash = manifest
+        .get("chunking_config_hash")
+        .and_then(|v| v.as_str())
+        .expect("chunking hash");
+    let expected_chunking_hash = hash_chunking_config(&default_chunking_config_v1())
+        .expect("hash default chunking config");
+    assert_eq!(chunking_hash, expected_chunking_hash.0);
 }
 
 #[test]

@@ -44,6 +44,19 @@ fn report_for(exit_code: i64, mut errors: Vec<VerifyErrorEntry>, checked: Checke
     )
 }
 
+fn internal_error(path: String, message: String, checked: CheckedCounts) -> (i64, VerifyReportV1) {
+    report_for(
+        60,
+        vec![VerifyErrorEntry {
+            code: "INTERNAL_ERROR".to_string(),
+            path,
+            expected: None,
+            actual: Some(message),
+        }],
+        checked,
+    )
+}
+
 fn manifest_schema() -> Value {
     serde_json::json!({
       "$schema": "https://json-schema.org/draft/2020-12/schema",
@@ -52,7 +65,11 @@ fn manifest_schema() -> Value {
       "required": ["manifest_version", "vault_id", "schema_versions", "chunking_config_hash", "db", "objects"],
       "properties": {
         "manifest_version": { "const": 1 },
-        "vault_id": { "type": "string" },
+        "vault_id": {
+          "type": "string",
+          "format": "uuid",
+          "pattern": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-5][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$"
+        },
         "schema_versions": { "type": "object" },
         "toolchain_registry": { "type": "object" },
         "chunking_config_id": { "type": "string" },
@@ -212,15 +229,20 @@ pub fn verify_bundle(bundle_path: &Path) -> AppResult<(i64, VerifyReportV1)> {
             continue;
         }
 
-        let actual_hash = blake3_hex_prefixed(&fs::read(&abs).map_err(|e| {
-            AppError::new(
-                "KC_VERIFY_FAILED",
-                "verify",
-                "failed to read object during verification",
-                false,
-                serde_json::json!({ "error": e.to_string() }),
-            )
-        })?);
+        let bytes = match fs::read(&abs) {
+            Ok(bytes) => bytes,
+            Err(e) => {
+                return Ok(internal_error(
+                    path,
+                    format!("failed to read object during verification: {}", e),
+                    CheckedCounts {
+                        objects: objects.len() as i64,
+                        indexes: vectors.len() as i64,
+                    },
+                ))
+            }
+        };
+        let actual_hash = blake3_hex_prefixed(&bytes);
 
         if actual_hash != expected_hash {
             errors.push(VerifyErrorEntry {
@@ -255,15 +277,20 @@ pub fn verify_bundle(bundle_path: &Path) -> AppResult<(i64, VerifyReportV1)> {
             continue;
         }
 
-        let actual_hash = blake3_hex_prefixed(&fs::read(&abs).map_err(|e| {
-            AppError::new(
-                "KC_VERIFY_FAILED",
-                "verify",
-                "failed to read index file during verification",
-                false,
-                serde_json::json!({ "error": e.to_string() }),
-            )
-        })?);
+        let bytes = match fs::read(&abs) {
+            Ok(bytes) => bytes,
+            Err(e) => {
+                return Ok(internal_error(
+                    path,
+                    format!("failed to read index file during verification: {}", e),
+                    CheckedCounts {
+                        objects: objects.len() as i64,
+                        indexes: vectors.len() as i64,
+                    },
+                ))
+            }
+        };
+        let actual_hash = blake3_hex_prefixed(&bytes);
 
         if actual_hash != expected_hash {
             errors.push(VerifyErrorEntry {
