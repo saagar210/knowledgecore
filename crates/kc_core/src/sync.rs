@@ -3,6 +3,8 @@ use crate::canon_json::to_canonical_bytes;
 use crate::db::open_db;
 use crate::export::{export_bundle, ExportOptions};
 use crate::hashing::blake3_hex_prefixed;
+use crate::sync_s3::S3SyncTransport;
+use crate::sync_transport::{FsSyncTransport, SyncTargetUri, SyncTransport};
 use crate::vault::vault_open;
 use rusqlite::{params, Connection};
 use serde::{Deserialize, Serialize};
@@ -190,42 +192,11 @@ fn ensure_target_layout(target_path: &Path) -> AppResult<(PathBuf, PathBuf)> {
 }
 
 fn read_head(target_path: &Path) -> AppResult<Option<SyncHeadV1>> {
-    let head_path = target_path.join("head.json");
-    if !head_path.exists() {
-        return Ok(None);
-    }
-    let bytes = fs::read(&head_path).map_err(|e| {
-        sync_error(
-            "KC_SYNC_TARGET_INVALID",
-            "failed reading sync head file",
-            serde_json::json!({ "error": e.to_string(), "path": head_path }),
-        )
-    })?;
-    serde_json::from_slice(&bytes).map(Some).map_err(|e| {
-        sync_error(
-            "KC_SYNC_TARGET_INVALID",
-            "failed parsing sync head file",
-            serde_json::json!({ "error": e.to_string(), "path": head_path }),
-        )
-    })
+    FsSyncTransport::new(target_path).read_head()
 }
 
 fn write_head(target_path: &Path, head: &SyncHeadV1) -> AppResult<()> {
-    let bytes = to_canonical_bytes(&serde_json::to_value(head).map_err(|e| {
-        sync_error(
-            "KC_SYNC_TARGET_INVALID",
-            "failed serializing sync head",
-            serde_json::json!({ "error": e.to_string() }),
-        )
-    })?)?;
-    fs::write(target_path.join("head.json"), bytes).map_err(|e| {
-        sync_error(
-            "KC_SYNC_TARGET_INVALID",
-            "failed writing sync head",
-            serde_json::json!({ "error": e.to_string(), "path": target_path.join("head.json") }),
-        )
-    })?;
-    Ok(())
+    FsSyncTransport::new(target_path).write_head(head)
 }
 
 fn list_files_sorted(root: &Path) -> AppResult<Vec<PathBuf>> {
@@ -429,6 +400,25 @@ pub fn sync_status(
     })
 }
 
+pub fn sync_status_target(conn: &Connection, target_uri: &str) -> AppResult<SyncStatusV1> {
+    ensure_sync_tables(conn)?;
+    let target = SyncTargetUri::parse(target_uri)?;
+    let remote_head = match &target {
+        SyncTargetUri::FilePath { path } => FsSyncTransport::new(Path::new(path)).read_head()?,
+        SyncTargetUri::S3 { bucket, prefix } => {
+            S3SyncTransport::new(bucket.clone(), prefix.clone()).read_head()?
+        }
+    };
+    let seen_remote_snapshot_id = read_state(conn, "sync_remote_head_seen")?;
+    let last_applied_manifest_hash = read_state(conn, "sync_last_applied_manifest_hash")?;
+    Ok(SyncStatusV1 {
+        target_path: target.display(),
+        remote_head,
+        seen_remote_snapshot_id,
+        last_applied_manifest_hash,
+    })
+}
+
 pub fn sync_push(
     conn: &Connection,
     vault_path: &Path,
@@ -518,6 +508,22 @@ pub fn sync_push(
         manifest_hash: local_manifest_hash,
         remote_head: head,
     })
+}
+
+pub fn sync_push_target(
+    conn: &Connection,
+    vault_path: &Path,
+    target_uri: &str,
+    now_ms: i64,
+) -> AppResult<SyncPushResultV1> {
+    match SyncTargetUri::parse(target_uri)? {
+        SyncTargetUri::FilePath { path } => sync_push(conn, vault_path, Path::new(&path), now_ms),
+        SyncTargetUri::S3 { .. } => Err(sync_error(
+            "KC_SYNC_TARGET_UNSUPPORTED",
+            "s3 sync push is not enabled in this milestone",
+            serde_json::json!({ "target": target_uri }),
+        )),
+    }
 }
 
 pub fn sync_pull(
@@ -610,4 +616,20 @@ pub fn sync_pull(
         manifest_hash: remote_head.manifest_hash.clone(),
         remote_head,
     })
+}
+
+pub fn sync_pull_target(
+    conn: &Connection,
+    vault_path: &Path,
+    target_uri: &str,
+    now_ms: i64,
+) -> AppResult<SyncPullResultV1> {
+    match SyncTargetUri::parse(target_uri)? {
+        SyncTargetUri::FilePath { path } => sync_pull(conn, vault_path, Path::new(&path), now_ms),
+        SyncTargetUri::S3 { .. } => Err(sync_error(
+            "KC_SYNC_TARGET_UNSUPPORTED",
+            "s3 sync pull is not enabled in this milestone",
+            serde_json::json!({ "target": target_uri }),
+        )),
+    }
 }

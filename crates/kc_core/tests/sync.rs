@@ -1,6 +1,9 @@
 use kc_core::db::open_db;
 use kc_core::object_store::ObjectStore;
-use kc_core::sync::{sync_pull, sync_push, sync_status, SyncHeadV1};
+use kc_core::sync::{
+    sync_pull, sync_pull_target, sync_push, sync_push_target, sync_status, sync_status_target,
+    SyncHeadV1,
+};
 use kc_core::vault::vault_init;
 
 fn insert_object(conn: &rusqlite::Connection, vault_root: &std::path::Path, bytes: &[u8], event_id: i64) {
@@ -99,4 +102,39 @@ fn sync_push_conflict_emits_artifact() {
         .and_then(|v| v.as_str())
         .expect("conflict path");
     assert!(std::path::Path::new(conflict_path).exists());
+}
+
+#[test]
+fn sync_target_wrappers_support_file_uri() {
+    let root = tempfile::tempdir().expect("tempdir").keep();
+    let vault_root = root.join("vault");
+    let target_root = root.join("sync-target");
+    let target_uri = format!("file://{}", target_root.display());
+
+    vault_init(&vault_root, "demo", 1).expect("vault init");
+    let conn = open_db(&vault_root.join("db/knowledge.sqlite")).expect("open db");
+    insert_object(&conn, &vault_root, b"uri", 1);
+
+    let pushed =
+        sync_push_target(&conn, &vault_root, &target_uri, 100).expect("sync push target");
+    assert!(!pushed.snapshot_id.is_empty());
+
+    let status = sync_status_target(&conn, &target_uri).expect("sync status target");
+    assert_eq!(status.seen_remote_snapshot_id, Some(pushed.snapshot_id.clone()));
+
+    let pulled =
+        sync_pull_target(&conn, &vault_root, &target_uri, 101).expect("sync pull target");
+    assert_eq!(pulled.snapshot_id, pushed.snapshot_id);
+}
+
+#[test]
+fn sync_target_wrappers_reject_s3_until_enabled() {
+    let root = tempfile::tempdir().expect("tempdir").keep();
+    let vault_root = root.join("vault");
+    vault_init(&vault_root, "demo", 1).expect("vault init");
+    let conn = open_db(&vault_root.join("db/knowledge.sqlite")).expect("open db");
+
+    let err = sync_push_target(&conn, &vault_root, "s3://demo-bucket/kc", 100)
+        .expect_err("s3 push should be unsupported in this milestone");
+    assert_eq!(err.code, "KC_SYNC_TARGET_UNSUPPORTED");
 }
