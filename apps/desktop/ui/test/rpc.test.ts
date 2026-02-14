@@ -36,6 +36,7 @@ describe("rpc client", () => {
       "syncStatus",
       "syncPush",
       "syncPull",
+      "syncMergePreview",
       "lineageQuery",
       "lineageQueryV2",
       "lineageOverlayAdd",

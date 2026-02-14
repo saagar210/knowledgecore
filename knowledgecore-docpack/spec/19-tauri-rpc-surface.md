@@ -89,6 +89,8 @@ Versioned RPC surface v1, envelope schema, and determinism notes.
          - ask_question
          - events_list, jobs_list
          - sync_status, sync_push, sync_pull
+           - `sync_pull` accepts optional `auto_merge` with supported value `conservative`
+         - sync_merge_preview
          - lineage_query
          - lineage_query_v2
          - lineage_overlay_add, lineage_overlay_remove, lineage_overlay_list

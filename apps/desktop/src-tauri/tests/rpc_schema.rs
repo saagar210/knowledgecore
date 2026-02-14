@@ -1,9 +1,9 @@
 use apps_desktop_tauri::rpc::{
     AskQuestionReq, LineageOverlayAddReq, LineageOverlayListReq, LineageOverlayRemoveReq,
-    LineageQueryReq, LineageQueryV2Req, SearchQueryReq, SyncPullReq, SyncPushReq, SyncStatusReq,
-    VaultEncryptionEnableReq, VaultEncryptionMigrateReq, VaultEncryptionStatusReq, VaultInitReq,
-    VaultLockReq, VaultLockStatusReq, VaultRecoveryGenerateReq, VaultRecoveryStatusReq,
-    VaultRecoveryVerifyReq, VaultUnlockReq,
+    LineageQueryReq, LineageQueryV2Req, SearchQueryReq, SyncMergePreviewReq, SyncPullReq,
+    SyncPushReq, SyncStatusReq, VaultEncryptionEnableReq, VaultEncryptionMigrateReq,
+    VaultEncryptionStatusReq, VaultInitReq, VaultLockReq, VaultLockStatusReq,
+    VaultRecoveryGenerateReq, VaultRecoveryStatusReq, VaultRecoveryVerifyReq, VaultUnlockReq,
 };
 
 #[test]
@@ -146,6 +146,30 @@ fn rpc_schema_sync_accepts_uri_targets() {
     });
     assert!(serde_json::from_value::<SyncPushReq>(push.clone()).is_ok());
     assert!(serde_json::from_value::<SyncPullReq>(push).is_ok());
+
+    let pull_with_merge = serde_json::json!({
+        "vault_path": "/tmp/vault",
+        "target_path": "s3://demo-bucket/kc",
+        "auto_merge": "conservative",
+        "now_ms": 124
+    });
+    assert!(serde_json::from_value::<SyncPullReq>(pull_with_merge).is_ok());
+}
+
+#[test]
+fn rpc_schema_sync_merge_preview_requires_now_ms() {
+    let missing_now = serde_json::json!({
+        "vault_path": "/tmp/vault",
+        "target_path": "s3://demo-bucket/kc"
+    });
+    assert!(serde_json::from_value::<SyncMergePreviewReq>(missing_now).is_err());
+
+    let valid = serde_json::json!({
+        "vault_path": "/tmp/vault",
+        "target_path": "s3://demo-bucket/kc",
+        "now_ms": 123
+    });
+    assert!(serde_json::from_value::<SyncMergePreviewReq>(valid).is_ok());
 }
 
 #[test]

@@ -463,10 +463,21 @@ pub fn sync_pull_service(
     vault_path: &Path,
     target_uri: &str,
     now_ms: i64,
+    auto_merge_mode: Option<&str>,
 ) -> AppResult<crate::sync::SyncPullResultV1> {
     let vault = vault_open(vault_path)?;
     let conn = open_db(&vault_path.join(vault.db.relative_path))?;
-    crate::sync::sync_pull_target(&conn, vault_path, target_uri, now_ms)
+    crate::sync::sync_pull_target_with_mode(&conn, vault_path, target_uri, now_ms, auto_merge_mode)
+}
+
+pub fn sync_merge_preview_service(
+    vault_path: &Path,
+    target_uri: &str,
+    now_ms: i64,
+) -> AppResult<crate::sync::SyncMergePreviewResultV1> {
+    let vault = vault_open(vault_path)?;
+    let conn = open_db(&vault_path.join(vault.db.relative_path))?;
+    crate::sync::sync_merge_preview_target(&conn, vault_path, target_uri, now_ms)
 }
 
 pub fn lineage_query_service(

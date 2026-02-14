@@ -22,6 +22,8 @@ import type {
   VaultEncryptionStatusRes,
   SyncPullReq,
   SyncPullRes,
+  SyncMergePreviewReq,
+  SyncMergePreviewRes,
   SyncPushReq,
   SyncPushRes,
   SyncStatusReq,
@@ -118,4 +120,11 @@ export async function runSyncPull(
   req: SyncPullReq
 ): Promise<ViewState<SyncPullRes>> {
   return nextStateFromRpc(await api.syncPull(req));
+}
+
+export async function loadSyncMergePreview(
+  api: DesktopRpcApi,
+  req: SyncMergePreviewReq
+): Promise<ViewState<SyncMergePreviewRes>> {
+  return nextStateFromRpc(await api.syncMergePreview(req));
 }

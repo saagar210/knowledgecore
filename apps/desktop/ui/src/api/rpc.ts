@@ -200,11 +200,41 @@ export type SyncPushRes = {
   manifest_hash: string;
   remote_head: SyncHead;
 };
-export type SyncPullReq = { vault_path: string; target_path: string; now_ms: number };
+export type SyncPullReq = {
+  vault_path: string;
+  target_path: string;
+  auto_merge?: string | null;
+  now_ms: number;
+};
 export type SyncPullRes = {
   snapshot_id: string;
   manifest_hash: string;
   remote_head: SyncHead;
+};
+export type SyncMergePreviewReq = {
+  vault_path: string;
+  target_path: string;
+  now_ms: number;
+};
+export type SyncMergeChangeSet = {
+  object_hashes: string[];
+  lineage_overlay_ids: string[];
+};
+export type SyncMergePreviewReport = {
+  schema_version: number;
+  merge_policy: string;
+  safe: boolean;
+  generated_at_ms: number;
+  local: SyncMergeChangeSet;
+  remote: SyncMergeChangeSet;
+  overlap: SyncMergeChangeSet;
+  reasons: string[];
+};
+export type SyncMergePreviewRes = {
+  target_path: string;
+  seen_remote_snapshot_id: string | null;
+  remote_snapshot_id: string;
+  report: SyncMergePreviewReport;
 };
 export type LineageQueryReq = {
   vault_path: string;
@@ -305,6 +335,8 @@ export const rpcMethods = {
   syncStatus: (req: SyncStatusReq) => rpc<SyncStatusReq, SyncStatusRes>("sync_status", req),
   syncPush: (req: SyncPushReq) => rpc<SyncPushReq, SyncPushRes>("sync_push", req),
   syncPull: (req: SyncPullReq) => rpc<SyncPullReq, SyncPullRes>("sync_pull", req),
+  syncMergePreview: (req: SyncMergePreviewReq) =>
+    rpc<SyncMergePreviewReq, SyncMergePreviewRes>("sync_merge_preview", req),
   lineageQuery: (req: LineageQueryReq) =>
     rpc<LineageQueryReq, LineageQueryRes>("lineage_query", req),
   lineageQueryV2: (req: LineageQueryV2Req) =>

@@ -3,11 +3,16 @@ use crate::canon_json::to_canonical_bytes;
 use crate::db::open_db;
 use crate::export::{export_bundle, ExportOptions};
 use crate::hashing::blake3_hex_prefixed;
+use crate::sync_merge::{
+    ensure_conservative_merge_safe, merge_preview_conservative, SyncMergeChangeSetV1,
+    SyncMergePreviewReportV1,
+};
 use crate::sync_s3::S3SyncTransport;
 use crate::sync_transport::{FsSyncTransport, SyncTargetUri, SyncTransport};
 use crate::vault::{vault_open, VaultJsonV2};
 use rusqlite::{params, Connection};
 use serde::{Deserialize, Serialize};
+use std::collections::BTreeSet;
 use std::fs;
 use std::io::Cursor;
 use std::path::{Path, PathBuf};
@@ -62,6 +67,19 @@ pub struct SyncPullResultV1 {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SyncMergePreviewResultV1 {
+    pub target_path: String,
+    pub seen_remote_snapshot_id: Option<String>,
+    pub remote_snapshot_id: String,
+    pub report: SyncMergePreviewReportV1,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SyncAutoMergeMode {
+    Conservative,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SyncConflictArtifactV1 {
     pub schema_version: i64,
     pub kind: String,
@@ -91,6 +109,23 @@ struct SyncS3WriteLockV1 {
 
 fn sync_error(code: &str, message: &str, details: serde_json::Value) -> AppError {
     AppError::new(code, "sync", message, false, details)
+}
+
+fn parse_auto_merge_mode(mode: Option<&str>) -> AppResult<Option<SyncAutoMergeMode>> {
+    match mode {
+        None => Ok(None),
+        Some(raw) => match raw {
+            "conservative" => Ok(Some(SyncAutoMergeMode::Conservative)),
+            other => Err(sync_error(
+                "KC_SYNC_MERGE_PRECONDITION_FAILED",
+                "unsupported sync auto-merge mode",
+                serde_json::json!({
+                    "auto_merge": other,
+                    "supported": ["conservative"]
+                }),
+            )),
+        },
+    }
 }
 
 fn ensure_sync_tables(conn: &Connection) -> AppResult<()> {
@@ -355,6 +390,180 @@ fn compute_manifest_hash(bundle_dir: &Path) -> AppResult<String> {
         )
     })?;
     Ok(blake3_hex_prefixed(&bytes))
+}
+
+fn extract_change_set_from_bundle_dir(bundle_dir: &Path) -> AppResult<SyncMergeChangeSetV1> {
+    let manifest_path = bundle_dir.join("manifest.json");
+    let manifest_bytes = fs::read(&manifest_path).map_err(|e| {
+        sync_error(
+            "KC_SYNC_MERGE_PRECONDITION_FAILED",
+            "failed reading snapshot manifest for merge preview",
+            serde_json::json!({ "error": e.to_string(), "path": manifest_path }),
+        )
+    })?;
+    let manifest: serde_json::Value = serde_json::from_slice(&manifest_bytes).map_err(|e| {
+        sync_error(
+            "KC_SYNC_MERGE_PRECONDITION_FAILED",
+            "failed parsing snapshot manifest for merge preview",
+            serde_json::json!({ "error": e.to_string(), "path": manifest_path }),
+        )
+    })?;
+
+    let objects = manifest
+        .get("objects")
+        .and_then(|x| x.as_array())
+        .ok_or_else(|| {
+            sync_error(
+                "KC_SYNC_MERGE_PRECONDITION_FAILED",
+                "snapshot manifest missing objects array",
+                serde_json::json!({ "path": manifest_path }),
+            )
+        })?;
+
+    let mut object_hashes = Vec::new();
+    for object in objects {
+        let hash = object.get("hash").and_then(|x| x.as_str()).ok_or_else(|| {
+            sync_error(
+                "KC_SYNC_MERGE_PRECONDITION_FAILED",
+                "snapshot manifest object entry missing hash",
+                serde_json::json!({ "path": manifest_path }),
+            )
+        })?;
+        object_hashes.push(hash.to_string());
+    }
+
+    let db_rel = manifest
+        .get("db")
+        .and_then(|db| db.get("relative_path"))
+        .and_then(|x| x.as_str())
+        .unwrap_or("db/knowledge.sqlite");
+    let db_path = bundle_dir.join(db_rel);
+    let lineage_overlay_ids = read_overlay_ids_from_snapshot_db(&db_path)?;
+
+    Ok(SyncMergeChangeSetV1 {
+        object_hashes,
+        lineage_overlay_ids,
+    })
+}
+
+fn read_overlay_ids_from_snapshot_db(db_path: &Path) -> AppResult<Vec<String>> {
+    if !db_path.exists() {
+        return Ok(Vec::new());
+    }
+
+    let conn = Connection::open(db_path).map_err(|e| {
+        sync_error(
+            "KC_SYNC_MERGE_PRECONDITION_FAILED",
+            "failed opening snapshot db for merge preview",
+            serde_json::json!({ "error": e.to_string(), "path": db_path }),
+        )
+    })?;
+
+    let has_lineage_overlays: i64 = conn
+        .query_row(
+            "SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='lineage_overlays'",
+            [],
+            |row| row.get(0),
+        )
+        .map_err(|e| {
+            sync_error(
+                "KC_SYNC_MERGE_PRECONDITION_FAILED",
+                "failed checking lineage overlay table in snapshot db",
+                serde_json::json!({ "error": e.to_string(), "path": db_path }),
+            )
+        })?;
+    if has_lineage_overlays == 0 {
+        return Ok(Vec::new());
+    }
+
+    let mut stmt = conn
+        .prepare("SELECT overlay_id FROM lineage_overlays ORDER BY overlay_id ASC")
+        .map_err(|e| {
+            sync_error(
+                "KC_SYNC_MERGE_PRECONDITION_FAILED",
+                "failed preparing lineage overlay query for merge preview",
+                serde_json::json!({ "error": e.to_string(), "path": db_path }),
+            )
+        })?;
+    let rows = stmt
+        .query_map([], |row| row.get::<_, String>(0))
+        .map_err(|e| {
+            sync_error(
+                "KC_SYNC_MERGE_PRECONDITION_FAILED",
+                "failed querying lineage overlay ids for merge preview",
+                serde_json::json!({ "error": e.to_string(), "path": db_path }),
+            )
+        })?;
+    let mut overlay_ids = Vec::new();
+    for row in rows {
+        overlay_ids.push(row.map_err(|e| {
+            sync_error(
+                "KC_SYNC_MERGE_PRECONDITION_FAILED",
+                "failed decoding lineage overlay id for merge preview",
+                serde_json::json!({ "error": e.to_string(), "path": db_path }),
+            )
+        })?);
+    }
+    Ok(overlay_ids)
+}
+
+fn delta_change_set(
+    current: &SyncMergeChangeSetV1,
+    base: &SyncMergeChangeSetV1,
+) -> SyncMergeChangeSetV1 {
+    let base_object_hashes: BTreeSet<String> = base.object_hashes.iter().cloned().collect();
+    let base_overlay_ids: BTreeSet<String> = base.lineage_overlay_ids.iter().cloned().collect();
+
+    SyncMergeChangeSetV1 {
+        object_hashes: current
+            .object_hashes
+            .iter()
+            .filter(|h| !base_object_hashes.contains(*h))
+            .cloned()
+            .collect(),
+        lineage_overlay_ids: current
+            .lineage_overlay_ids
+            .iter()
+            .filter(|h| !base_overlay_ids.contains(*h))
+            .cloned()
+            .collect(),
+    }
+}
+
+fn extract_change_set_from_s3_snapshot(
+    transport: &S3SyncTransport,
+    snapshot_id: &str,
+    now_ms: i64,
+) -> AppResult<SyncMergeChangeSetV1> {
+    let snapshot_key = format!("snapshots/{}.zip", snapshot_id);
+    let zip_bytes = transport.read_bytes(&snapshot_key)?.ok_or_else(|| {
+        sync_error(
+            "KC_SYNC_MERGE_PRECONDITION_FAILED",
+            "sync merge preview snapshot is missing on remote target",
+            serde_json::json!({
+                "target": transport.target().display(),
+                "snapshot_id": snapshot_id,
+                "key": snapshot_key
+            }),
+        )
+    })?;
+    let unpack_dir = std::env::temp_dir().join(format!(
+        "kc_sync_merge_unpack_{}_{}_{}",
+        std::process::id(),
+        snapshot_id.replace(':', "_"),
+        now_ms
+    ));
+    if unpack_dir.exists() {
+        fs::remove_dir_all(&unpack_dir).map_err(|e| {
+            sync_error(
+                "KC_SYNC_MERGE_PRECONDITION_FAILED",
+                "failed clearing existing merge preview unpack directory",
+                serde_json::json!({ "error": e.to_string(), "path": unpack_dir }),
+            )
+        })?;
+    }
+    unpack_zip_snapshot(&zip_bytes, &unpack_dir)?;
+    extract_change_set_from_bundle_dir(&unpack_dir)
 }
 
 fn build_local_snapshot(vault_path: &Path, now_ms: i64) -> AppResult<(PathBuf, String)> {
@@ -789,6 +998,129 @@ pub fn sync_status_target(conn: &Connection, target_uri: &str) -> AppResult<Sync
     })
 }
 
+fn sync_merge_preview_file_target(
+    conn: &Connection,
+    vault_path: &Path,
+    target_path: &Path,
+    now_ms: i64,
+) -> AppResult<SyncMergePreviewResultV1> {
+    ensure_sync_tables(conn)?;
+    let remote_head = read_head(target_path)?.ok_or_else(|| {
+        sync_error(
+            "KC_SYNC_MERGE_PRECONDITION_FAILED",
+            "sync merge preview requires a remote head",
+            serde_json::json!({ "target_path": target_path }),
+        )
+    })?;
+    let seen_remote_snapshot_id = read_state(conn, "sync_remote_head_seen")?;
+    let (local_bundle, _local_manifest_hash) = build_local_snapshot(vault_path, now_ms)?;
+    let local_current = extract_change_set_from_bundle_dir(&local_bundle)?;
+
+    let remote_snapshot_dir = target_path.join("snapshots").join(&remote_head.snapshot_id);
+    if !remote_snapshot_dir.exists() {
+        return Err(sync_error(
+            "KC_SYNC_MERGE_PRECONDITION_FAILED",
+            "sync merge preview remote snapshot is missing",
+            serde_json::json!({
+                "target_path": target_path,
+                "snapshot_id": remote_head.snapshot_id,
+                "path": remote_snapshot_dir
+            }),
+        ));
+    }
+    let remote_current = extract_change_set_from_bundle_dir(&remote_snapshot_dir)?;
+
+    let base = if let Some(seen_snapshot_id) = seen_remote_snapshot_id.as_deref() {
+        let seen_snapshot_dir = target_path.join("snapshots").join(seen_snapshot_id);
+        if !seen_snapshot_dir.exists() {
+            return Err(sync_error(
+                "KC_SYNC_MERGE_PRECONDITION_FAILED",
+                "sync merge preview base snapshot is missing",
+                serde_json::json!({
+                    "target_path": target_path,
+                    "snapshot_id": seen_snapshot_id,
+                    "path": seen_snapshot_dir
+                }),
+            ));
+        }
+        extract_change_set_from_bundle_dir(&seen_snapshot_dir)?
+    } else {
+        SyncMergeChangeSetV1::default()
+    };
+
+    let local_delta = delta_change_set(&local_current, &base);
+    let remote_delta = delta_change_set(&remote_current, &base);
+    let report = merge_preview_conservative(&local_delta, &remote_delta, now_ms)?;
+
+    Ok(SyncMergePreviewResultV1 {
+        target_path: target_path.display().to_string(),
+        seen_remote_snapshot_id,
+        remote_snapshot_id: remote_head.snapshot_id,
+        report,
+    })
+}
+
+fn sync_merge_preview_s3_target(
+    conn: &Connection,
+    vault_path: &Path,
+    transport: S3SyncTransport,
+    now_ms: i64,
+) -> AppResult<SyncMergePreviewResultV1> {
+    ensure_sync_tables(conn)?;
+    let vault = vault_open(vault_path)?;
+    let local_trust = derive_local_sync_trust(&vault, now_ms)?;
+    let remote_head = transport.read_head()?.ok_or_else(|| {
+        sync_error(
+            "KC_SYNC_MERGE_PRECONDITION_FAILED",
+            "sync merge preview requires a remote head",
+            serde_json::json!({ "target": transport.target().display() }),
+        )
+    })?;
+    ensure_remote_trust_matches(Some(&remote_head), &local_trust)?;
+    let seen_remote_snapshot_id = read_state(conn, "sync_remote_head_seen")?;
+
+    let (local_bundle, _local_manifest_hash) = build_local_snapshot(vault_path, now_ms)?;
+    let local_current = extract_change_set_from_bundle_dir(&local_bundle)?;
+    let remote_current =
+        extract_change_set_from_s3_snapshot(&transport, &remote_head.snapshot_id, now_ms)?;
+
+    let base = if let Some(seen_snapshot_id) = seen_remote_snapshot_id.as_deref() {
+        extract_change_set_from_s3_snapshot(&transport, seen_snapshot_id, now_ms)?
+    } else {
+        SyncMergeChangeSetV1::default()
+    };
+
+    let local_delta = delta_change_set(&local_current, &base);
+    let remote_delta = delta_change_set(&remote_current, &base);
+    let report = merge_preview_conservative(&local_delta, &remote_delta, now_ms)?;
+
+    Ok(SyncMergePreviewResultV1 {
+        target_path: transport.target().display(),
+        seen_remote_snapshot_id,
+        remote_snapshot_id: remote_head.snapshot_id,
+        report,
+    })
+}
+
+pub fn sync_merge_preview_target(
+    conn: &Connection,
+    vault_path: &Path,
+    target_uri: &str,
+    now_ms: i64,
+) -> AppResult<SyncMergePreviewResultV1> {
+    match SyncTargetUri::parse(target_uri)? {
+        SyncTargetUri::FilePath { path } => {
+            sync_merge_preview_file_target(conn, vault_path, Path::new(&path), now_ms)
+        }
+        SyncTargetUri::S3 { bucket, prefix } => sync_merge_preview_s3_target(
+            conn,
+            vault_path,
+            S3SyncTransport::new(bucket, prefix),
+            now_ms,
+        ),
+    }
+}
+
 pub fn sync_push(
     conn: &Connection,
     vault_path: &Path,
@@ -1014,11 +1346,12 @@ pub fn sync_push_target(
     }
 }
 
-pub fn sync_pull(
+fn sync_pull_with_mode(
     conn: &Connection,
     vault_path: &Path,
     target_path: &Path,
     now_ms: i64,
+    auto_merge_mode: Option<SyncAutoMergeMode>,
 ) -> AppResult<SyncPullResultV1> {
     ensure_sync_tables(conn)?;
     let db_path = main_db_path(conn)?;
@@ -1042,20 +1375,29 @@ pub fn sync_pull(
         last_applied_manifest.as_deref(),
         &local_manifest_hash,
     ) {
-        let conflict_path = create_conflict_artifact(
-            target_path,
-            &vault.vault_id,
-            now_ms,
-            &local_manifest_hash,
-            Some(&remote_head),
-            seen_remote,
-            None,
-        )?;
-        return Err(sync_error(
-            "KC_SYNC_CONFLICT",
-            "remote and local changes diverged; conflict artifact emitted",
-            serde_json::json!({ "conflict_artifact": conflict_path }),
-        ));
+        match auto_merge_mode {
+            Some(SyncAutoMergeMode::Conservative) => {
+                let preview =
+                    sync_merge_preview_file_target(conn, vault_path, target_path, now_ms)?;
+                ensure_conservative_merge_safe(&preview.report)?;
+            }
+            None => {
+                let conflict_path = create_conflict_artifact(
+                    target_path,
+                    &vault.vault_id,
+                    now_ms,
+                    &local_manifest_hash,
+                    Some(&remote_head),
+                    seen_remote,
+                    None,
+                )?;
+                return Err(sync_error(
+                    "KC_SYNC_CONFLICT",
+                    "remote and local changes diverged; conflict artifact emitted",
+                    serde_json::json!({ "conflict_artifact": conflict_path }),
+                ));
+            }
+        }
     }
 
     let snapshot_dir = target_path.join("snapshots").join(&remote_head.snapshot_id);
@@ -1107,11 +1449,21 @@ pub fn sync_pull(
     })
 }
 
+pub fn sync_pull(
+    conn: &Connection,
+    vault_path: &Path,
+    target_path: &Path,
+    now_ms: i64,
+) -> AppResult<SyncPullResultV1> {
+    sync_pull_with_mode(conn, vault_path, target_path, now_ms, None)
+}
+
 fn sync_pull_s3_target(
     conn: &Connection,
     vault_path: &Path,
     transport: S3SyncTransport,
     now_ms: i64,
+    auto_merge_mode: Option<SyncAutoMergeMode>,
 ) -> AppResult<SyncPullResultV1> {
     ensure_sync_tables(conn)?;
     let db_path = main_db_path(conn)?;
@@ -1138,20 +1490,29 @@ fn sync_pull_s3_target(
         last_applied_manifest.as_deref(),
         &local_manifest_hash,
     ) {
-        let conflict_key = create_conflict_artifact_s3(
-            &transport,
-            &vault.vault_id,
-            now_ms,
-            &local_manifest_hash,
-            Some(&remote_head),
-            seen_remote,
-            Some(local_trust.fingerprint.clone()),
-        )?;
-        return Err(sync_error(
-            "KC_SYNC_CONFLICT",
-            "remote and local changes diverged; conflict artifact emitted",
-            serde_json::json!({ "conflict_artifact": conflict_key, "target": transport.target().display() }),
-        ));
+        match auto_merge_mode {
+            Some(SyncAutoMergeMode::Conservative) => {
+                let preview =
+                    sync_merge_preview_s3_target(conn, vault_path, transport.clone(), now_ms)?;
+                ensure_conservative_merge_safe(&preview.report)?;
+            }
+            None => {
+                let conflict_key = create_conflict_artifact_s3(
+                    &transport,
+                    &vault.vault_id,
+                    now_ms,
+                    &local_manifest_hash,
+                    Some(&remote_head),
+                    seen_remote,
+                    Some(local_trust.fingerprint.clone()),
+                )?;
+                return Err(sync_error(
+                    "KC_SYNC_CONFLICT",
+                    "remote and local changes diverged; conflict artifact emitted",
+                    serde_json::json!({ "conflict_artifact": conflict_key, "target": transport.target().display() }),
+                ));
+            }
+        }
     }
 
     with_s3_lock(&transport, &vault.vault_id, &local_trust, now_ms, || {
@@ -1170,20 +1531,29 @@ fn sync_pull_s3_target(
             last_applied_manifest.as_deref(),
             &local_manifest_hash,
         ) {
-            let conflict_key = create_conflict_artifact_s3(
-                &transport,
-                &vault.vault_id,
-                now_ms,
-                &local_manifest_hash,
-                Some(&remote_head_locked),
-                seen_remote.clone(),
-                Some(local_trust.fingerprint.clone()),
-            )?;
-            return Err(sync_error(
-                "KC_SYNC_CONFLICT",
-                "remote and local changes diverged; conflict artifact emitted",
-                serde_json::json!({ "conflict_artifact": conflict_key, "target": transport.target().display() }),
-            ));
+            match auto_merge_mode {
+                Some(SyncAutoMergeMode::Conservative) => {
+                    let preview =
+                        sync_merge_preview_s3_target(conn, vault_path, transport.clone(), now_ms)?;
+                    ensure_conservative_merge_safe(&preview.report)?;
+                }
+                None => {
+                    let conflict_key = create_conflict_artifact_s3(
+                        &transport,
+                        &vault.vault_id,
+                        now_ms,
+                        &local_manifest_hash,
+                        Some(&remote_head_locked),
+                        seen_remote.clone(),
+                        Some(local_trust.fingerprint.clone()),
+                    )?;
+                    return Err(sync_error(
+                        "KC_SYNC_CONFLICT",
+                        "remote and local changes diverged; conflict artifact emitted",
+                        serde_json::json!({ "conflict_artifact": conflict_key, "target": transport.target().display() }),
+                    ));
+                }
+            }
         }
 
         let snapshot_key = format!("snapshots/{}.zip", remote_head_locked.snapshot_id);
@@ -1258,13 +1628,27 @@ pub fn sync_pull_target(
     target_uri: &str,
     now_ms: i64,
 ) -> AppResult<SyncPullResultV1> {
+    sync_pull_target_with_mode(conn, vault_path, target_uri, now_ms, None)
+}
+
+pub fn sync_pull_target_with_mode(
+    conn: &Connection,
+    vault_path: &Path,
+    target_uri: &str,
+    now_ms: i64,
+    auto_merge_mode: Option<&str>,
+) -> AppResult<SyncPullResultV1> {
+    let mode = parse_auto_merge_mode(auto_merge_mode)?;
     match SyncTargetUri::parse(target_uri)? {
-        SyncTargetUri::FilePath { path } => sync_pull(conn, vault_path, Path::new(&path), now_ms),
+        SyncTargetUri::FilePath { path } => {
+            sync_pull_with_mode(conn, vault_path, Path::new(&path), now_ms, mode)
+        }
         SyncTargetUri::S3 { bucket, prefix } => sync_pull_s3_target(
             conn,
             vault_path,
             S3SyncTransport::new(bucket, prefix),
             now_ms,
+            mode,
         ),
     }
 }

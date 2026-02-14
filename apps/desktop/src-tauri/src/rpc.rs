@@ -430,6 +430,8 @@ pub struct SyncPushRes {
 pub struct SyncPullReq {
     pub vault_path: String,
     pub target_path: String,
+    #[serde(default)]
+    pub auto_merge: Option<String>,
     pub now_ms: i64,
 }
 
@@ -438,6 +440,40 @@ pub struct SyncPullRes {
     pub snapshot_id: String,
     pub manifest_hash: String,
     pub remote_head: SyncHeadRes,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct SyncMergePreviewReq {
+    pub vault_path: String,
+    pub target_path: String,
+    pub now_ms: i64,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct SyncMergeChangeSetRes {
+    pub object_hashes: Vec<String>,
+    pub lineage_overlay_ids: Vec<String>,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct SyncMergePreviewReportRes {
+    pub schema_version: i64,
+    pub merge_policy: String,
+    pub safe: bool,
+    pub generated_at_ms: i64,
+    pub local: SyncMergeChangeSetRes,
+    pub remote: SyncMergeChangeSetRes,
+    pub overlap: SyncMergeChangeSetRes,
+    pub reasons: Vec<String>,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct SyncMergePreviewRes {
+    pub target_path: String,
+    pub seen_remote_snapshot_id: Option<String>,
+    pub remote_snapshot_id: String,
+    pub report: SyncMergePreviewReportRes,
 }
 
 #[derive(Debug, Deserialize)]
@@ -858,6 +894,30 @@ fn map_sync_head(head: kc_core::sync::SyncHeadV1) -> SyncHeadRes {
     }
 }
 
+fn map_sync_merge_change_set(
+    set: kc_core::sync_merge::SyncMergeChangeSetV1,
+) -> SyncMergeChangeSetRes {
+    SyncMergeChangeSetRes {
+        object_hashes: set.object_hashes,
+        lineage_overlay_ids: set.lineage_overlay_ids,
+    }
+}
+
+fn map_sync_merge_preview_report(
+    report: kc_core::sync_merge::SyncMergePreviewReportV1,
+) -> SyncMergePreviewReportRes {
+    SyncMergePreviewReportRes {
+        schema_version: report.schema_version,
+        merge_policy: report.merge_policy,
+        safe: report.safe,
+        generated_at_ms: report.generated_at_ms,
+        local: map_sync_merge_change_set(report.local),
+        remote: map_sync_merge_change_set(report.remote),
+        overlap: map_sync_merge_change_set(report.overlap),
+        reasons: report.reasons,
+    }
+}
+
 pub fn sync_status_rpc(req: SyncStatusReq) -> RpcResponse<SyncStatusRes> {
     match rpc_service::sync_status_service(std::path::Path::new(&req.vault_path), &req.target_path)
     {
@@ -891,11 +951,28 @@ pub fn sync_pull_rpc(req: SyncPullReq) -> RpcResponse<SyncPullRes> {
         std::path::Path::new(&req.vault_path),
         &req.target_path,
         req.now_ms,
+        req.auto_merge.as_deref(),
     ) {
         Ok(out) => RpcResponse::ok(SyncPullRes {
             snapshot_id: out.snapshot_id,
             manifest_hash: out.manifest_hash,
             remote_head: map_sync_head(out.remote_head),
+        }),
+        Err(error) => RpcResponse::err(error),
+    }
+}
+
+pub fn sync_merge_preview_rpc(req: SyncMergePreviewReq) -> RpcResponse<SyncMergePreviewRes> {
+    match rpc_service::sync_merge_preview_service(
+        std::path::Path::new(&req.vault_path),
+        &req.target_path,
+        req.now_ms,
+    ) {
+        Ok(out) => RpcResponse::ok(SyncMergePreviewRes {
+            target_path: out.target_path,
+            seen_remote_snapshot_id: out.seen_remote_snapshot_id,
+            remote_snapshot_id: out.remote_snapshot_id,
+            report: map_sync_merge_preview_report(out.report),
         }),
         Err(error) => RpcResponse::err(error),
     }

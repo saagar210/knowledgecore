@@ -1,6 +1,8 @@
 use kc_core::app_error::AppResult;
 use kc_core::db::open_db;
-use kc_core::sync::{sync_pull_target, sync_push_target, sync_status_target};
+use kc_core::sync::{
+    sync_merge_preview_target, sync_pull_target_with_mode, sync_push_target, sync_status_target,
+};
 use kc_core::vault::vault_open;
 use std::path::Path;
 
@@ -26,10 +28,32 @@ pub fn run_push(vault_path: &str, target_path: &str, now_ms: i64) -> AppResult<(
     Ok(())
 }
 
-pub fn run_pull(vault_path: &str, target_path: &str, now_ms: i64) -> AppResult<()> {
+pub fn run_pull(
+    vault_path: &str,
+    target_path: &str,
+    now_ms: i64,
+    auto_merge_mode: Option<&str>,
+) -> AppResult<()> {
     let vault = vault_open(Path::new(vault_path))?;
     let conn = open_db(&Path::new(vault_path).join(vault.db.relative_path))?;
-    let out = sync_pull_target(&conn, Path::new(vault_path), target_path, now_ms)?;
+    let out = sync_pull_target_with_mode(
+        &conn,
+        Path::new(vault_path),
+        target_path,
+        now_ms,
+        auto_merge_mode,
+    )?;
+    println!(
+        "{}",
+        serde_json::to_string_pretty(&out).unwrap_or_else(|_| "{}".to_string())
+    );
+    Ok(())
+}
+
+pub fn run_merge_preview(vault_path: &str, target_path: &str, now_ms: i64) -> AppResult<()> {
+    let vault = vault_open(Path::new(vault_path))?;
+    let conn = open_db(&Path::new(vault_path).join(vault.db.relative_path))?;
+    let out = sync_merge_preview_target(&conn, Path::new(vault_path), target_path, now_ms)?;
     println!(
         "{}",
         serde_json::to_string_pretty(&out).unwrap_or_else(|_| "{}".to_string())

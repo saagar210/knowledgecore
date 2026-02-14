@@ -25,6 +25,7 @@ import {
   loadVaultLockStatus,
   loadVaultRecoveryStatus,
   loadSettingsDependencies,
+  loadSyncMergePreview,
   loadSyncStatus,
   loadVaultEncryptionStatus,
   migrateVaultEncryption,
@@ -173,6 +174,33 @@ function mockApi(): DesktopRpcApi {
           manifest_hash:
             "blake3:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
           created_at_ms: 6
+        }
+      }),
+    syncMergePreview: () =>
+      ok({
+        target_path: "s3://demo-bucket/kc",
+        seen_remote_snapshot_id: "snap-0",
+        remote_snapshot_id: "snap-1",
+        report: {
+          schema_version: 1,
+          merge_policy: "conservative_v1",
+          safe: true,
+          generated_at_ms: 8,
+          local: {
+            object_hashes: [],
+            lineage_overlay_ids: []
+          },
+          remote: {
+            object_hashes: [
+              "blake3:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+            ],
+            lineage_overlay_ids: []
+          },
+          overlap: {
+            object_hashes: [],
+            lineage_overlay_ids: []
+          },
+          reasons: []
         }
       }),
     lineageQuery: () =>
@@ -404,6 +432,14 @@ describe("feature controllers", () => {
     ).toMatchObject({ kind: "data" });
     expect(
       await runSyncPull(api, {
+        vault_path: "/tmp/v",
+        target_path: "s3://demo-bucket/kc",
+        auto_merge: "conservative",
+        now_ms: 8
+      })
+    ).toMatchObject({ kind: "data" });
+    expect(
+      await loadSyncMergePreview(api, {
         vault_path: "/tmp/v",
         target_path: "s3://demo-bucket/kc",
         now_ms: 8

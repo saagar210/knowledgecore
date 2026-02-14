@@ -141,6 +141,13 @@ pub fn sync_pull(req: rpc::SyncPullReq) -> rpc::RpcResponse<rpc::SyncPullRes> {
 }
 
 #[tauri::command]
+pub fn sync_merge_preview(
+    req: rpc::SyncMergePreviewReq,
+) -> rpc::RpcResponse<rpc::SyncMergePreviewRes> {
+    rpc::sync_merge_preview_rpc(req)
+}
+
+#[tauri::command]
 pub fn lineage_query(req: rpc::LineageQueryReq) -> rpc::RpcResponse<rpc::LineageQueryRes> {
     rpc::lineage_query_rpc(req)
 }

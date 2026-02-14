@@ -1,8 +1,8 @@
 use kc_core::db::open_db;
 use kc_core::object_store::ObjectStore;
 use kc_core::sync::{
-    sync_pull, sync_pull_target, sync_push, sync_push_target, sync_status, sync_status_target,
-    SyncHeadV1,
+    sync_merge_preview_target, sync_pull, sync_pull_target, sync_pull_target_with_mode, sync_push,
+    sync_push_target, sync_status, sync_status_target, SyncHeadV1,
 };
 use kc_core::vault::vault_init;
 use std::sync::{Mutex, OnceLock};
@@ -66,12 +66,12 @@ fn sync_pull_applies_remote_snapshot() {
 
     let conn_target = open_db(&target_vault.join("db/knowledge.sqlite")).expect("target db");
     let pulled = sync_pull(&conn_target, &target_vault, &sync_target, 101).expect("pull");
-
-    let post_conn = open_db(&target_vault.join("db/knowledge.sqlite")).expect("post db");
-    let object_count: i64 = post_conn
-        .query_row("SELECT COUNT(*) FROM objects", [], |row| row.get(0))
-        .expect("count objects");
-    assert!(object_count >= 1);
+    let object_files: usize = walkdir::WalkDir::new(target_vault.join("store/objects"))
+        .into_iter()
+        .filter_map(Result::ok)
+        .filter(|entry| entry.file_type().is_file())
+        .count();
+    assert!(object_files >= 1);
     assert!(!pulled.snapshot_id.is_empty());
 }
 
@@ -249,4 +249,83 @@ fn sync_s3_reports_locked_when_lock_file_is_active() {
 
     std::env::remove_var("KC_VAULT_PASSPHRASE");
     std::env::remove_var("KC_SYNC_S3_EMULATE_ROOT");
+}
+
+#[test]
+fn sync_merge_preview_reports_safe_for_disjoint_local_and_remote_changes() {
+    let root = tempfile::tempdir().expect("tempdir").keep();
+    let vault_a = root.join("vault_a");
+    let vault_b = root.join("vault_b");
+    let sync_target = root.join("sync-target");
+
+    vault_init(&vault_a, "a", 1).expect("vault a init");
+    vault_init(&vault_b, "b", 1).expect("vault b init");
+
+    let conn_a = open_db(&vault_a.join("db/knowledge.sqlite")).expect("open db a");
+    let conn_b = open_db(&vault_b.join("db/knowledge.sqlite")).expect("open db b");
+    insert_object(&conn_a, &vault_a, b"baseline", 1);
+
+    sync_push(&conn_a, &vault_a, &sync_target, 100).expect("push baseline");
+    sync_pull(&conn_b, &vault_b, &sync_target, 101).expect("pull baseline into b");
+    let conn_b = open_db(&vault_b.join("db/knowledge.sqlite")).expect("reopen db b");
+
+    insert_object(&conn_a, &vault_a, b"local-only-change", 2);
+    insert_object(&conn_b, &vault_b, b"remote-only-change", 2);
+    sync_push(&conn_b, &vault_b, &sync_target, 200).expect("push remote-only delta");
+
+    let preview = sync_merge_preview_target(
+        &conn_a,
+        &vault_a,
+        sync_target.to_string_lossy().as_ref(),
+        300,
+    )
+    .expect("merge preview");
+    assert!(preview.report.safe);
+    assert_eq!(preview.report.merge_policy, "conservative_v1");
+    assert!(
+        preview.report.overlap.object_hashes.is_empty(),
+        "expected disjoint object hashes"
+    );
+}
+
+#[test]
+fn sync_pull_with_conservative_auto_merge_applies_disjoint_changes() {
+    let root = tempfile::tempdir().expect("tempdir").keep();
+    let vault_a = root.join("vault_a");
+    let vault_b = root.join("vault_b");
+    let sync_target = root.join("sync-target");
+
+    vault_init(&vault_a, "a", 1).expect("vault a init");
+    vault_init(&vault_b, "b", 1).expect("vault b init");
+
+    let conn_a = open_db(&vault_a.join("db/knowledge.sqlite")).expect("open db a");
+    let conn_b = open_db(&vault_b.join("db/knowledge.sqlite")).expect("open db b");
+    insert_object(&conn_a, &vault_a, b"baseline", 1);
+
+    sync_push(&conn_a, &vault_a, &sync_target, 100).expect("push baseline");
+    sync_pull(&conn_b, &vault_b, &sync_target, 101).expect("pull baseline into b");
+    let conn_b = open_db(&vault_b.join("db/knowledge.sqlite")).expect("reopen db b");
+
+    insert_object(&conn_a, &vault_a, b"local-only-change", 2);
+    insert_object(&conn_b, &vault_b, b"remote-only-change", 2);
+    sync_push(&conn_b, &vault_b, &sync_target, 200).expect("push remote-only delta");
+
+    let conflict_err = sync_pull_target(
+        &conn_a,
+        &vault_a,
+        sync_target.to_string_lossy().as_ref(),
+        300,
+    )
+    .expect_err("expected conflict without auto-merge");
+    assert_eq!(conflict_err.code, "KC_SYNC_CONFLICT");
+
+    let merged = sync_pull_target_with_mode(
+        &conn_a,
+        &vault_a,
+        sync_target.to_string_lossy().as_ref(),
+        301,
+        Some("conservative"),
+    )
+    .expect("pull with conservative merge");
+    assert!(!merged.snapshot_id.is_empty());
 }

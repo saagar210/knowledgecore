@@ -2,12 +2,13 @@ use apps_desktop_tauri::commands;
 use apps_desktop_tauri::rpc::{
     ingest_inbox_start_rpc, ingest_inbox_stop_rpc, jobs_list_rpc, lineage_overlay_add_rpc,
     lineage_overlay_list_rpc, lineage_overlay_remove_rpc, lineage_query_rpc, lineage_query_v2_rpc,
-    sync_pull_rpc, sync_push_rpc, sync_status_rpc, vault_encryption_enable_rpc,
-    vault_encryption_migrate_rpc, vault_encryption_status_rpc, vault_init_rpc, vault_lock_rpc,
-    vault_lock_status_rpc, vault_open_rpc, vault_recovery_generate_rpc, vault_recovery_status_rpc,
-    vault_recovery_verify_rpc, vault_unlock_rpc, IngestInboxStartReq, IngestInboxStopReq,
-    JobsListReq, LineageOverlayAddReq, LineageOverlayListReq, LineageOverlayRemoveReq,
-    LineageQueryReq, LineageQueryV2Req, RpcResponse, SyncPullReq, SyncPushReq, SyncStatusReq,
+    sync_merge_preview_rpc, sync_pull_rpc, sync_push_rpc, sync_status_rpc,
+    vault_encryption_enable_rpc, vault_encryption_migrate_rpc, vault_encryption_status_rpc,
+    vault_init_rpc, vault_lock_rpc, vault_lock_status_rpc, vault_open_rpc,
+    vault_recovery_generate_rpc, vault_recovery_status_rpc, vault_recovery_verify_rpc,
+    vault_unlock_rpc, IngestInboxStartReq, IngestInboxStopReq, JobsListReq, LineageOverlayAddReq,
+    LineageOverlayListReq, LineageOverlayRemoveReq, LineageQueryReq, LineageQueryV2Req,
+    RpcResponse, SyncMergePreviewReq, SyncPullReq, SyncPushReq, SyncStatusReq,
     VaultEncryptionEnableReq, VaultEncryptionMigrateReq, VaultEncryptionStatusReq, VaultInitReq,
     VaultLockReq, VaultLockStatusReq, VaultOpenReq, VaultRecoveryGenerateReq,
     VaultRecoveryStatusReq, VaultRecoveryVerifyReq, VaultUnlockReq,
@@ -373,11 +374,25 @@ fn rpc_sync_supports_s3_uri_targets_via_emulation() {
     let pulled = sync_pull_rpc(SyncPullReq {
         vault_path: pull_root.to_string_lossy().to_string(),
         target_path: target_uri.to_string(),
+        auto_merge: Some("conservative".to_string()),
         now_ms: 4,
     });
     match pulled {
         RpcResponse::Ok { data } => assert_eq!(data.snapshot_id, pushed_snapshot_id),
         RpcResponse::Err { error } => panic!("sync pull failed: {}", error.code),
+    }
+
+    let preview = sync_merge_preview_rpc(SyncMergePreviewReq {
+        vault_path: root.to_string_lossy().to_string(),
+        target_path: target_uri.to_string(),
+        now_ms: 5,
+    });
+    match preview {
+        RpcResponse::Ok { data } => {
+            assert_eq!(data.target_path, target_uri);
+            assert_eq!(data.report.merge_policy, "conservative_v1");
+        }
+        RpcResponse::Err { error } => panic!("sync merge preview failed: {}", error.code),
     }
 
     std::env::remove_var("KC_VAULT_PASSPHRASE");

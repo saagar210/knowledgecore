@@ -215,6 +215,14 @@ pub enum SyncCmd {
     Pull {
         vault_path: String,
         target_path: String,
+        #[arg(long = "auto-merge")]
+        auto_merge: Option<String>,
+        #[arg(long = "now-ms")]
+        now_ms: i64,
+    },
+    MergePreview {
+        vault_path: String,
+        target_path: String,
         #[arg(long = "now-ms")]
         now_ms: i64,
     },

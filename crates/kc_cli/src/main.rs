@@ -168,8 +168,14 @@ fn main() {
             SyncCmd::Pull {
                 vault_path,
                 target_path,
+                auto_merge,
                 now_ms,
-            } => commands::sync::run_pull(&vault_path, &target_path, now_ms),
+            } => commands::sync::run_pull(&vault_path, &target_path, now_ms, auto_merge.as_deref()),
+            SyncCmd::MergePreview {
+                vault_path,
+                target_path,
+                now_ms,
+            } => commands::sync::run_merge_preview(&vault_path, &target_path, now_ms),
         },
         Command::Lineage { cmd } => match cmd {
             LineageCmd::Overlay { cmd } => match cmd {

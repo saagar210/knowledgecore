@@ -28,6 +28,7 @@ fn main() {
         commands::sync_status,
         commands::sync_push,
         commands::sync_pull,
+        commands::sync_merge_preview,
         commands::lineage_query,
         commands::lineage_query_v2,
         commands::lineage_overlay_add,
