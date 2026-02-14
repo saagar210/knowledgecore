@@ -1,12 +1,13 @@
 use apps_desktop_tauri::rpc::{
-    AskQuestionReq, LineageOverlayAddReq, LineageOverlayListReq, LineageOverlayRemoveReq,
-    LineageLockAcquireReq, LineageLockReleaseReq, LineageLockStatusReq, LineageQueryReq,
+    AskQuestionReq, LineageLockAcquireReq, LineageLockReleaseReq, LineageLockStatusReq,
+    LineageOverlayAddReq, LineageOverlayListReq, LineageOverlayRemoveReq, LineageQueryReq,
     LineageQueryV2Req, SearchQueryReq, SyncMergePreviewReq, SyncPullReq, SyncPushReq,
     SyncStatusReq, TrustDeviceEnrollReq, TrustDeviceListReq, TrustDeviceVerifyChainReq,
     TrustIdentityCompleteReq, TrustIdentityStartReq, VaultEncryptionEnableReq,
     VaultEncryptionMigrateReq, VaultEncryptionStatusReq, VaultInitReq, VaultLockReq,
-    VaultLockStatusReq, VaultRecoveryGenerateReq, VaultRecoveryStatusReq, VaultRecoveryVerifyReq,
-    VaultUnlockReq,
+    VaultLockStatusReq, VaultRecoveryEscrowEnableReq, VaultRecoveryEscrowRestoreReq,
+    VaultRecoveryEscrowRotateReq, VaultRecoveryEscrowStatusReq, VaultRecoveryGenerateReq,
+    VaultRecoveryStatusReq, VaultRecoveryVerifyReq, VaultUnlockReq,
 };
 
 #[test]
@@ -90,6 +91,24 @@ fn rpc_schema_requires_now_ms_for_recovery_generate() {
         "passphrase": "secret"
     });
     assert!(serde_json::from_value::<VaultRecoveryGenerateReq>(missing_now).is_err());
+
+    let missing_enable_now = serde_json::json!({
+        "vault_path": "/tmp/vault",
+        "provider": "aws"
+    });
+    assert!(serde_json::from_value::<VaultRecoveryEscrowEnableReq>(missing_enable_now).is_err());
+
+    let missing_rotate_now = serde_json::json!({
+        "vault_path": "/tmp/vault",
+        "passphrase": "secret"
+    });
+    assert!(serde_json::from_value::<VaultRecoveryEscrowRotateReq>(missing_rotate_now).is_err());
+
+    let missing_restore_now = serde_json::json!({
+        "vault_path": "/tmp/vault",
+        "bundle_path": "/tmp/out/recovery"
+    });
+    assert!(serde_json::from_value::<VaultRecoveryEscrowRestoreReq>(missing_restore_now).is_err());
 }
 
 #[test]
@@ -113,6 +132,32 @@ fn rpc_schema_recovery_requests_validate_shapes() {
         "recovery_phrase": "abcd-efgh"
     });
     assert!(serde_json::from_value::<VaultRecoveryVerifyReq>(verify).is_ok());
+
+    let escrow_status = serde_json::json!({
+        "vault_path": "/tmp/vault"
+    });
+    assert!(serde_json::from_value::<VaultRecoveryEscrowStatusReq>(escrow_status).is_ok());
+
+    let escrow_enable = serde_json::json!({
+        "vault_path": "/tmp/vault",
+        "provider": "aws",
+        "now_ms": 100
+    });
+    assert!(serde_json::from_value::<VaultRecoveryEscrowEnableReq>(escrow_enable).is_ok());
+
+    let escrow_rotate = serde_json::json!({
+        "vault_path": "/tmp/vault",
+        "passphrase": "secret",
+        "now_ms": 101
+    });
+    assert!(serde_json::from_value::<VaultRecoveryEscrowRotateReq>(escrow_rotate).is_ok());
+
+    let escrow_restore = serde_json::json!({
+        "vault_path": "/tmp/vault",
+        "bundle_path": "/tmp/out/recovery",
+        "now_ms": 102
+    });
+    assert!(serde_json::from_value::<VaultRecoveryEscrowRestoreReq>(escrow_restore).is_ok());
 }
 
 #[test]
@@ -122,6 +167,14 @@ fn rpc_schema_recovery_rejects_unknown_fields() {
         "extra": "nope"
     });
     assert!(serde_json::from_value::<VaultRecoveryStatusReq>(invalid).is_err());
+
+    let invalid_escrow = serde_json::json!({
+        "vault_path": "/tmp/vault",
+        "provider": "aws",
+        "now_ms": 100,
+        "extra": "nope"
+    });
+    assert!(serde_json::from_value::<VaultRecoveryEscrowEnableReq>(invalid_escrow).is_err());
 }
 
 #[test]

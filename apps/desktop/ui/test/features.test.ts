@@ -27,6 +27,10 @@ import {
   enableVaultEncryption,
   listTrustDevices,
   generateVaultRecovery,
+  loadVaultRecoveryEscrowStatus,
+  enableVaultRecoveryEscrow,
+  rotateVaultRecoveryEscrow,
+  restoreVaultRecoveryEscrow,
   lockVault,
   loadVaultLockStatus,
   loadVaultRecoveryStatus,
@@ -168,9 +172,69 @@ function mockApi(): DesktopRpcApi {
         bundle_path: "/tmp/recovery",
         recovery_phrase: "abcd1234-efgh5678-ijkl9012-mnop3456",
         manifest: {
-          schema_version: 1,
+          schema_version: 2,
           vault_id: "v1",
           created_at_ms: 7,
+          phrase_checksum:
+            "blake3:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          payload_hash:
+            "blake3:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+        }
+      }),
+    vaultRecoveryEscrowStatus: () =>
+      ok({
+        enabled: true,
+        provider: "aws",
+        provider_available: true,
+        updated_at_ms: 8,
+        details_json: "{}"
+      }),
+    vaultRecoveryEscrowEnable: () =>
+      ok({
+        status: {
+          enabled: true,
+          provider: "aws",
+          provider_available: true,
+          updated_at_ms: 8,
+          details_json: "{}"
+        }
+      }),
+    vaultRecoveryEscrowRotate: () =>
+      ok({
+        status: {
+          enabled: true,
+          provider: "aws",
+          provider_available: true,
+          updated_at_ms: 9,
+          details_json: "{}"
+        },
+        bundle_path: "/tmp/recovery",
+        recovery_phrase: "abcd1234-efgh5678-ijkl9012-mnop3456",
+        manifest: {
+          schema_version: 2,
+          vault_id: "v1",
+          created_at_ms: 9,
+          phrase_checksum:
+            "blake3:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          payload_hash:
+            "blake3:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+        }
+      }),
+    vaultRecoveryEscrowRestore: () =>
+      ok({
+        status: {
+          enabled: true,
+          provider: "aws",
+          provider_available: true,
+          updated_at_ms: 10,
+          details_json: "{}"
+        },
+        bundle_path: "/tmp/recovery",
+        restored_bytes: 42,
+        manifest: {
+          schema_version: 2,
+          vault_id: "v1",
+          created_at_ms: 9,
           phrase_checksum:
             "blake3:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
           payload_hash:
@@ -180,7 +244,7 @@ function mockApi(): DesktopRpcApi {
     vaultRecoveryVerify: () =>
       ok({
         manifest: {
-          schema_version: 1,
+          schema_version: 2,
           vault_id: "v1",
           created_at_ms: 7,
           phrase_checksum:
@@ -511,6 +575,32 @@ describe("feature controllers", () => {
     expect(
       await loadVaultRecoveryStatus(api, {
         vault_path: "/tmp/v"
+      })
+    ).toMatchObject({ kind: "data" });
+    expect(
+      await loadVaultRecoveryEscrowStatus(api, {
+        vault_path: "/tmp/v"
+      })
+    ).toMatchObject({ kind: "data" });
+    expect(
+      await enableVaultRecoveryEscrow(api, {
+        vault_path: "/tmp/v",
+        provider: "aws",
+        now_ms: 6
+      })
+    ).toMatchObject({ kind: "data" });
+    expect(
+      await rotateVaultRecoveryEscrow(api, {
+        vault_path: "/tmp/v",
+        passphrase: "pass",
+        now_ms: 6
+      })
+    ).toMatchObject({ kind: "data" });
+    expect(
+      await restoreVaultRecoveryEscrow(api, {
+        vault_path: "/tmp/v",
+        bundle_path: "/tmp/recovery",
+        now_ms: 6
       })
     ).toMatchObject({ kind: "data" });
     expect(

@@ -105,6 +105,34 @@ pub fn vault_recovery_verify(
 }
 
 #[tauri::command]
+pub fn vault_recovery_escrow_status(
+    req: rpc::VaultRecoveryEscrowStatusReq,
+) -> rpc::RpcResponse<rpc::VaultRecoveryEscrowStatusRes> {
+    rpc::vault_recovery_escrow_status_rpc(req)
+}
+
+#[tauri::command]
+pub fn vault_recovery_escrow_enable(
+    req: rpc::VaultRecoveryEscrowEnableReq,
+) -> rpc::RpcResponse<rpc::VaultRecoveryEscrowEnableRes> {
+    rpc::vault_recovery_escrow_enable_rpc(req)
+}
+
+#[tauri::command]
+pub fn vault_recovery_escrow_rotate(
+    req: rpc::VaultRecoveryEscrowRotateReq,
+) -> rpc::RpcResponse<rpc::VaultRecoveryEscrowRotateRes> {
+    rpc::vault_recovery_escrow_rotate_rpc(req)
+}
+
+#[tauri::command]
+pub fn vault_recovery_escrow_restore(
+    req: rpc::VaultRecoveryEscrowRestoreReq,
+) -> rpc::RpcResponse<rpc::VaultRecoveryEscrowRestoreRes> {
+    rpc::vault_recovery_escrow_restore_rpc(req)
+}
+
+#[tauri::command]
 pub fn ingest_scan_folder(
     req: rpc::IngestScanFolderReq,
 ) -> rpc::RpcResponse<rpc::IngestScanFolderRes> {

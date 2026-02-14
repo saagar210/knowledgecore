@@ -4,8 +4,10 @@ use kc_core::rpc_service::{
     vault_db_encrypt_enable_service, vault_db_encrypt_migrate_service,
     vault_db_encrypt_status_service, vault_encryption_enable_service,
     vault_encryption_migrate_service, vault_encryption_status_service, vault_lock_service,
-    vault_lock_status_service, vault_recovery_generate_service, vault_recovery_status_service,
-    vault_recovery_verify_service, vault_unlock_service,
+    vault_lock_status_service, vault_recovery_escrow_enable_service,
+    vault_recovery_escrow_restore_service, vault_recovery_escrow_rotate_service,
+    vault_recovery_escrow_status_service, vault_recovery_generate_service,
+    vault_recovery_status_service, vault_recovery_verify_service, vault_unlock_service,
 };
 use kc_core::vault::{vault_open, vault_paths};
 use std::path::Path;
@@ -322,6 +324,102 @@ pub fn run_recovery_verify(vault_path: &str, bundle: &str, phrase_env: &str) -> 
         serde_json::to_string_pretty(&serde_json::json!({
             "status": "ok",
             "manifest": out.manifest,
+        }))
+        .unwrap_or_else(|_| "{}".to_string())
+    );
+    Ok(())
+}
+
+pub fn run_recovery_escrow_status(vault_path: &str) -> AppResult<()> {
+    let status = vault_recovery_escrow_status_service(Path::new(vault_path))?;
+    println!(
+        "{}",
+        serde_json::to_string_pretty(&serde_json::json!({
+            "status": "ok",
+            "escrow": {
+                "enabled": status.enabled,
+                "provider": status.provider,
+                "provider_available": status.provider_available,
+                "updated_at_ms": status.updated_at_ms,
+                "details_json": status.details_json,
+            }
+        }))
+        .unwrap_or_else(|_| "{}".to_string())
+    );
+    Ok(())
+}
+
+pub fn run_recovery_escrow_enable(vault_path: &str, provider: &str, now_ms: i64) -> AppResult<()> {
+    let status = vault_recovery_escrow_enable_service(Path::new(vault_path), provider, now_ms)?;
+    println!(
+        "{}",
+        serde_json::to_string_pretty(&serde_json::json!({
+            "status": "ok",
+            "escrow": {
+                "enabled": status.enabled,
+                "provider": status.provider,
+                "provider_available": status.provider_available,
+                "updated_at_ms": status.updated_at_ms,
+                "details_json": status.details_json,
+            }
+        }))
+        .unwrap_or_else(|_| "{}".to_string())
+    );
+    Ok(())
+}
+
+pub fn run_recovery_escrow_rotate(
+    vault_path: &str,
+    passphrase_env: &str,
+    now_ms_override: i64,
+) -> AppResult<()> {
+    let passphrase = passphrase_from_env(passphrase_env)?;
+    let out =
+        vault_recovery_escrow_rotate_service(Path::new(vault_path), &passphrase, now_ms_override)?;
+    println!(
+        "{}",
+        serde_json::to_string_pretty(&serde_json::json!({
+            "status": "ok",
+            "bundle_path": out.bundle_path,
+            "recovery_phrase": out.recovery_phrase,
+            "manifest": out.manifest,
+            "escrow": {
+                "enabled": out.status.enabled,
+                "provider": out.status.provider,
+                "provider_available": out.status.provider_available,
+                "updated_at_ms": out.status.updated_at_ms,
+                "details_json": out.status.details_json,
+            }
+        }))
+        .unwrap_or_else(|_| "{}".to_string())
+    );
+    Ok(())
+}
+
+pub fn run_recovery_escrow_restore(
+    vault_path: &str,
+    bundle: &str,
+    now_ms_override: i64,
+) -> AppResult<()> {
+    let out = vault_recovery_escrow_restore_service(
+        Path::new(vault_path),
+        Path::new(bundle),
+        now_ms_override,
+    )?;
+    println!(
+        "{}",
+        serde_json::to_string_pretty(&serde_json::json!({
+            "status": "ok",
+            "bundle_path": out.bundle_path,
+            "restored_bytes": out.restored_bytes,
+            "manifest": out.manifest,
+            "escrow": {
+                "enabled": out.status.enabled,
+                "provider": out.status.provider,
+                "provider_available": out.status.provider_available,
+                "updated_at_ms": out.status.updated_at_ms,
+                "details_json": out.status.details_json,
+            }
         }))
         .unwrap_or_else(|_| "{}".to_string())
     );

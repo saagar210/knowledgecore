@@ -8,7 +8,15 @@ use crate::hashing::blake3_hex_prefixed;
 use crate::ingest::ingest_bytes;
 use crate::locator::{resolve_locator_strict, LocatorV1};
 use crate::object_store::{is_encrypted_payload, ObjectStore};
-use crate::recovery::{generate_recovery_bundle, verify_recovery_bundle, RecoveryManifestV2};
+use crate::recovery::{
+    generate_recovery_bundle, read_recovery_manifest, verify_recovery_bundle,
+    write_recovery_manifest, RecoveryManifestV2,
+};
+use crate::recovery_escrow::{
+    RecoveryEscrowProvider, RecoveryEscrowReadRequest, RecoveryEscrowWriteRequest,
+};
+use crate::recovery_escrow_aws::{AwsRecoveryEscrowConfig, AwsRecoveryEscrowProvider};
+use crate::recovery_escrow_local::LocalRecoveryEscrowProvider;
 use crate::trust::{
     trust_device_init, trust_device_list, trust_device_verify, TrustedDeviceRecord,
 };
@@ -89,6 +97,31 @@ pub struct VaultRecoveryVerifyResult {
 }
 
 #[derive(Debug, Clone)]
+pub struct VaultRecoveryEscrowStatus {
+    pub enabled: bool,
+    pub provider: String,
+    pub provider_available: bool,
+    pub updated_at_ms: Option<i64>,
+    pub details_json: String,
+}
+
+#[derive(Debug, Clone)]
+pub struct VaultRecoveryEscrowRotateResult {
+    pub status: VaultRecoveryEscrowStatus,
+    pub bundle_path: PathBuf,
+    pub recovery_phrase: String,
+    pub manifest: RecoveryManifestV2,
+}
+
+#[derive(Debug, Clone)]
+pub struct VaultRecoveryEscrowRestoreResult {
+    pub status: VaultRecoveryEscrowStatus,
+    pub bundle_path: PathBuf,
+    pub restored_bytes: i64,
+    pub manifest: RecoveryManifestV2,
+}
+
+#[derive(Debug, Clone)]
 pub struct VaultDbLockStatus {
     pub db_encryption_enabled: bool,
     pub unlocked: bool,
@@ -152,6 +185,230 @@ fn read_recovery_state_file(vault_path: &Path) -> Option<String> {
     } else {
         Some(trimmed.to_string())
     }
+}
+
+#[derive(Debug, Clone)]
+struct RecoveryEscrowConfigRow {
+    provider_id: String,
+    enabled: bool,
+    descriptor_json: String,
+    updated_at_ms: i64,
+}
+
+fn read_recovery_escrow_config(
+    conn: &rusqlite::Connection,
+) -> AppResult<Option<RecoveryEscrowConfigRow>> {
+    let mut stmt = conn
+        .prepare(
+            "SELECT provider_id, enabled, descriptor_json, updated_at_ms
+             FROM recovery_escrow_configs
+             ORDER BY updated_at_ms DESC, provider_id DESC
+             LIMIT 1",
+        )
+        .map_err(|e| {
+            AppError::new(
+                "KC_RECOVERY_ESCROW_UNAVAILABLE",
+                "recovery",
+                "failed preparing escrow config query",
+                false,
+                serde_json::json!({ "error": e.to_string() }),
+            )
+        })?;
+    let mut rows = stmt.query([]).map_err(|e| {
+        AppError::new(
+            "KC_RECOVERY_ESCROW_UNAVAILABLE",
+            "recovery",
+            "failed querying escrow config",
+            false,
+            serde_json::json!({ "error": e.to_string() }),
+        )
+    })?;
+    let Some(row) = rows.next().map_err(|e| {
+        AppError::new(
+            "KC_RECOVERY_ESCROW_UNAVAILABLE",
+            "recovery",
+            "failed reading escrow config row",
+            false,
+            serde_json::json!({ "error": e.to_string() }),
+        )
+    })?
+    else {
+        return Ok(None);
+    };
+
+    Ok(Some(RecoveryEscrowConfigRow {
+        provider_id: row.get::<_, String>(0).map_err(|e| {
+            AppError::new(
+                "KC_RECOVERY_ESCROW_UNAVAILABLE",
+                "recovery",
+                "failed decoding escrow provider_id",
+                false,
+                serde_json::json!({ "error": e.to_string() }),
+            )
+        })?,
+        enabled: row.get::<_, i64>(1).map(|v| v != 0).map_err(|e| {
+            AppError::new(
+                "KC_RECOVERY_ESCROW_UNAVAILABLE",
+                "recovery",
+                "failed decoding escrow enabled flag",
+                false,
+                serde_json::json!({ "error": e.to_string() }),
+            )
+        })?,
+        descriptor_json: row.get::<_, String>(2).map_err(|e| {
+            AppError::new(
+                "KC_RECOVERY_ESCROW_UNAVAILABLE",
+                "recovery",
+                "failed decoding escrow descriptor_json",
+                false,
+                serde_json::json!({ "error": e.to_string() }),
+            )
+        })?,
+        updated_at_ms: row.get::<_, i64>(3).map_err(|e| {
+            AppError::new(
+                "KC_RECOVERY_ESCROW_UNAVAILABLE",
+                "recovery",
+                "failed decoding escrow updated_at_ms",
+                false,
+                serde_json::json!({ "error": e.to_string() }),
+            )
+        })?,
+    }))
+}
+
+fn upsert_recovery_escrow_config(
+    conn: &rusqlite::Connection,
+    provider_id: &str,
+    enabled: bool,
+    descriptor_json: &str,
+    updated_at_ms: i64,
+) -> AppResult<()> {
+    conn.execute(
+        "INSERT INTO recovery_escrow_configs (provider_id, enabled, descriptor_json, updated_at_ms)
+         VALUES (?1, ?2, ?3, ?4)
+         ON CONFLICT(provider_id)
+         DO UPDATE SET
+           enabled = excluded.enabled,
+           descriptor_json = excluded.descriptor_json,
+           updated_at_ms = excluded.updated_at_ms",
+        rusqlite::params![
+            provider_id,
+            if enabled { 1 } else { 0 },
+            descriptor_json,
+            updated_at_ms
+        ],
+    )
+    .map_err(|e| {
+        AppError::new(
+            "KC_RECOVERY_ESCROW_WRITE_FAILED",
+            "recovery",
+            "failed upserting recovery escrow config",
+            false,
+            serde_json::json!({ "error": e.to_string(), "provider": provider_id }),
+        )
+    })?;
+    Ok(())
+}
+
+fn append_recovery_escrow_event(
+    conn: &rusqlite::Connection,
+    provider_id: &str,
+    action: &str,
+    ts_ms: i64,
+    details: &serde_json::Value,
+) -> AppResult<()> {
+    let details_json = serde_json::to_string(details).map_err(|e| {
+        AppError::new(
+            "KC_RECOVERY_ESCROW_WRITE_FAILED",
+            "recovery",
+            "failed serializing recovery escrow event details",
+            false,
+            serde_json::json!({ "error": e.to_string(), "provider": provider_id, "action": action }),
+        )
+    })?;
+    conn.execute(
+        "INSERT INTO recovery_escrow_events (provider_id, action, ts_ms, details_json)
+         VALUES (?1, ?2, ?3, ?4)",
+        rusqlite::params![provider_id, action, ts_ms, details_json],
+    )
+    .map_err(|e| {
+        AppError::new(
+            "KC_RECOVERY_ESCROW_WRITE_FAILED",
+            "recovery",
+            "failed appending recovery escrow event",
+            false,
+            serde_json::json!({ "error": e.to_string(), "provider": provider_id, "action": action }),
+        )
+    })?;
+    Ok(())
+}
+
+fn resolve_recovery_escrow_provider(
+    provider_id: &str,
+    vault_path: &Path,
+    vault_id: &str,
+) -> AppResult<Box<dyn RecoveryEscrowProvider>> {
+    match provider_id {
+        "aws" => {
+            let region = std::env::var("KC_RECOVERY_ESCROW_AWS_REGION")
+                .ok()
+                .filter(|v| !v.trim().is_empty())
+                .unwrap_or_else(|| "us-east-1".to_string());
+            let kms_key_id = std::env::var("KC_RECOVERY_ESCROW_AWS_KMS_KEY_ID")
+                .ok()
+                .filter(|v| !v.trim().is_empty())
+                .unwrap_or_default();
+            let secret_prefix = std::env::var("KC_RECOVERY_ESCROW_AWS_SECRET_PREFIX")
+                .ok()
+                .filter(|v| !v.trim().is_empty())
+                .unwrap_or_else(|| format!("kc/recovery/{vault_id}"));
+            Ok(Box::new(AwsRecoveryEscrowProvider::new(
+                AwsRecoveryEscrowConfig {
+                    region,
+                    kms_key_id,
+                    secret_prefix,
+                },
+            )))
+        }
+        "local" => Ok(Box::new(LocalRecoveryEscrowProvider::new(
+            vault_path.join("recovery-escrow-local"),
+        ))),
+        other => Err(AppError::new(
+            "KC_RECOVERY_ESCROW_UNAVAILABLE",
+            "recovery",
+            "unsupported recovery escrow provider",
+            false,
+            serde_json::json!({
+                "provider": other,
+                "supported": ["aws", "local"]
+            }),
+        )),
+    }
+}
+
+fn recovery_escrow_status_from_config(
+    vault_path: &Path,
+    vault_id: &str,
+    config: Option<RecoveryEscrowConfigRow>,
+) -> AppResult<VaultRecoveryEscrowStatus> {
+    let Some(config) = config else {
+        return Ok(VaultRecoveryEscrowStatus {
+            enabled: false,
+            provider: "none".to_string(),
+            provider_available: false,
+            updated_at_ms: None,
+            details_json: "{}".to_string(),
+        });
+    };
+    let provider = resolve_recovery_escrow_provider(&config.provider_id, vault_path, vault_id)?;
+    let status = provider.status()?;
+    Ok(VaultRecoveryEscrowStatus {
+        enabled: config.enabled,
+        provider: config.provider_id,
+        provider_available: status.available,
+        updated_at_ms: Some(config.updated_at_ms),
+        details_json: config.descriptor_json,
+    })
 }
 
 fn mime_for_path(path: &Path) -> String {
@@ -845,6 +1102,246 @@ pub fn vault_recovery_verify_service(
     let vault = vault_open(vault_path)?;
     let manifest = verify_recovery_bundle(&vault.vault_id, bundle_path, phrase)?;
     Ok(VaultRecoveryVerifyResult { manifest })
+}
+
+pub fn vault_recovery_escrow_status_service(
+    vault_path: &Path,
+) -> AppResult<VaultRecoveryEscrowStatus> {
+    let vault = vault_open(vault_path)?;
+    let conn = open_db(&vault_path.join(vault.db.relative_path.clone()))?;
+    let config = read_recovery_escrow_config(&conn)?;
+    recovery_escrow_status_from_config(vault_path, &vault.vault_id, config)
+}
+
+pub fn vault_recovery_escrow_enable_service(
+    vault_path: &Path,
+    provider_id: &str,
+    now_ms: i64,
+) -> AppResult<VaultRecoveryEscrowStatus> {
+    let vault = vault_open(vault_path)?;
+    let conn = open_db(&vault_path.join(vault.db.relative_path.clone()))?;
+    let provider = resolve_recovery_escrow_provider(provider_id, vault_path, &vault.vault_id)?;
+    let provider_status = provider.status()?;
+    if !provider_status.configured {
+        return Err(AppError::new(
+            "KC_RECOVERY_ESCROW_AUTH_FAILED",
+            "recovery",
+            "recovery escrow provider is not configured",
+            false,
+            serde_json::json!({ "provider": provider_id, "details": provider_status.details_json }),
+        ));
+    }
+
+    let descriptor_json = serde_json::to_string(&serde_json::json!({
+        "provider_status": {
+            "configured": provider_status.configured,
+            "available": provider_status.available,
+            "details_json": provider_status.details_json,
+        }
+    }))
+    .map_err(|e| {
+        AppError::new(
+            "KC_RECOVERY_ESCROW_WRITE_FAILED",
+            "recovery",
+            "failed serializing escrow config descriptor",
+            false,
+            serde_json::json!({ "error": e.to_string(), "provider": provider_id }),
+        )
+    })?;
+    upsert_recovery_escrow_config(&conn, provider_id, true, &descriptor_json, now_ms)?;
+    append_recovery_escrow_event(
+        &conn,
+        provider_id,
+        "enable",
+        now_ms,
+        &serde_json::json!({
+            "available": provider_status.available,
+            "configured": provider_status.configured
+        }),
+    )?;
+    vault_recovery_escrow_status_service(vault_path)
+}
+
+pub fn vault_recovery_escrow_rotate_service(
+    vault_path: &Path,
+    passphrase: &str,
+    now_ms: i64,
+) -> AppResult<VaultRecoveryEscrowRotateResult> {
+    if passphrase.is_empty() {
+        return Err(AppError::new(
+            "KC_ENCRYPTION_REQUIRED",
+            "recovery",
+            "passphrase is required for escrow rotation",
+            false,
+            serde_json::json!({}),
+        ));
+    }
+    let vault = vault_open(vault_path)?;
+    let conn = open_db(&vault_path.join(vault.db.relative_path.clone()))?;
+    let config = read_recovery_escrow_config(&conn)?.ok_or_else(|| {
+        AppError::new(
+            "KC_RECOVERY_ESCROW_UNAVAILABLE",
+            "recovery",
+            "recovery escrow provider is not enabled",
+            false,
+            serde_json::json!({}),
+        )
+    })?;
+    if !config.enabled {
+        return Err(AppError::new(
+            "KC_RECOVERY_ESCROW_UNAVAILABLE",
+            "recovery",
+            "recovery escrow provider is disabled",
+            false,
+            serde_json::json!({ "provider": config.provider_id }),
+        ));
+    }
+    let provider =
+        resolve_recovery_escrow_provider(&config.provider_id, vault_path, &vault.vault_id)?;
+    let provider_status = provider.status()?;
+    if !provider_status.available {
+        return Err(AppError::new(
+            "KC_RECOVERY_ESCROW_UNAVAILABLE",
+            "recovery",
+            "recovery escrow provider is unavailable",
+            false,
+            serde_json::json!({ "provider": config.provider_id, "details": provider_status.details_json }),
+        ));
+    }
+
+    let output_dir = vault_path.join("recovery-escrow-bundles");
+    let generated = generate_recovery_bundle(&vault.vault_id, &output_dir, passphrase, now_ms)?;
+    let blob_path = generated.bundle_path.join("key_blob.enc");
+    let blob = fs::read(&blob_path).map_err(|e| {
+        AppError::new(
+            "KC_RECOVERY_ESCROW_WRITE_FAILED",
+            "recovery",
+            "failed reading generated recovery key blob for escrow write",
+            false,
+            serde_json::json!({ "error": e.to_string(), "path": blob_path }),
+        )
+    })?;
+    let descriptor = provider.write(RecoveryEscrowWriteRequest {
+        vault_id: &vault.vault_id,
+        payload_hash: &generated.manifest.payload_hash,
+        key_blob: &blob,
+        now_ms,
+    })?;
+    let mut manifest = generated.manifest.clone();
+    manifest.escrow = Some(descriptor);
+    write_recovery_manifest(&generated.bundle_path, &manifest)?;
+    write_recovery_state_file(vault_path, &generated.bundle_path)?;
+
+    let descriptor_json = serde_json::to_string(&serde_json::json!({
+        "provider_status": {
+            "configured": provider_status.configured,
+            "available": provider_status.available,
+            "details_json": provider_status.details_json,
+        },
+        "last_rotate_manifest_payload_hash": manifest.payload_hash
+    }))
+    .map_err(|e| {
+        AppError::new(
+            "KC_RECOVERY_ESCROW_WRITE_FAILED",
+            "recovery",
+            "failed serializing escrow rotation descriptor",
+            false,
+            serde_json::json!({ "error": e.to_string(), "provider": config.provider_id }),
+        )
+    })?;
+    upsert_recovery_escrow_config(&conn, &config.provider_id, true, &descriptor_json, now_ms)?;
+    append_recovery_escrow_event(
+        &conn,
+        &config.provider_id,
+        "rotate",
+        now_ms,
+        &serde_json::json!({
+            "bundle_path": generated.bundle_path,
+            "payload_hash": manifest.payload_hash
+        }),
+    )?;
+
+    let status = vault_recovery_escrow_status_service(vault_path)?;
+    Ok(VaultRecoveryEscrowRotateResult {
+        status,
+        bundle_path: generated.bundle_path,
+        recovery_phrase: generated.recovery_phrase,
+        manifest,
+    })
+}
+
+pub fn vault_recovery_escrow_restore_service(
+    vault_path: &Path,
+    bundle_path: &Path,
+    now_ms: i64,
+) -> AppResult<VaultRecoveryEscrowRestoreResult> {
+    let vault = vault_open(vault_path)?;
+    let conn = open_db(&vault_path.join(vault.db.relative_path.clone()))?;
+    let config = read_recovery_escrow_config(&conn)?.ok_or_else(|| {
+        AppError::new(
+            "KC_RECOVERY_ESCROW_UNAVAILABLE",
+            "recovery",
+            "recovery escrow provider is not enabled",
+            false,
+            serde_json::json!({}),
+        )
+    })?;
+    if !config.enabled {
+        return Err(AppError::new(
+            "KC_RECOVERY_ESCROW_UNAVAILABLE",
+            "recovery",
+            "recovery escrow provider is disabled",
+            false,
+            serde_json::json!({ "provider": config.provider_id }),
+        ));
+    }
+
+    let manifest = read_recovery_manifest(bundle_path)?;
+    let descriptor = manifest.escrow.clone().ok_or_else(|| {
+        AppError::new(
+            "KC_RECOVERY_ESCROW_RESTORE_FAILED",
+            "recovery",
+            "recovery manifest has no escrow descriptor",
+            false,
+            serde_json::json!({ "bundle_path": bundle_path }),
+        )
+    })?;
+    let provider =
+        resolve_recovery_escrow_provider(&descriptor.provider, vault_path, &vault.vault_id)?;
+    let bytes = provider.read(RecoveryEscrowReadRequest {
+        descriptor: &descriptor,
+        expected_payload_hash: &manifest.payload_hash,
+    })?;
+
+    let blob_path = bundle_path.join("key_blob.enc");
+    fs::write(&blob_path, &bytes).map_err(|e| {
+        AppError::new(
+            "KC_RECOVERY_ESCROW_RESTORE_FAILED",
+            "recovery",
+            "failed writing restored escrow payload to bundle",
+            false,
+            serde_json::json!({ "error": e.to_string(), "path": blob_path }),
+        )
+    })?;
+
+    append_recovery_escrow_event(
+        &conn,
+        &config.provider_id,
+        "restore",
+        now_ms,
+        &serde_json::json!({
+            "bundle_path": bundle_path,
+            "payload_hash": manifest.payload_hash
+        }),
+    )?;
+
+    let status = vault_recovery_escrow_status_service(vault_path)?;
+    Ok(VaultRecoveryEscrowRestoreResult {
+        status,
+        bundle_path: bundle_path.to_path_buf(),
+        restored_bytes: bytes.len() as i64,
+        manifest,
+    })
 }
 
 fn db_lock_status_for_vault(

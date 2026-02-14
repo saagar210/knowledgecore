@@ -18,8 +18,8 @@ mod verifier;
 use clap::Parser;
 use cli::{
     BenchCmd, Cli, Command, DepsCmd, FixturesCmd, GcCmd, IndexCmd, IngestCmd, LineageCmd,
-    LineageLockCmd, LineageOverlayCmd, SyncCmd, VaultCmd, VaultDbEncryptCmd, VaultEncryptCmd,
-    VaultRecoveryCmd, TrustCmd, TrustDeviceCmd, TrustIdentityCmd,
+    LineageLockCmd, LineageOverlayCmd, SyncCmd, TrustCmd, TrustDeviceCmd, TrustIdentityCmd,
+    VaultCmd, VaultDbEncryptCmd, VaultEncryptCmd, VaultRecoveryCmd, VaultRecoveryEscrowCmd,
 };
 use kc_core::vault::{vault_init, vault_open};
 
@@ -90,6 +90,38 @@ fn main() {
                 VaultRecoveryCmd::Status { vault_path } => {
                     commands::vault::run_recovery_status(&vault_path)
                 }
+                VaultRecoveryCmd::Escrow { cmd } => match cmd {
+                    VaultRecoveryEscrowCmd::Status { vault_path } => {
+                        commands::vault::run_recovery_escrow_status(&vault_path)
+                    }
+                    VaultRecoveryEscrowCmd::Enable {
+                        vault_path,
+                        provider,
+                        now_ms: now_ms_opt,
+                    } => commands::vault::run_recovery_escrow_enable(
+                        &vault_path,
+                        &provider,
+                        now_ms_opt.unwrap_or_else(now_ms),
+                    ),
+                    VaultRecoveryEscrowCmd::Rotate {
+                        vault_path,
+                        passphrase_env,
+                        now_ms: now_ms_opt,
+                    } => commands::vault::run_recovery_escrow_rotate(
+                        &vault_path,
+                        &passphrase_env,
+                        now_ms_opt.unwrap_or_else(now_ms),
+                    ),
+                    VaultRecoveryEscrowCmd::Restore {
+                        vault_path,
+                        bundle,
+                        now_ms: now_ms_opt,
+                    } => commands::vault::run_recovery_escrow_restore(
+                        &vault_path,
+                        &bundle,
+                        now_ms_opt.unwrap_or_else(now_ms),
+                    ),
+                },
                 VaultRecoveryCmd::Generate {
                     vault_path,
                     output,

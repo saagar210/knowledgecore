@@ -272,11 +272,7 @@ fn parse_recovery_manifest(
     }
 }
 
-pub fn verify_recovery_bundle(
-    expected_vault_id: &str,
-    bundle_path: &Path,
-    phrase: &str,
-) -> AppResult<RecoveryManifestV2> {
+pub fn read_recovery_manifest(bundle_path: &Path) -> AppResult<RecoveryManifestV2> {
     let manifest_path = bundle_path.join("recovery_manifest.json");
     let manifest_bytes = fs::read(&manifest_path).map_err(|e| {
         recovery_error(
@@ -285,7 +281,33 @@ pub fn verify_recovery_bundle(
             serde_json::json!({ "error": e.to_string(), "path": manifest_path }),
         )
     })?;
-    let manifest = parse_recovery_manifest(&manifest_bytes, &manifest_path)?;
+    parse_recovery_manifest(&manifest_bytes, &manifest_path)
+}
+
+pub fn write_recovery_manifest(bundle_path: &Path, manifest: &RecoveryManifestV2) -> AppResult<()> {
+    let manifest_bytes = to_canonical_bytes(&serde_json::to_value(manifest).map_err(|e| {
+        recovery_error(
+            "KC_RECOVERY_BUNDLE_INVALID",
+            "failed serializing recovery manifest",
+            serde_json::json!({ "error": e.to_string() }),
+        )
+    })?)?;
+    let manifest_path = bundle_path.join("recovery_manifest.json");
+    fs::write(&manifest_path, manifest_bytes).map_err(|e| {
+        recovery_error(
+            "KC_RECOVERY_BUNDLE_INVALID",
+            "failed writing recovery manifest",
+            serde_json::json!({ "error": e.to_string(), "path": manifest_path }),
+        )
+    })
+}
+
+pub fn verify_recovery_bundle(
+    expected_vault_id: &str,
+    bundle_path: &Path,
+    phrase: &str,
+) -> AppResult<RecoveryManifestV2> {
+    let manifest = read_recovery_manifest(bundle_path)?;
 
     if manifest.vault_id != expected_vault_id {
         return Err(recovery_error(

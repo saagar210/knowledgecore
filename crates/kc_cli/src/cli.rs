@@ -141,6 +141,10 @@ pub enum VaultRecoveryCmd {
     Status {
         vault_path: String,
     },
+    Escrow {
+        #[command(subcommand)]
+        cmd: VaultRecoveryEscrowCmd,
+    },
     Generate {
         vault_path: String,
         #[arg(long)]
@@ -156,6 +160,34 @@ pub enum VaultRecoveryCmd {
         bundle: String,
         #[arg(long = "phrase-env")]
         phrase_env: String,
+    },
+}
+
+#[derive(Subcommand)]
+pub enum VaultRecoveryEscrowCmd {
+    Status {
+        vault_path: String,
+    },
+    Enable {
+        vault_path: String,
+        #[arg(long)]
+        provider: String,
+        #[arg(long = "now-ms")]
+        now_ms: Option<i64>,
+    },
+    Rotate {
+        vault_path: String,
+        #[arg(long = "passphrase-env")]
+        passphrase_env: String,
+        #[arg(long = "now-ms")]
+        now_ms: Option<i64>,
+    },
+    Restore {
+        vault_path: String,
+        #[arg(long)]
+        bundle: String,
+        #[arg(long = "now-ms")]
+        now_ms: Option<i64>,
     },
 }
 

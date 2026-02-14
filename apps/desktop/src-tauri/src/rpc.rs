@@ -333,6 +333,66 @@ pub struct VaultRecoveryVerifyRes {
 
 #[derive(Debug, Deserialize)]
 #[serde(deny_unknown_fields)]
+pub struct VaultRecoveryEscrowStatusReq {
+    pub vault_path: String,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct VaultRecoveryEscrowStatusRes {
+    pub enabled: bool,
+    pub provider: String,
+    pub provider_available: bool,
+    pub updated_at_ms: Option<i64>,
+    pub details_json: String,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct VaultRecoveryEscrowEnableReq {
+    pub vault_path: String,
+    pub provider: String,
+    pub now_ms: i64,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct VaultRecoveryEscrowEnableRes {
+    pub status: VaultRecoveryEscrowStatusRes,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct VaultRecoveryEscrowRotateReq {
+    pub vault_path: String,
+    pub passphrase: String,
+    pub now_ms: i64,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct VaultRecoveryEscrowRotateRes {
+    pub status: VaultRecoveryEscrowStatusRes,
+    pub bundle_path: String,
+    pub recovery_phrase: String,
+    pub manifest: RecoveryManifestRes,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct VaultRecoveryEscrowRestoreReq {
+    pub vault_path: String,
+    pub bundle_path: String,
+    pub now_ms: i64,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct VaultRecoveryEscrowRestoreRes {
+    pub status: VaultRecoveryEscrowStatusRes,
+    pub bundle_path: String,
+    pub restored_bytes: i64,
+    pub manifest: RecoveryManifestRes,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct IngestScanFolderReq {
     pub vault_path: String,
     pub scan_root: String,
@@ -872,6 +932,18 @@ fn map_recovery_manifest(manifest: kc_core::recovery::RecoveryManifestV2) -> Rec
     }
 }
 
+fn map_recovery_escrow_status(
+    status: kc_core::rpc_service::VaultRecoveryEscrowStatus,
+) -> VaultRecoveryEscrowStatusRes {
+    VaultRecoveryEscrowStatusRes {
+        enabled: status.enabled,
+        provider: status.provider,
+        provider_available: status.provider_available,
+        updated_at_ms: status.updated_at_ms,
+        details_json: status.details_json,
+    }
+}
+
 fn map_lock_status(status: kc_core::rpc_service::VaultDbLockStatus) -> VaultLockStatusRes {
     VaultLockStatusRes {
         db_encryption_enabled: status.db_encryption_enabled,
@@ -988,6 +1060,66 @@ pub fn vault_recovery_verify_rpc(
         &req.recovery_phrase,
     ) {
         Ok(out) => RpcResponse::ok(VaultRecoveryVerifyRes {
+            manifest: map_recovery_manifest(out.manifest),
+        }),
+        Err(error) => RpcResponse::err(error),
+    }
+}
+
+pub fn vault_recovery_escrow_status_rpc(
+    req: VaultRecoveryEscrowStatusReq,
+) -> RpcResponse<VaultRecoveryEscrowStatusRes> {
+    match rpc_service::vault_recovery_escrow_status_service(std::path::Path::new(&req.vault_path)) {
+        Ok(status) => RpcResponse::ok(map_recovery_escrow_status(status)),
+        Err(error) => RpcResponse::err(error),
+    }
+}
+
+pub fn vault_recovery_escrow_enable_rpc(
+    req: VaultRecoveryEscrowEnableReq,
+) -> RpcResponse<VaultRecoveryEscrowEnableRes> {
+    match rpc_service::vault_recovery_escrow_enable_service(
+        std::path::Path::new(&req.vault_path),
+        &req.provider,
+        req.now_ms,
+    ) {
+        Ok(status) => RpcResponse::ok(VaultRecoveryEscrowEnableRes {
+            status: map_recovery_escrow_status(status),
+        }),
+        Err(error) => RpcResponse::err(error),
+    }
+}
+
+pub fn vault_recovery_escrow_rotate_rpc(
+    req: VaultRecoveryEscrowRotateReq,
+) -> RpcResponse<VaultRecoveryEscrowRotateRes> {
+    match rpc_service::vault_recovery_escrow_rotate_service(
+        std::path::Path::new(&req.vault_path),
+        &req.passphrase,
+        req.now_ms,
+    ) {
+        Ok(out) => RpcResponse::ok(VaultRecoveryEscrowRotateRes {
+            status: map_recovery_escrow_status(out.status),
+            bundle_path: out.bundle_path.display().to_string(),
+            recovery_phrase: out.recovery_phrase,
+            manifest: map_recovery_manifest(out.manifest),
+        }),
+        Err(error) => RpcResponse::err(error),
+    }
+}
+
+pub fn vault_recovery_escrow_restore_rpc(
+    req: VaultRecoveryEscrowRestoreReq,
+) -> RpcResponse<VaultRecoveryEscrowRestoreRes> {
+    match rpc_service::vault_recovery_escrow_restore_service(
+        std::path::Path::new(&req.vault_path),
+        std::path::Path::new(&req.bundle_path),
+        req.now_ms,
+    ) {
+        Ok(out) => RpcResponse::ok(VaultRecoveryEscrowRestoreRes {
+            status: map_recovery_escrow_status(out.status),
+            bundle_path: out.bundle_path.display().to_string(),
+            restored_bytes: out.restored_bytes,
             manifest: map_recovery_manifest(out.manifest),
         }),
         Err(error) => RpcResponse::err(error),

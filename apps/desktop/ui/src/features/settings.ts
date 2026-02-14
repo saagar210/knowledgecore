@@ -24,6 +24,14 @@ import type {
   VaultEncryptionMigrateRes,
   VaultRecoveryGenerateReq,
   VaultRecoveryGenerateRes,
+  VaultRecoveryEscrowEnableReq,
+  VaultRecoveryEscrowEnableRes,
+  VaultRecoveryEscrowRestoreReq,
+  VaultRecoveryEscrowRestoreRes,
+  VaultRecoveryEscrowRotateReq,
+  VaultRecoveryEscrowRotateRes,
+  VaultRecoveryEscrowStatusReq,
+  VaultRecoveryEscrowStatusRes,
   VaultRecoveryStatusReq,
   VaultRecoveryStatusRes,
   VaultRecoveryVerifyReq,
@@ -137,6 +145,34 @@ export async function generateVaultRecovery(
   req: VaultRecoveryGenerateReq
 ): Promise<ViewState<VaultRecoveryGenerateRes>> {
   return nextStateFromRpc(await api.vaultRecoveryGenerate(req));
+}
+
+export async function loadVaultRecoveryEscrowStatus(
+  api: DesktopRpcApi,
+  req: VaultRecoveryEscrowStatusReq
+): Promise<ViewState<VaultRecoveryEscrowStatusRes>> {
+  return nextStateFromRpc(await api.vaultRecoveryEscrowStatus(req));
+}
+
+export async function enableVaultRecoveryEscrow(
+  api: DesktopRpcApi,
+  req: VaultRecoveryEscrowEnableReq
+): Promise<ViewState<VaultRecoveryEscrowEnableRes>> {
+  return nextStateFromRpc(await api.vaultRecoveryEscrowEnable(req));
+}
+
+export async function rotateVaultRecoveryEscrow(
+  api: DesktopRpcApi,
+  req: VaultRecoveryEscrowRotateReq
+): Promise<ViewState<VaultRecoveryEscrowRotateRes>> {
+  return nextStateFromRpc(await api.vaultRecoveryEscrowRotate(req));
+}
+
+export async function restoreVaultRecoveryEscrow(
+  api: DesktopRpcApi,
+  req: VaultRecoveryEscrowRestoreReq
+): Promise<ViewState<VaultRecoveryEscrowRestoreRes>> {
+  return nextStateFromRpc(await api.vaultRecoveryEscrowRestore(req));
 }
 
 export async function verifyVaultRecovery(

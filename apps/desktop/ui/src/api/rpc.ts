@@ -181,6 +181,42 @@ export type RecoveryManifest = {
   phrase_checksum: string;
   payload_hash: string;
 };
+export type VaultRecoveryEscrowStatusReq = { vault_path: string };
+export type VaultRecoveryEscrowStatusRes = {
+  enabled: boolean;
+  provider: string;
+  provider_available: boolean;
+  updated_at_ms: number | null;
+  details_json: string;
+};
+export type VaultRecoveryEscrowEnableReq = {
+  vault_path: string;
+  provider: string;
+  now_ms: number;
+};
+export type VaultRecoveryEscrowEnableRes = { status: VaultRecoveryEscrowStatusRes };
+export type VaultRecoveryEscrowRotateReq = {
+  vault_path: string;
+  passphrase: string;
+  now_ms: number;
+};
+export type VaultRecoveryEscrowRotateRes = {
+  status: VaultRecoveryEscrowStatusRes;
+  bundle_path: string;
+  recovery_phrase: string;
+  manifest: RecoveryManifest;
+};
+export type VaultRecoveryEscrowRestoreReq = {
+  vault_path: string;
+  bundle_path: string;
+  now_ms: number;
+};
+export type VaultRecoveryEscrowRestoreRes = {
+  status: VaultRecoveryEscrowStatusRes;
+  bundle_path: string;
+  restored_bytes: number;
+  manifest: RecoveryManifest;
+};
 export type VaultRecoveryGenerateReq = {
   vault_path: string;
   output_dir: string;
@@ -420,6 +456,26 @@ export const rpcMethods = {
     rpc<VaultEncryptionMigrateReq, VaultEncryptionMigrateRes>("vault_encryption_migrate", req),
   vaultRecoveryStatus: (req: VaultRecoveryStatusReq) =>
     rpc<VaultRecoveryStatusReq, VaultRecoveryStatusRes>("vault_recovery_status", req),
+  vaultRecoveryEscrowStatus: (req: VaultRecoveryEscrowStatusReq) =>
+    rpc<VaultRecoveryEscrowStatusReq, VaultRecoveryEscrowStatusRes>(
+      "vault_recovery_escrow_status",
+      req
+    ),
+  vaultRecoveryEscrowEnable: (req: VaultRecoveryEscrowEnableReq) =>
+    rpc<VaultRecoveryEscrowEnableReq, VaultRecoveryEscrowEnableRes>(
+      "vault_recovery_escrow_enable",
+      req
+    ),
+  vaultRecoveryEscrowRotate: (req: VaultRecoveryEscrowRotateReq) =>
+    rpc<VaultRecoveryEscrowRotateReq, VaultRecoveryEscrowRotateRes>(
+      "vault_recovery_escrow_rotate",
+      req
+    ),
+  vaultRecoveryEscrowRestore: (req: VaultRecoveryEscrowRestoreReq) =>
+    rpc<VaultRecoveryEscrowRestoreReq, VaultRecoveryEscrowRestoreRes>(
+      "vault_recovery_escrow_restore",
+      req
+    ),
   vaultRecoveryGenerate: (req: VaultRecoveryGenerateReq) =>
     rpc<VaultRecoveryGenerateReq, VaultRecoveryGenerateRes>("vault_recovery_generate", req),
   vaultRecoveryVerify: (req: VaultRecoveryVerifyReq) =>

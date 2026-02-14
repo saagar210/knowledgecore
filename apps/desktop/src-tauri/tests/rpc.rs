@@ -7,14 +7,17 @@ use apps_desktop_tauri::rpc::{
     trust_device_list_rpc, trust_device_verify_chain_rpc, trust_identity_complete_rpc,
     trust_identity_start_rpc, vault_encryption_enable_rpc, vault_encryption_migrate_rpc,
     vault_encryption_status_rpc, vault_init_rpc, vault_lock_rpc, vault_lock_status_rpc,
-    vault_open_rpc, vault_recovery_generate_rpc, vault_recovery_status_rpc,
-    vault_recovery_verify_rpc, vault_unlock_rpc, IngestInboxStartReq, IngestInboxStopReq,
-    JobsListReq, LineageLockAcquireReq, LineageLockReleaseReq, LineageLockStatusReq,
-    LineageOverlayAddReq, LineageOverlayListReq, LineageOverlayRemoveReq, LineageQueryReq,
-    LineageQueryV2Req, RpcResponse, SyncMergePreviewReq, SyncPullReq, SyncPushReq, SyncStatusReq,
-    TrustDeviceEnrollReq, TrustDeviceListReq, TrustDeviceVerifyChainReq, TrustIdentityCompleteReq,
-    TrustIdentityStartReq, VaultEncryptionEnableReq, VaultEncryptionMigrateReq,
-    VaultEncryptionStatusReq, VaultInitReq, VaultLockReq, VaultLockStatusReq, VaultOpenReq,
+    vault_open_rpc, vault_recovery_escrow_enable_rpc, vault_recovery_escrow_restore_rpc,
+    vault_recovery_escrow_rotate_rpc, vault_recovery_escrow_status_rpc,
+    vault_recovery_generate_rpc, vault_recovery_status_rpc, vault_recovery_verify_rpc,
+    vault_unlock_rpc, IngestInboxStartReq, IngestInboxStopReq, JobsListReq, LineageLockAcquireReq,
+    LineageLockReleaseReq, LineageLockStatusReq, LineageOverlayAddReq, LineageOverlayListReq,
+    LineageOverlayRemoveReq, LineageQueryReq, LineageQueryV2Req, RpcResponse, SyncMergePreviewReq,
+    SyncPullReq, SyncPushReq, SyncStatusReq, TrustDeviceEnrollReq, TrustDeviceListReq,
+    TrustDeviceVerifyChainReq, TrustIdentityCompleteReq, TrustIdentityStartReq,
+    VaultEncryptionEnableReq, VaultEncryptionMigrateReq, VaultEncryptionStatusReq, VaultInitReq,
+    VaultLockReq, VaultLockStatusReq, VaultOpenReq, VaultRecoveryEscrowEnableReq,
+    VaultRecoveryEscrowRestoreReq, VaultRecoveryEscrowRotateReq, VaultRecoveryEscrowStatusReq,
     VaultRecoveryGenerateReq, VaultRecoveryStatusReq, VaultRecoveryVerifyReq, VaultUnlockReq,
 };
 use kc_core::app_error::AppError;
@@ -326,6 +329,82 @@ fn rpc_vault_recovery_status_generate_and_verify() {
         RpcResponse::Ok { data } => assert_eq!(data.manifest.schema_version, 2),
         RpcResponse::Err { error } => panic!("recovery verify failed: {}", error.code),
     }
+}
+
+#[test]
+fn rpc_vault_recovery_escrow_enable_rotate_restore_round_trip() {
+    let _guard = env_lock().lock().expect("env lock");
+    let root = tempfile::tempdir().expect("tempdir").keep();
+    let emu = root.join("escrow-emulation");
+    std::fs::create_dir_all(&emu).expect("create emulation dir");
+    std::env::set_var(
+        "KC_RECOVERY_ESCROW_AWS_EMULATE_DIR",
+        emu.to_string_lossy().to_string(),
+    );
+    std::env::set_var("KC_RECOVERY_ESCROW_AWS_KMS_KEY_ID", "alias/kc-test");
+
+    let init = vault_init_rpc(VaultInitReq {
+        vault_path: root.to_string_lossy().to_string(),
+        vault_slug: "demo".to_string(),
+        now_ms: 1,
+    });
+    match init {
+        RpcResponse::Ok { .. } => {}
+        RpcResponse::Err { error } => panic!("vault init failed: {}", error.code),
+    }
+
+    let status_before = vault_recovery_escrow_status_rpc(VaultRecoveryEscrowStatusReq {
+        vault_path: root.to_string_lossy().to_string(),
+    });
+    match status_before {
+        RpcResponse::Ok { data } => {
+            assert!(!data.enabled);
+            assert_eq!(data.provider, "none");
+        }
+        RpcResponse::Err { error } => panic!("escrow status failed: {}", error.code),
+    }
+
+    let enabled = vault_recovery_escrow_enable_rpc(VaultRecoveryEscrowEnableReq {
+        vault_path: root.to_string_lossy().to_string(),
+        provider: "aws".to_string(),
+        now_ms: 2,
+    });
+    match enabled {
+        RpcResponse::Ok { data } => {
+            assert!(data.status.enabled);
+            assert_eq!(data.status.provider, "aws");
+        }
+        RpcResponse::Err { error } => panic!("escrow enable failed: {}", error.code),
+    }
+
+    let rotated = vault_recovery_escrow_rotate_rpc(VaultRecoveryEscrowRotateReq {
+        vault_path: root.to_string_lossy().to_string(),
+        passphrase: "vault-passphrase".to_string(),
+        now_ms: 3,
+    });
+    let bundle_path = match rotated {
+        RpcResponse::Ok { data } => {
+            assert_eq!(data.manifest.schema_version, 2);
+            data.bundle_path
+        }
+        RpcResponse::Err { error } => panic!("escrow rotate failed: {}", error.code),
+    };
+
+    let restored = vault_recovery_escrow_restore_rpc(VaultRecoveryEscrowRestoreReq {
+        vault_path: root.to_string_lossy().to_string(),
+        bundle_path,
+        now_ms: 4,
+    });
+    match restored {
+        RpcResponse::Ok { data } => {
+            assert_eq!(data.status.provider, "aws");
+            assert!(data.restored_bytes > 0);
+        }
+        RpcResponse::Err { error } => panic!("escrow restore failed: {}", error.code),
+    }
+
+    std::env::remove_var("KC_RECOVERY_ESCROW_AWS_EMULATE_DIR");
+    std::env::remove_var("KC_RECOVERY_ESCROW_AWS_KMS_KEY_ID");
 }
 
 #[test]
