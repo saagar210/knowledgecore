@@ -1,8 +1,33 @@
 use kc_core::db::open_db;
 use kc_core::object_store::ObjectStore;
 use kc_core::sync::{sync_pull, sync_push};
+use kc_core::trust::{trust_device_init, trust_device_verify};
+use kc_core::trust_identity::{
+    trust_device_enroll, trust_device_verify_chain, trust_identity_complete, trust_identity_start,
+};
 use kc_core::vault::vault_init;
 use std::process::Command;
+
+macro_rules! enroll_verified_sync_author {
+    ($conn:expr, $now_ms:expr) => {{
+        let device =
+            trust_device_init($conn, "sync-author", "tester", $now_ms).expect("trust init");
+        trust_device_verify(
+            $conn,
+            &device.device_id,
+            &device.fingerprint,
+            "tester",
+            $now_ms + 1,
+        )
+        .expect("trust verify");
+        trust_identity_start($conn, "default", $now_ms + 2).expect("identity start");
+        trust_identity_complete($conn, "default", "sub:sync-author", $now_ms + 3)
+            .expect("identity complete");
+        trust_device_enroll($conn, "default", &device.device_id, $now_ms + 4)
+            .expect("device enroll");
+        trust_device_verify_chain($conn, &device.device_id, $now_ms + 5).expect("verify chain");
+    }};
+}
 
 #[test]
 fn cli_sync_push_and_status_work() {
@@ -12,6 +37,7 @@ fn cli_sync_push_and_status_work() {
 
     vault_init(&vault_root, "demo", 1).expect("vault init");
     let conn = open_db(&vault_root.join("db/knowledge.sqlite")).expect("open db");
+    enroll_verified_sync_author!(&conn, 10);
     let store = ObjectStore::new(vault_root.join("store/objects"));
     store
         .put_bytes(&conn, b"sync payload", 1)
@@ -67,6 +93,7 @@ fn cli_sync_supports_s3_uri_with_emulation() {
     vault_init(&pull_vault_root, "pull-demo", 1).expect("pull vault init");
 
     let conn = open_db(&vault_root.join("db/knowledge.sqlite")).expect("open db");
+    enroll_verified_sync_author!(&conn, 20);
     let store = ObjectStore::new(vault_root.join("store/objects"));
     store
         .put_bytes(&conn, b"sync payload", 1)

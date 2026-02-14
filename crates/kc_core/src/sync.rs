@@ -9,6 +9,7 @@ use crate::sync_merge::{
 };
 use crate::sync_s3::S3SyncTransport;
 use crate::sync_transport::{FsSyncTransport, SyncTargetUri, SyncTransport};
+use crate::trust_identity;
 use crate::vault::{vault_open, VaultJsonV2};
 use rusqlite::{params, Connection};
 use serde::{Deserialize, Serialize};
@@ -42,6 +43,10 @@ pub struct SyncHeadV1 {
     pub author_fingerprint: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub author_signature: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub author_cert_id: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub author_chain_hash: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -818,7 +823,80 @@ fn derive_local_sync_trust(vault: &VaultJsonV2, now_ms: i64) -> AppResult<SyncTr
     })
 }
 
+fn sync_signature_payload(
+    snapshot_id: &str,
+    manifest_hash: &str,
+    created_at_ms: i64,
+    author_device_id: &str,
+    author_fingerprint: &str,
+    author_cert_id: &str,
+    author_chain_hash: &str,
+) -> AppResult<Vec<u8>> {
+    to_canonical_bytes(&serde_json::json!({
+        "snapshot_id": snapshot_id,
+        "manifest_hash": manifest_hash,
+        "created_at_ms": created_at_ms,
+        "author_device_id": author_device_id,
+        "author_fingerprint": author_fingerprint,
+        "author_cert_id": author_cert_id,
+        "author_chain_hash": author_chain_hash
+    }))
+}
+
+fn bytes_to_hex(bytes: &[u8]) -> String {
+    let mut out = String::with_capacity(bytes.len() * 2);
+    for byte in bytes {
+        out.push_str(&format!("{byte:02x}"));
+    }
+    out
+}
+
+fn sign_sync_payload(payload: &[u8]) -> String {
+    let h1 = blake3::hash(payload);
+    let mut second_seed = Vec::with_capacity(16 + payload.len());
+    second_seed.extend_from_slice(b"kc.sync.sig.v1\n");
+    second_seed.extend_from_slice(payload);
+    let h2 = blake3::hash(&second_seed);
+    let mut sig = String::with_capacity(128);
+    sig.push_str(&bytes_to_hex(h1.as_bytes()));
+    sig.push_str(&bytes_to_hex(h2.as_bytes()));
+    sig
+}
+
+#[derive(Debug, Clone)]
+struct SyncAuthorV3 {
+    device_id: String,
+    fingerprint: String,
+    cert_id: String,
+    chain_hash: String,
+}
+
+fn local_sync_author(conn: &Connection) -> AppResult<SyncAuthorV3> {
+    let author = trust_identity::verified_author_identity(conn).map_err(|e| {
+        if e.code == "KC_TRUST_DEVICE_NOT_ENROLLED" {
+            sync_error(
+                "KC_TRUST_DEVICE_NOT_ENROLLED",
+                "sync head v3 requires a verified enrolled device certificate",
+                serde_json::json!({}),
+            )
+        } else {
+            sync_error(
+                "KC_TRUST_CERT_CHAIN_INVALID",
+                "failed resolving local sync author identity",
+                serde_json::json!({ "source_code": e.code, "source_message": e.message }),
+            )
+        }
+    })?;
+    Ok(SyncAuthorV3 {
+        device_id: author.device_id,
+        fingerprint: author.fingerprint,
+        cert_id: author.cert_id,
+        chain_hash: author.cert_chain_hash,
+    })
+}
+
 fn ensure_remote_trust_matches(
+    _conn: &Connection,
     remote_head: Option<&SyncHeadV1>,
     local: &SyncTrustV1,
 ) -> AppResult<()> {
@@ -855,6 +933,83 @@ fn ensure_remote_trust_matches(
                 "snapshot_id": head.snapshot_id
             }),
         ));
+    }
+
+    if head.schema_version >= 3 {
+        let author_device_id = head.author_device_id.as_deref().ok_or_else(|| {
+            sync_error(
+                "KC_TRUST_DEVICE_NOT_ENROLLED",
+                "sync head v3 is missing author_device_id",
+                serde_json::json!({ "snapshot_id": head.snapshot_id }),
+            )
+        })?;
+        let author_fingerprint = head.author_fingerprint.as_deref().ok_or_else(|| {
+            sync_error(
+                "KC_TRUST_DEVICE_NOT_ENROLLED",
+                "sync head v3 is missing author_fingerprint",
+                serde_json::json!({ "snapshot_id": head.snapshot_id }),
+            )
+        })?;
+        let author_signature = head.author_signature.as_deref().ok_or_else(|| {
+            sync_error(
+                "KC_TRUST_SIGNATURE_INVALID",
+                "sync head v3 is missing author_signature",
+                serde_json::json!({ "snapshot_id": head.snapshot_id }),
+            )
+        })?;
+        let author_cert_id = head.author_cert_id.as_deref().ok_or_else(|| {
+            sync_error(
+                "KC_TRUST_CERT_CHAIN_INVALID",
+                "sync head v3 is missing author_cert_id",
+                serde_json::json!({ "snapshot_id": head.snapshot_id }),
+            )
+        })?;
+        let author_chain_hash = head.author_chain_hash.as_deref().ok_or_else(|| {
+            sync_error(
+                "KC_TRUST_CERT_CHAIN_INVALID",
+                "sync head v3 is missing author_chain_hash",
+                serde_json::json!({ "snapshot_id": head.snapshot_id }),
+            )
+        })?;
+
+        let expected_chain_hash = trust_identity::expected_cert_chain_hash(
+            author_cert_id,
+            author_device_id,
+            author_fingerprint,
+        );
+        if expected_chain_hash != author_chain_hash {
+            return Err(sync_error(
+                "KC_TRUST_CERT_CHAIN_INVALID",
+                "sync head v3 certificate chain hash mismatch",
+                serde_json::json!({
+                    "snapshot_id": head.snapshot_id,
+                    "expected": expected_chain_hash,
+                    "actual": author_chain_hash
+                }),
+            ));
+        }
+
+        let payload = sync_signature_payload(
+            &head.snapshot_id,
+            &head.manifest_hash,
+            head.created_at_ms,
+            author_device_id,
+            author_fingerprint,
+            author_cert_id,
+            author_chain_hash,
+        )?;
+        let expected_signature = sign_sync_payload(&payload);
+        if expected_signature != author_signature {
+            return Err(sync_error(
+                "KC_TRUST_SIGNATURE_INVALID",
+                "sync head v3 signature mismatch",
+                serde_json::json!({
+                    "snapshot_id": head.snapshot_id,
+                    "expected": expected_signature,
+                    "actual": author_signature
+                }),
+            ));
+        }
     }
 
     Ok(())
@@ -1076,7 +1231,7 @@ fn sync_merge_preview_s3_target(
             serde_json::json!({ "target": transport.target().display() }),
         )
     })?;
-    ensure_remote_trust_matches(Some(&remote_head), &local_trust)?;
+    ensure_remote_trust_matches(conn, Some(&remote_head), &local_trust)?;
     let seen_remote_snapshot_id = read_state(conn, "sync_remote_head_seen")?;
 
     let (local_bundle, _local_manifest_hash) = build_local_snapshot(vault_path, now_ms)?;
@@ -1188,6 +1343,8 @@ pub fn sync_push(
         author_device_id: None,
         author_fingerprint: None,
         author_signature: None,
+        author_cert_id: None,
+        author_chain_hash: None,
     };
     write_head(target_path, &head)?;
 
@@ -1224,6 +1381,7 @@ fn sync_push_s3_target(
     ensure_sync_tables(conn)?;
     let vault = vault_open(vault_path)?;
     let local_trust = derive_local_sync_trust(&vault, now_ms)?;
+    let local_author = local_sync_author(conn)?;
 
     let seen_remote = read_state(conn, "sync_remote_head_seen")?;
     let last_applied_manifest = read_state(conn, "sync_last_applied_manifest_hash")?;
@@ -1231,7 +1389,7 @@ fn sync_push_s3_target(
     let (zip_path, _bundle_dir, local_manifest_hash) =
         build_local_snapshot_zip(vault_path, now_ms)?;
     let remote_head = transport.read_head()?;
-    ensure_remote_trust_matches(remote_head.as_ref(), &local_trust)?;
+    ensure_remote_trust_matches(conn, remote_head.as_ref(), &local_trust)?;
 
     if should_conflict(
         remote_head.as_ref(),
@@ -1257,7 +1415,7 @@ fn sync_push_s3_target(
 
     with_s3_lock(&transport, &vault.vault_id, &local_trust, now_ms, || {
         let latest_remote_head = transport.read_head()?;
-        ensure_remote_trust_matches(latest_remote_head.as_ref(), &local_trust)?;
+        ensure_remote_trust_matches(conn, latest_remote_head.as_ref(), &local_trust)?;
 
         if should_conflict(
             latest_remote_head.as_ref(),
@@ -1293,14 +1451,24 @@ fn sync_push_s3_target(
         transport.write_bytes(&snapshot_key, &zip_bytes, "application/zip")?;
 
         let head = SyncHeadV1 {
-            schema_version: 2,
+            schema_version: 3,
             snapshot_id: snapshot_id.clone(),
             manifest_hash: local_manifest_hash.clone(),
             created_at_ms: now_ms,
             trust: Some(local_trust.clone()),
-            author_device_id: None,
-            author_fingerprint: None,
-            author_signature: None,
+            author_device_id: Some(local_author.device_id.clone()),
+            author_fingerprint: Some(local_author.fingerprint.clone()),
+            author_signature: Some(sign_sync_payload(&sync_signature_payload(
+                &snapshot_id,
+                &local_manifest_hash,
+                now_ms,
+                &local_author.device_id,
+                &local_author.fingerprint,
+                &local_author.cert_id,
+                &local_author.chain_hash,
+            )?)),
+            author_cert_id: Some(local_author.cert_id.clone()),
+            author_chain_hash: Some(local_author.chain_hash.clone()),
         };
         transport.write_head(&head)?;
 
@@ -1477,7 +1645,7 @@ fn sync_pull_s3_target(
             serde_json::json!({ "target": transport.target().display() }),
         )
     })?;
-    ensure_remote_trust_matches(Some(&remote_head), &local_trust)?;
+    ensure_remote_trust_matches(conn, Some(&remote_head), &local_trust)?;
 
     let seen_remote = read_state(conn, "sync_remote_head_seen")?;
     let last_applied_manifest = read_state(conn, "sync_last_applied_manifest_hash")?;
@@ -1523,7 +1691,7 @@ fn sync_pull_s3_target(
                 serde_json::json!({ "target": transport.target().display() }),
             )
         })?;
-        ensure_remote_trust_matches(Some(&remote_head_locked), &local_trust)?;
+        ensure_remote_trust_matches(conn, Some(&remote_head_locked), &local_trust)?;
 
         if should_conflict(
             Some(&remote_head_locked),

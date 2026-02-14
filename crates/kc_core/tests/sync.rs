@@ -4,6 +4,10 @@ use kc_core::sync::{
     sync_merge_preview_target, sync_pull, sync_pull_target, sync_pull_target_with_mode, sync_push,
     sync_push_target, sync_status, sync_status_target, SyncHeadV1,
 };
+use kc_core::trust::{trust_device_init, trust_device_verify};
+use kc_core::trust_identity::{
+    trust_device_enroll, trust_device_verify_chain, trust_identity_complete, trust_identity_start,
+};
 use kc_core::vault::vault_init;
 use std::sync::{Mutex, OnceLock};
 
@@ -20,6 +24,23 @@ fn insert_object(
 fn env_lock() -> &'static Mutex<()> {
     static LOCK: OnceLock<Mutex<()>> = OnceLock::new();
     LOCK.get_or_init(|| Mutex::new(()))
+}
+
+fn enroll_verified_sync_author(conn: &rusqlite::Connection, now_ms: i64) {
+    let device = trust_device_init(conn, "sync-author", "tester", now_ms).expect("trust init");
+    trust_device_verify(
+        conn,
+        &device.device_id,
+        &device.fingerprint,
+        "tester",
+        now_ms + 1,
+    )
+    .expect("trust verify");
+    trust_identity_start(conn, "default", now_ms + 2).expect("identity start");
+    trust_identity_complete(conn, "default", "sub:sync-author", now_ms + 3)
+        .expect("identity complete");
+    trust_device_enroll(conn, "default", &device.device_id, now_ms + 4).expect("device enroll");
+    trust_device_verify_chain(conn, &device.device_id, now_ms + 5).expect("verify chain");
 }
 
 #[test]
@@ -99,6 +120,8 @@ fn sync_push_conflict_emits_artifact() {
         author_device_id: None,
         author_fingerprint: None,
         author_signature: None,
+        author_cert_id: None,
+        author_chain_hash: None,
     };
     std::fs::write(
         target_root.join("head.json"),
@@ -159,6 +182,7 @@ fn sync_target_wrappers_support_s3_uri_with_emulation() {
 
     let conn = open_db(&vault_root.join("db/knowledge.sqlite")).expect("open db");
     let conn_pull = open_db(&pull_vault_root.join("db/knowledge.sqlite")).expect("open pull db");
+    enroll_verified_sync_author(&conn, 10);
     insert_object(&conn, &vault_root, b"s3-sync-object", 1);
 
     let target_uri = "s3://demo-bucket/kc";
@@ -201,6 +225,7 @@ fn sync_s3_key_mismatch_hard_fails() {
 
     let source_conn = open_db(&source_vault.join("db/knowledge.sqlite")).expect("source db");
     let target_conn = open_db(&target_vault.join("db/knowledge.sqlite")).expect("target db");
+    enroll_verified_sync_author(&source_conn, 10);
     insert_object(&source_conn, &source_vault, b"source-object", 1);
 
     std::env::set_var("KC_VAULT_PASSPHRASE", "alpha");
@@ -229,6 +254,7 @@ fn sync_s3_reports_locked_when_lock_file_is_active() {
 
     vault_init(&vault_root, "demo", 1).expect("vault init");
     let conn = open_db(&vault_root.join("db/knowledge.sqlite")).expect("open db");
+    enroll_verified_sync_author(&conn, 10);
     insert_object(&conn, &vault_root, b"payload", 1);
 
     let lock = serde_json::json!({
