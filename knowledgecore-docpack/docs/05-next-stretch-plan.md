@@ -1,102 +1,96 @@
-# Next Stretch Plan (Post-N3)
+# Next Stretch Plan (Post-R)
 
 ## Title
-KnowledgeCore Remaining Roadmap: Phases O, P, Q, R
+KnowledgeCore Remaining Roadmap: Phases S, T, U, V
 
 ## Summary
-This execution horizon closes the remaining deferred scope after N3:
-- O: sync transport v2 (URI targets + S3-compatible adapter + trust metadata)
-- P: SQLCipher DB encryption with vault schema v3 and unlock/session surfaces
-- Q: lineage overlay write/edit model (overlay-only, immutable system lineage)
-- R: preview scaffold retirement and final hardening
+This execution horizon closes the remaining deferred scope after O–R:
+- S: security foundations (manual device trust + local recovery kit)
+- T: conservative sync auto-merge (preview-first)
+- U: collaborative lineage with turn-based locks
+- V: final hardening and closure
 
 ## Global Invariants
-- Local-first remains default; remote sync is optional.
+- Local-first remains default; remote adapters are optional.
 - UI has no business logic and branches on `AppError.code` only.
 - Tauri layer remains thin RPC orchestration only.
 - Tier 1 determinism and ordering contracts must not regress.
 - Schema changes must update `SCHEMA_REGISTRY.md` and schema validation tests.
 - Milestones are merge-as-we-go with stop/fix/rerun gates.
 
-## Phase O — Sync Transport v2 (Sync-first)
+## Phase S — Security Foundations
 
 ### Goal
-Generalize sync target handling from local filesystem path semantics to URI semantics while preserving existing local sync behavior.
+Introduce manual device-key verification trust and local recovery-kit workflows.
 
 ### Scope
-- Transport abstraction and URI parser (`file://`, plain path, `s3://`).
-- S3-compatible adapter with deterministic snapshot/head/conflict object layout.
-- Passphrase trust metadata in sync head/manifests and compatibility checks.
-- CLI/Tauri/UI sync surfaces updated to accept URI targets.
+- Device trust APIs and schema.
+- Trust author metadata in sync heads.
+- Recovery bundle generate/verify/status APIs.
+- CLI/RPC/UI settings surface for trust and recovery.
 
 ### Non-goals
-- Auto-merge conflict resolution.
-- Device enrollment PKI.
-- Background daemonized sync loop.
+- Managed identity.
+- Shamir secret sharing.
+- Remote escrow.
 
 ### Acceptance
-- Existing local path sync still works unchanged.
-- `s3://` sync push/pull/status supported through CLI and desktop settings.
-- Deterministic conflict artifacts and stable error codes.
+- Unverified devices cannot author accepted remote heads.
+- Fingerprint verification is explicit and deterministic.
+- Recovery bundle verification hard-fails on mismatch/tamper.
 
-## Phase P — SQLCipher DB Encryption v1
+## Phase T — Sync Conservative Auto-Merge
 
 ### Goal
-Add SQLCipher-backed DB encryption as active at-rest protection for the SQLite file while keeping v1/v2 vault compatibility.
+Enable opt-in conservative merge where only disjoint deterministic changes are auto-applied.
 
 ### Scope
-- Vault schema v3 with DB encryption metadata.
-- `vault_open` support for v1/v2/v3 normalized model.
-- DB key/unlock contract for CLI and RPC.
-- Migration flow with rollback-safe strategy and integrity checks.
-- Export/verifier schema and checks aligned with encrypted DB metadata.
+- `sync_merge` preview report contract and deterministic ordering.
+- CLI surface for `sync merge-preview` and `sync pull --auto-merge conservative`.
+- RPC and UI settings preview wiring.
 
 ### Non-goals
-- External KMS.
-- Per-record encryption overlays.
-- Removing object-store encryption support.
+- Aggressive conflict resolution.
+- Hidden/implicit merge behavior.
 
 ### Acceptance
-- Plaintext and encrypted vaults are both openable through supported flows.
-- Wrong key/fingerprint fails deterministically with stable `AppError.code`.
-- Post-migration plaintext DB artifacts are not left in active vault paths.
+- Overlap hard-fails with `KC_SYNC_MERGE_NOT_SAFE`.
+- Disjoint sets merge predictably with no silent overwrite.
 
-## Phase Q — Lineage Overlay Workflows v1
+## Phase U — Collaborative Lineage (Turn-Based Lock)
 
 ### Goal
-Enable user-editable lineage via overlays only, preserving immutable system lineage.
+Add edit-lock semantics for lineage overlays with explicit acquire/release/status.
 
 ### Scope
-- Overlay storage table + migration.
-- Overlay CRUD in core and CLI.
-- `lineage_query_v2` merged response with deterministic ordering rules.
-- RPC and UI support for overlay add/remove/list and v2 query rendering.
+- Per-doc lock table and lock APIs.
+- Overlay mutation paths gated by valid lock token.
+- CLI/RPC/UI lock workflows.
 
 ### Non-goals
-- Direct mutation of system lineage edges.
-- Automatic inference/ranking in UI.
-- Collaborative lineage editing.
+- Real-time collaborative merge.
+- CRDT/OT editing models.
 
 ### Acceptance
-- Overlay changes never mutate base lineage graph.
-- Deterministic merged ordering remains stable across repeated runs.
-- UI renders response order without client-side reordering.
+- Lock contention and expiration codes are deterministic.
+- Overlay mutations without valid lock token fail.
 
-## Phase R — Runtime Surface Cleanup + Final Hardening
+## Phase V — Final Consolidation
 
 ### Goal
-Remove obsolete Phase L preview scaffolding and finalize docs/risk closure for O–Q.
+Close risks/follow-ups, run final full gates, and leave planning-ready `master`.
 
 ### Scope
-- Remove `phase_l_preview` runtime surfaces and preview-only tests.
-- Keep only active runtime contracts.
-- Final readiness/follow-up docs update and full gate run.
+- Readiness and operations docs updates.
+- Final canonical Rust/desktop/schema/RPC gates.
+- Bench smoke run twice.
 
 ### Acceptance
-- No preview-only runtime path remains.
-- Full Rust + desktop + RPC/schema + bench smoke gates pass on `master`.
+- No unresolved S–U follow-ups in this horizon.
+- `master` clean with branch hygiene normalized.
 
 ## Canonical Gates
 - Rust: `cargo test -p kc_core -p kc_extract -p kc_index -p kc_ask -p kc_cli`
 - Desktop: `pnpm lint && pnpm test && pnpm tauri build`
+- RPC/schema: `cargo test -p apps_desktop_tauri -- rpc_` and `cargo test -p apps_desktop_tauri -- rpc_schema`
 - Bench smoke: `cargo run -p kc_cli -- bench run --corpus v1` (twice at final consolidation)
