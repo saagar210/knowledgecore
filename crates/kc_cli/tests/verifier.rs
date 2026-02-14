@@ -23,6 +23,14 @@ fn base_manifest(db_hash: String) -> serde_json::Value {
                 "salt_id": "vault-kdf-salt-v1"
             }
         },
+        "db_encryption": {
+            "enabled": false,
+            "mode": "sqlcipher_v4",
+            "key_reference": serde_json::Value::Null,
+            "kdf": {
+                "algorithm": "pbkdf2_hmac_sha512"
+            }
+        },
         "packaging": {
             "format": "folder",
             "zip_policy": {
@@ -297,6 +305,28 @@ fn verifier_reports_encryption_mismatch_when_enabled_bundle_has_plain_object() {
             .errors
             .iter()
             .any(|e| e.code == "OBJECT_ENCRYPTION_MISMATCH")
+    );
+}
+
+#[test]
+fn verifier_reports_db_encryption_mismatch_when_plain_db_claims_encrypted() {
+    let root = tempfile::tempdir().expect("tempdir").keep();
+    let bundle = root.join("bundle_dbenc");
+    std::fs::create_dir_all(bundle.join("db")).expect("mkdir db");
+    let plaintext_sqlite_header = b"SQLite format 3\0fixture";
+    std::fs::write(bundle.join("db/knowledge.sqlite"), plaintext_sqlite_header).expect("write db");
+
+    let mut manifest = base_manifest(blake3_hex_prefixed(plaintext_sqlite_header));
+    manifest["db_encryption"]["enabled"] = serde_json::json!(true);
+    write_manifest(&bundle, &manifest);
+
+    let (code, report) = verify_bundle(&bundle).expect("verify");
+    assert_eq!(code, 31);
+    assert!(
+        report
+            .errors
+            .iter()
+            .any(|e| e.code == "DB_ENCRYPTION_MISMATCH")
     );
 }
 

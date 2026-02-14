@@ -20,6 +20,7 @@ Deterministic export folder bundle and manifest schema + ordering rules.
     "vault_id",
     "schema_versions",
     "encryption",
+    "db_encryption",
     "packaging",
     "chunking_config_hash",
     "db",
@@ -37,6 +38,28 @@ Deterministic export folder bundle and manifest schema + ordering rules.
       "type": "object"
     },
     "encryption": {
+      "type": "object",
+      "required": [
+        "enabled",
+        "mode",
+        "kdf"
+      ],
+      "properties": {
+        "enabled": { "type": "boolean" },
+        "mode": { "type": "string" },
+        "key_reference": { "type": ["string", "null"] },
+        "kdf": {
+          "type": "object",
+          "required": ["algorithm"],
+          "properties": {
+            "algorithm": { "type": "string" }
+          },
+          "additionalProperties": false
+        }
+      },
+      "additionalProperties": false
+    },
+    "db_encryption": {
       "type": "object",
       "required": [
         "enabled",

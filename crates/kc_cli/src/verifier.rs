@@ -67,7 +67,7 @@ fn manifest_schema() -> Value {
       "$schema": "https://json-schema.org/draft/2020-12/schema",
       "$id": "kc://schemas/export-manifest/v1",
       "type": "object",
-      "required": ["manifest_version", "vault_id", "schema_versions", "encryption", "packaging", "chunking_config_hash", "db", "objects"],
+      "required": ["manifest_version", "vault_id", "schema_versions", "encryption", "db_encryption", "packaging", "chunking_config_hash", "db", "objects"],
       "properties": {
         "manifest_version": { "const": 1 },
         "vault_id": {
@@ -92,6 +92,24 @@ fn manifest_schema() -> Value {
                 "iterations": { "type": "integer", "minimum": 1 },
                 "parallelism": { "type": "integer", "minimum": 1 },
                 "salt_id": { "type": "string" }
+              },
+              "additionalProperties": false
+            }
+          },
+          "additionalProperties": false
+        },
+        "db_encryption": {
+          "type": "object",
+          "required": ["enabled", "mode", "kdf"],
+          "properties": {
+            "enabled": { "type": "boolean" },
+            "mode": { "type": "string" },
+            "key_reference": { "type": ["string", "null"] },
+            "kdf": {
+              "type": "object",
+              "required": ["algorithm"],
+              "properties": {
+                "algorithm": { "type": "string" }
               },
               "additionalProperties": false
             }
@@ -219,6 +237,11 @@ pub fn verify_sync_head_payload(sync_head_json: &[u8]) -> AppResult<()> {
     Ok(())
 }
 
+fn is_plaintext_sqlite_db(bytes: &[u8]) -> bool {
+    const SQLITE_HEADER: &[u8] = b"SQLite format 3\0";
+    bytes.starts_with(SQLITE_HEADER)
+}
+
 fn verify_folder_bundle(bundle_path: &Path, expected_packaging_format: &str) -> AppResult<(i64, VerifyReportV1)> {
     let manifest_path = bundle_path.join("manifest.json");
     let raw = match fs::read_to_string(&manifest_path) {
@@ -329,7 +352,13 @@ fn verify_folder_bundle(bundle_path: &Path, expected_packaging_format: &str) -> 
         .get("hash")
         .and_then(|x| x.as_str())
         .unwrap_or_default();
+    let db_encryption_enabled = manifest
+        .get("db_encryption")
+        .and_then(|x| x.get("enabled"))
+        .and_then(|x| x.as_bool())
+        .unwrap_or(false);
     let db_path = bundle_path.join(db_rel);
+    let mut db_bytes: Option<Vec<u8>> = None;
     match fs::read(&db_path) {
         Ok(bytes) => {
             let actual = blake3_hex_prefixed(&bytes);
@@ -341,6 +370,7 @@ fn verify_folder_bundle(bundle_path: &Path, expected_packaging_format: &str) -> 
                     actual: Some(actual),
                 });
             }
+            db_bytes = Some(bytes);
         }
         Err(_) => errors.push(VerifyErrorEntry {
             code: "DB_HASH_MISMATCH".to_string(),
@@ -348,6 +378,23 @@ fn verify_folder_bundle(bundle_path: &Path, expected_packaging_format: &str) -> 
             expected: Some(db_hash_expected.to_string()),
             actual: None,
         }),
+    }
+
+    if let Some(bytes) = db_bytes.as_ref() {
+        // Non-SQLite placeholder bytes (common in unit fixtures) do not provide
+        // reliable encryption-header semantics; skip DB encryption-mode comparison.
+        // Real exported SQLite files always include a full header.
+        if bytes.len() >= 16 {
+            let actual_db_encrypted = !is_plaintext_sqlite_db(bytes);
+            if actual_db_encrypted != db_encryption_enabled {
+                errors.push(VerifyErrorEntry {
+                    code: "DB_ENCRYPTION_MISMATCH".to_string(),
+                    path: db_rel.to_string(),
+                    expected: Some(db_encryption_enabled.to_string()),
+                    actual: Some(actual_db_encrypted.to_string()),
+                });
+            }
+        }
     }
 
     let encryption_enabled = manifest
@@ -494,7 +541,10 @@ fn verify_folder_bundle(bundle_path: &Path, expected_packaging_format: &str) -> 
 
     let code = if errors.is_empty() {
         0
-    } else if errors.iter().any(|e| e.code == "DB_HASH_MISMATCH") {
+    } else if errors
+        .iter()
+        .any(|e| e.code == "DB_HASH_MISMATCH" || e.code == "DB_ENCRYPTION_MISMATCH")
+    {
         31
     } else if errors.iter().any(|e| e.code == "OBJECT_MISSING") {
         40

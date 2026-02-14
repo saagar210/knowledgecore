@@ -94,6 +94,7 @@ Verifier behavior, stable exit codes, deterministic report ordering.
          - 21 MANIFEST_SCHEMA_INVALID
            (includes deterministic ZIP metadata violations)
          - 31 DB_HASH_MISMATCH
+           (also used for DB_ENCRYPTION_MISMATCH)
          - 40 OBJECT_MISSING
          - 41 OBJECT_HASH_MISMATCH
            (also used for OBJECT_ENCRYPTION_MISMATCH)

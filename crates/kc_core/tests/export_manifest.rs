@@ -80,6 +80,17 @@ fn export_manifest_has_deterministic_object_order() {
         encryption.get("enabled").and_then(|v| v.as_bool()),
         Some(false)
     );
+    let db_encryption = manifest
+        .get("db_encryption")
+        .expect("db_encryption block");
+    assert_eq!(
+        db_encryption.get("enabled").and_then(|v| v.as_bool()),
+        Some(false)
+    );
+    assert_eq!(
+        db_encryption.get("mode").and_then(|v| v.as_str()),
+        Some("sqlcipher_v4")
+    );
     assert_eq!(
         manifest
             .get("packaging")

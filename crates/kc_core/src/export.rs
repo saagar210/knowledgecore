@@ -336,6 +336,14 @@ pub fn export_bundle(vault_path: &Path, export_dir: &Path, opts: &ExportOptions,
                 "salt_id": vault.encryption.kdf.salt_id,
             }
         },
+        "db_encryption": {
+            "enabled": vault.db_encryption.enabled,
+            "mode": vault.db_encryption.mode,
+            "key_reference": vault.db_encryption.key_reference,
+            "kdf": {
+                "algorithm": vault.db_encryption.kdf.algorithm,
+            }
+        },
         "toolchain_registry": {
             "pdfium": vault.toolchain.pdfium.identity,
             "tesseract": vault.toolchain.tesseract.identity,
