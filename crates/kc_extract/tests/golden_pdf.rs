@@ -1,6 +1,6 @@
 use kc_core::services::{ExtractInput, ExtractService, ToolchainIdentity};
 use kc_core::types::DocId;
-use kc_extract::ocr::should_run_ocr;
+use kc_extract::ocr::{ocr_pdf_via_images, should_run_ocr, OcrConfig};
 use kc_extract::pdf::{extract_pdf_text, PdfiumConfig};
 use kc_extract::DefaultExtractor;
 
@@ -24,10 +24,11 @@ fn golden_pdf_extractor_hashes_canonical() {
         tesseract_identity: "tesseract:test".to_string(),
     });
 
+    let pdf_like_body = "a".repeat(900);
     let out = extractor
         .extract_canonical(ExtractInput {
             doc_id: &DocId("blake3:3333333333333333333333333333333333333333333333333333333333333333".to_string()),
-            bytes: b"pdf body",
+            bytes: pdf_like_body.as_bytes(),
             mime: "application/pdf",
             source_kind: "manuals",
         })
@@ -51,4 +52,18 @@ fn golden_pdf_extractor_hashes_canonical() {
         .is_some());
     let flags: serde_json::Value = serde_json::from_str(&out.extractor_flags_json).expect("flags json");
     assert_eq!(flags.get("source_kind").and_then(|x| x.as_str()), Some("manuals"));
+}
+
+#[test]
+fn golden_pdf_ocr_hard_fails_when_tesseract_missing() {
+    let err = ocr_pdf_via_images(
+        b"%PDF-1.4\n%",
+        &OcrConfig {
+            tesseract_cmd: Some("kc_missing_tesseract_cmd".to_string()),
+            language: "eng".to_string(),
+        },
+    )
+    .expect_err("missing tesseract command must hard-fail");
+
+    assert_eq!(err.code, "KC_TESSERACT_UNAVAILABLE");
 }

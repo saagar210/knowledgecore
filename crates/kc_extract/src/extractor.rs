@@ -65,10 +65,7 @@ impl ExtractService for DefaultExtractor {
                             ocr_status = "used".to_string();
                             ocr_text
                         }
-                        Err(err) => {
-                            ocr_status = format!("fallback:{}", err.code);
-                            pdf.text_with_page_markers
-                        }
+                        Err(err) => return Err(err),
                     }
                 } else {
                     pdf.text_with_page_markers

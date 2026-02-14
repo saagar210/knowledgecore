@@ -1,3 +1,4 @@
+use crate::markers::page_marker;
 use kc_core::app_error::{AppError, AppResult};
 use kc_core::hashing::blake3_hex_prefixed;
 use std::fs;
@@ -142,7 +143,7 @@ pub fn ocr_pdf_via_images(pdf_bytes: &[u8], ocr_cfg: &OcrConfig) -> AppResult<St
     pages.sort();
 
     let mut text = String::new();
-    for page in pages {
+    for (idx, page) in pages.into_iter().enumerate() {
         let out = Command::new(tesseract_cmd)
             .arg(&page)
             .arg("stdout")
@@ -172,10 +173,15 @@ pub fn ocr_pdf_via_images(pdf_bytes: &[u8], ocr_cfg: &OcrConfig) -> AppResult<St
                 }),
             ));
         }
+        let page_text = String::from_utf8_lossy(&out.stdout).trim().to_string();
         if !text.is_empty() {
             text.push('\n');
         }
-        text.push_str(&String::from_utf8_lossy(&out.stdout));
+        text.push_str(&page_marker(idx + 1));
+        if !page_text.is_empty() {
+            text.push('\n');
+            text.push_str(&page_text);
+        }
     }
 
     if text.trim().is_empty() {
