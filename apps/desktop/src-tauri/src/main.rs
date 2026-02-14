@@ -12,6 +12,9 @@ fn main() {
         commands::vault_encryption_status,
         commands::vault_encryption_enable,
         commands::vault_encryption_migrate,
+        commands::vault_recovery_status,
+        commands::vault_recovery_generate,
+        commands::vault_recovery_verify,
         commands::ingest_scan_folder,
         commands::ingest_inbox_start,
         commands::ingest_inbox_stop,
@@ -32,5 +35,7 @@ fn main() {
         commands::lineage_overlay_list,
     ]);
 
-    builder.run(tauri::generate_context!()).expect("failed to run tauri app");
+    builder
+        .run(tauri::generate_context!())
+        .expect("failed to run tauri app");
 }

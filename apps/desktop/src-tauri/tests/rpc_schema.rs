@@ -1,9 +1,9 @@
 use apps_desktop_tauri::rpc::{
-    AskQuestionReq, SearchQueryReq, VaultEncryptionEnableReq, VaultEncryptionMigrateReq,
-    VaultEncryptionStatusReq, VaultInitReq, SyncPushReq, SyncPullReq, SyncStatusReq,
-    VaultLockReq, VaultLockStatusReq, VaultUnlockReq,
-    LineageOverlayAddReq, LineageOverlayListReq, LineageOverlayRemoveReq, LineageQueryReq,
-    LineageQueryV2Req,
+    AskQuestionReq, LineageOverlayAddReq, LineageOverlayListReq, LineageOverlayRemoveReq,
+    LineageQueryReq, LineageQueryV2Req, SearchQueryReq, SyncPullReq, SyncPushReq, SyncStatusReq,
+    VaultEncryptionEnableReq, VaultEncryptionMigrateReq, VaultEncryptionStatusReq, VaultInitReq,
+    VaultLockReq, VaultLockStatusReq, VaultRecoveryGenerateReq, VaultRecoveryStatusReq,
+    VaultRecoveryVerifyReq, VaultUnlockReq,
 };
 
 #[test]
@@ -77,6 +77,48 @@ fn rpc_schema_requires_now_ms_for_encryption_migrate() {
     });
     assert!(serde_json::from_value::<SyncPushReq>(missing_sync_now.clone()).is_err());
     assert!(serde_json::from_value::<SyncPullReq>(missing_sync_now).is_err());
+}
+
+#[test]
+fn rpc_schema_requires_now_ms_for_recovery_generate() {
+    let missing_now = serde_json::json!({
+        "vault_path": "/tmp/vault",
+        "output_dir": "/tmp/out",
+        "passphrase": "secret"
+    });
+    assert!(serde_json::from_value::<VaultRecoveryGenerateReq>(missing_now).is_err());
+}
+
+#[test]
+fn rpc_schema_recovery_requests_validate_shapes() {
+    let status = serde_json::json!({
+        "vault_path": "/tmp/vault"
+    });
+    assert!(serde_json::from_value::<VaultRecoveryStatusReq>(status).is_ok());
+
+    let generate = serde_json::json!({
+        "vault_path": "/tmp/vault",
+        "output_dir": "/tmp/out",
+        "passphrase": "secret",
+        "now_ms": 123
+    });
+    assert!(serde_json::from_value::<VaultRecoveryGenerateReq>(generate).is_ok());
+
+    let verify = serde_json::json!({
+        "vault_path": "/tmp/vault",
+        "bundle_path": "/tmp/out/recovery",
+        "recovery_phrase": "abcd-efgh"
+    });
+    assert!(serde_json::from_value::<VaultRecoveryVerifyReq>(verify).is_ok());
+}
+
+#[test]
+fn rpc_schema_recovery_rejects_unknown_fields() {
+    let invalid = serde_json::json!({
+        "vault_path": "/tmp/vault",
+        "extra": "nope"
+    });
+    assert!(serde_json::from_value::<VaultRecoveryStatusReq>(invalid).is_err());
 }
 
 #[test]

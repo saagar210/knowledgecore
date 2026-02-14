@@ -59,16 +59,27 @@ pub enum Command {
 
 #[derive(Subcommand)]
 pub enum VaultCmd {
-    Init { vault_path: String, vault_slug: String },
-    Open { vault_path: String },
-    Verify { vault_path: String },
+    Init {
+        vault_path: String,
+        vault_slug: String,
+    },
+    Open {
+        vault_path: String,
+    },
+    Verify {
+        vault_path: String,
+    },
     Unlock {
         vault_path: String,
         #[arg(long = "passphrase-env")]
         passphrase_env: String,
     },
-    Lock { vault_path: String },
-    LockStatus { vault_path: String },
+    Lock {
+        vault_path: String,
+    },
+    LockStatus {
+        vault_path: String,
+    },
     Encrypt {
         #[command(subcommand)]
         cmd: VaultEncryptCmd,
@@ -77,11 +88,17 @@ pub enum VaultCmd {
         #[command(subcommand)]
         cmd: VaultDbEncryptCmd,
     },
+    Recovery {
+        #[command(subcommand)]
+        cmd: VaultRecoveryCmd,
+    },
 }
 
 #[derive(Subcommand)]
 pub enum VaultEncryptCmd {
-    Status { vault_path: String },
+    Status {
+        vault_path: String,
+    },
     Enable {
         vault_path: String,
         #[arg(long = "passphrase-env")]
@@ -98,7 +115,9 @@ pub enum VaultEncryptCmd {
 
 #[derive(Subcommand)]
 pub enum VaultDbEncryptCmd {
-    Status { vault_path: String },
+    Status {
+        vault_path: String,
+    },
     Enable {
         vault_path: String,
         #[arg(long = "passphrase-env")]
@@ -110,6 +129,29 @@ pub enum VaultDbEncryptCmd {
         passphrase_env: String,
         #[arg(long = "now-ms")]
         now_ms: i64,
+    },
+}
+
+#[derive(Subcommand)]
+pub enum VaultRecoveryCmd {
+    Status {
+        vault_path: String,
+    },
+    Generate {
+        vault_path: String,
+        #[arg(long)]
+        output: String,
+        #[arg(long = "passphrase-env")]
+        passphrase_env: String,
+        #[arg(long = "now-ms")]
+        now_ms: Option<i64>,
+    },
+    Verify {
+        vault_path: String,
+        #[arg(long)]
+        bundle: String,
+        #[arg(long = "phrase-env")]
+        phrase_env: String,
     },
 }
 

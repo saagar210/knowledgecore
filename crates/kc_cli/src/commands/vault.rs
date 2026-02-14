@@ -1,12 +1,21 @@
 use kc_core::app_error::{AppError, AppResult};
 use kc_core::db::open_db;
 use kc_core::rpc_service::{
-    vault_db_encrypt_enable_service, vault_db_encrypt_migrate_service, vault_db_encrypt_status_service,
-    vault_encryption_enable_service, vault_encryption_migrate_service,
-    vault_encryption_status_service, vault_lock_service, vault_lock_status_service, vault_unlock_service,
+    vault_db_encrypt_enable_service, vault_db_encrypt_migrate_service,
+    vault_db_encrypt_status_service, vault_encryption_enable_service,
+    vault_encryption_migrate_service, vault_encryption_status_service, vault_lock_service,
+    vault_lock_status_service, vault_recovery_generate_service, vault_recovery_status_service,
+    vault_recovery_verify_service, vault_unlock_service,
 };
 use kc_core::vault::{vault_open, vault_paths};
 use std::path::Path;
+
+fn now_ms() -> i64 {
+    let now = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .expect("system time before unix epoch");
+    now.as_millis() as i64
+}
 
 pub fn run_verify(vault_path: &str) -> AppResult<()> {
     let vault = vault_open(Path::new(vault_path))?;
@@ -84,6 +93,21 @@ fn passphrase_from_env(passphrase_env: &str) -> AppResult<String> {
                 "passphrase env var is missing or empty",
                 false,
                 serde_json::json!({ "passphrase_env": passphrase_env }),
+            )
+        })
+}
+
+fn phrase_from_env(phrase_env: &str) -> AppResult<String> {
+    std::env::var(phrase_env)
+        .ok()
+        .filter(|v| !v.is_empty())
+        .ok_or_else(|| {
+            AppError::new(
+                "KC_RECOVERY_PHRASE_INVALID",
+                "recovery",
+                "recovery phrase env var is missing or empty",
+                false,
+                serde_json::json!({ "phrase_env": phrase_env }),
             )
         })
 }
@@ -182,7 +206,11 @@ pub fn run_db_encrypt_enable(vault_path: &str, passphrase_env: &str) -> AppResul
     Ok(())
 }
 
-pub fn run_db_encrypt_migrate(vault_path: &str, passphrase_env: &str, now_ms: i64) -> AppResult<()> {
+pub fn run_db_encrypt_migrate(
+    vault_path: &str,
+    passphrase_env: &str,
+    now_ms: i64,
+) -> AppResult<()> {
     let passphrase = passphrase_from_env(passphrase_env)?;
     let out = vault_db_encrypt_migrate_service(Path::new(vault_path), &passphrase, now_ms)?;
     println!(
@@ -245,9 +273,67 @@ pub fn run_lock_status(vault_path: &str) -> AppResult<()> {
     Ok(())
 }
 
+pub fn run_recovery_status(vault_path: &str) -> AppResult<()> {
+    let status = vault_recovery_status_service(Path::new(vault_path))?;
+    println!(
+        "{}",
+        serde_json::to_string_pretty(&serde_json::json!({
+            "status": "ok",
+            "vault_id": status.vault_id,
+            "encryption_enabled": status.encryption_enabled,
+            "last_bundle_path": status.last_bundle_path,
+        }))
+        .unwrap_or_else(|_| "{}".to_string())
+    );
+    Ok(())
+}
+
+pub fn run_recovery_generate(
+    vault_path: &str,
+    output: &str,
+    passphrase_env: &str,
+    now_ms_override: Option<i64>,
+) -> AppResult<()> {
+    let passphrase = passphrase_from_env(passphrase_env)?;
+    let out = vault_recovery_generate_service(
+        Path::new(vault_path),
+        Path::new(output),
+        &passphrase,
+        now_ms_override.unwrap_or_else(now_ms),
+    )?;
+    println!(
+        "{}",
+        serde_json::to_string_pretty(&serde_json::json!({
+            "status": "ok",
+            "bundle_path": out.bundle_path,
+            "recovery_phrase": out.recovery_phrase,
+            "manifest": out.manifest,
+        }))
+        .unwrap_or_else(|_| "{}".to_string())
+    );
+    Ok(())
+}
+
+pub fn run_recovery_verify(vault_path: &str, bundle: &str, phrase_env: &str) -> AppResult<()> {
+    let phrase = phrase_from_env(phrase_env)?;
+    let out = vault_recovery_verify_service(Path::new(vault_path), Path::new(bundle), &phrase)?;
+    println!(
+        "{}",
+        serde_json::to_string_pretty(&serde_json::json!({
+            "status": "ok",
+            "manifest": out.manifest,
+        }))
+        .unwrap_or_else(|_| "{}".to_string())
+    );
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
-    use super::{run_db_encrypt_enable, run_db_encrypt_migrate, run_db_encrypt_status, run_encrypt_enable, run_encrypt_migrate};
+    use super::{
+        run_db_encrypt_enable, run_db_encrypt_migrate, run_db_encrypt_status, run_encrypt_enable,
+        run_encrypt_migrate,
+    };
     use kc_core::db::open_db;
     use kc_core::object_store::{is_encrypted_payload, ObjectStore};
     use kc_core::rpc_service::{vault_db_encrypt_status_service, vault_encryption_status_service};
@@ -272,7 +358,8 @@ mod tests {
         assert_eq!(status_before.objects_total, 1);
         assert_eq!(status_before.objects_encrypted, 0);
 
-        run_encrypt_migrate(root.to_string_lossy().as_ref(), &env_name, 2).expect("migrate encryption");
+        run_encrypt_migrate(root.to_string_lossy().as_ref(), &env_name, 2)
+            .expect("migrate encryption");
 
         let status_after = vault_encryption_status_service(&root).expect("status after migrate");
         assert_eq!(status_after.objects_total, 1);
@@ -294,12 +381,14 @@ mod tests {
         let env_name = format!("KC_TEST_DB_PASSPHRASE_{}", std::process::id());
         std::env::set_var(&env_name, "test-db-passphrase");
 
-        run_db_encrypt_enable(root.to_string_lossy().as_ref(), &env_name).expect("enable db encryption");
+        run_db_encrypt_enable(root.to_string_lossy().as_ref(), &env_name)
+            .expect("enable db encryption");
         let status_enabled = vault_db_encrypt_status_service(&root).expect("db status enabled");
         assert!(status_enabled.enabled);
         assert!(status_enabled.unlocked);
 
-        run_db_encrypt_migrate(root.to_string_lossy().as_ref(), &env_name, 2).expect("migrate db encryption");
+        run_db_encrypt_migrate(root.to_string_lossy().as_ref(), &env_name, 2)
+            .expect("migrate db encryption");
         run_db_encrypt_status(root.to_string_lossy().as_ref()).expect("db status command");
 
         std::env::set_var("KC_VAULT_DB_PASSPHRASE", "test-db-passphrase");

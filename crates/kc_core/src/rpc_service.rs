@@ -1,11 +1,14 @@
 use crate::app_error::{AppError, AppResult};
 use crate::canonical::load_canonical_text;
-use crate::db::{db_is_unlocked, db_lock, db_unlock, migrate_db_to_sqlcipher, open_db, DbMigrationOutcome};
+use crate::db::{
+    db_is_unlocked, db_lock, db_unlock, migrate_db_to_sqlcipher, open_db, DbMigrationOutcome,
+};
 use crate::events::append_event;
 use crate::hashing::blake3_hex_prefixed;
 use crate::ingest::ingest_bytes;
 use crate::locator::{resolve_locator_strict, LocatorV1};
 use crate::object_store::{is_encrypted_payload, ObjectStore};
+use crate::recovery::{generate_recovery_bundle, verify_recovery_bundle, RecoveryManifestV1};
 use crate::types::{DocId, ObjectHash};
 use crate::vault::{vault_init, vault_open, vault_paths, vault_save};
 use std::collections::BTreeSet;
@@ -60,6 +63,25 @@ pub struct VaultEncryptionMigrateResult {
 }
 
 #[derive(Debug, Clone)]
+pub struct VaultRecoveryStatus {
+    pub vault_id: String,
+    pub encryption_enabled: bool,
+    pub last_bundle_path: Option<String>,
+}
+
+#[derive(Debug, Clone)]
+pub struct VaultRecoveryGenerateResult {
+    pub bundle_path: PathBuf,
+    pub recovery_phrase: String,
+    pub manifest: RecoveryManifestV1,
+}
+
+#[derive(Debug, Clone)]
+pub struct VaultRecoveryVerifyResult {
+    pub manifest: RecoveryManifestV1,
+}
+
+#[derive(Debug, Clone)]
 pub struct VaultDbLockStatus {
     pub db_encryption_enabled: bool,
     pub unlocked: bool,
@@ -86,8 +108,45 @@ fn jobs_set() -> &'static Mutex<BTreeSet<String>> {
     ACTIVE_JOBS.get_or_init(|| Mutex::new(BTreeSet::new()))
 }
 
+fn recovery_state_file(vault_path: &Path) -> PathBuf {
+    vault_path.join(".kc_recovery_last_path")
+}
+
+fn write_recovery_state_file(vault_path: &Path, bundle_path: &Path) -> AppResult<()> {
+    fs::write(
+        recovery_state_file(vault_path),
+        bundle_path.display().to_string(),
+    )
+    .map_err(|e| {
+        AppError::new(
+            "KC_RECOVERY_BUNDLE_INVALID",
+            "recovery",
+            "failed writing recovery state marker",
+            false,
+            serde_json::json!({ "error": e.to_string(), "vault_path": vault_path }),
+        )
+    })
+}
+
+fn read_recovery_state_file(vault_path: &Path) -> Option<String> {
+    let path = recovery_state_file(vault_path);
+    let Ok(value) = fs::read_to_string(path) else {
+        return None;
+    };
+    let trimmed = value.trim();
+    if trimmed.is_empty() {
+        None
+    } else {
+        Some(trimmed.to_string())
+    }
+}
+
 fn mime_for_path(path: &Path) -> String {
-    match path.extension().and_then(|x| x.to_str()).unwrap_or_default() {
+    match path
+        .extension()
+        .and_then(|x| x.to_str())
+        .unwrap_or_default()
+    {
         "md" => "text/markdown".to_string(),
         "html" | "htm" => "text/html".to_string(),
         "pdf" => "application/pdf".to_string(),
@@ -247,17 +306,19 @@ pub fn search_query_service(
     let vault = vault_open(vault_path)?;
     let conn = open_db(&vault_path.join(vault.db.relative_path.clone()))?;
     let store = object_store_without_passphrase(&vault, vault_path)?;
-    let mut stmt = conn.prepare(
-        "SELECT doc_id FROM canonical_text ORDER BY created_event_id DESC, doc_id ASC LIMIT ?1",
-    ).map_err(|e| {
-        AppError::new(
-            "KC_RETRIEVAL_FAILED",
-            "search",
-            "failed preparing search query",
-            false,
-            serde_json::json!({ "error": e.to_string() }),
+    let mut stmt = conn
+        .prepare(
+            "SELECT doc_id FROM canonical_text ORDER BY created_event_id DESC, doc_id ASC LIMIT ?1",
         )
-    })?;
+        .map_err(|e| {
+            AppError::new(
+                "KC_RETRIEVAL_FAILED",
+                "search",
+                "failed preparing search query",
+                false,
+                serde_json::json!({ "error": e.to_string() }),
+            )
+        })?;
     let rows = stmt
         .query_map([limit as i64], |row| row.get::<_, String>(0))
         .map_err(|e| {
@@ -282,8 +343,8 @@ pub fn search_query_service(
                 serde_json::json!({ "error": e.to_string() }),
             )
         })?;
-        let text =
-            String::from_utf8(load_canonical_text(&conn, &store, &DocId(doc_id.clone()))?).unwrap_or_default();
+        let text = String::from_utf8(load_canonical_text(&conn, &store, &DocId(doc_id.clone()))?)
+            .unwrap_or_default();
         if text.to_lowercase().contains(&query_lower) {
             hits.push(SearchHit {
                 doc_id,
@@ -379,7 +440,10 @@ pub fn jobs_list_service(_vault_path: &Path) -> AppResult<Vec<String>> {
     Ok(jobs.iter().cloned().collect())
 }
 
-pub fn sync_status_service(vault_path: &Path, target_uri: &str) -> AppResult<crate::sync::SyncStatusV1> {
+pub fn sync_status_service(
+    vault_path: &Path,
+    target_uri: &str,
+) -> AppResult<crate::sync::SyncStatusV1> {
     let vault = vault_open(vault_path)?;
     let conn = open_db(&vault_path.join(vault.db.relative_path))?;
     crate::sync::sync_status_target(&conn, target_uri)
@@ -581,7 +645,8 @@ pub fn vault_encryption_migrate_service(
     let conn = open_db(&vault_path.join(vault.db.relative_path.clone()))?;
     let hashes = load_object_hashes(&conn)?;
     let plain_store = ObjectStore::new(vault_paths(vault_path).objects_dir.clone());
-    let encrypted_store = ObjectStore::with_encryption(vault_paths(vault_path).objects_dir, enc_ctx);
+    let encrypted_store =
+        ObjectStore::with_encryption(vault_paths(vault_path).objects_dir, enc_ctx);
 
     let mut migrated = 0i64;
     let mut already_encrypted = 0i64;
@@ -626,6 +691,41 @@ pub fn vault_encryption_migrate_service(
         already_encrypted_objects: already_encrypted,
         event_id: event.event_id,
     })
+}
+
+pub fn vault_recovery_status_service(vault_path: &Path) -> AppResult<VaultRecoveryStatus> {
+    let vault = vault_open(vault_path)?;
+    Ok(VaultRecoveryStatus {
+        vault_id: vault.vault_id,
+        encryption_enabled: vault.encryption.enabled,
+        last_bundle_path: read_recovery_state_file(vault_path),
+    })
+}
+
+pub fn vault_recovery_generate_service(
+    vault_path: &Path,
+    output_dir: &Path,
+    passphrase: &str,
+    now_ms: i64,
+) -> AppResult<VaultRecoveryGenerateResult> {
+    let vault = vault_open(vault_path)?;
+    let generated = generate_recovery_bundle(&vault.vault_id, output_dir, passphrase, now_ms)?;
+    write_recovery_state_file(vault_path, &generated.bundle_path)?;
+    Ok(VaultRecoveryGenerateResult {
+        bundle_path: generated.bundle_path,
+        recovery_phrase: generated.recovery_phrase,
+        manifest: generated.manifest,
+    })
+}
+
+pub fn vault_recovery_verify_service(
+    vault_path: &Path,
+    bundle_path: &Path,
+    phrase: &str,
+) -> AppResult<VaultRecoveryVerifyResult> {
+    let vault = vault_open(vault_path)?;
+    let manifest = verify_recovery_bundle(&vault.vault_id, bundle_path, phrase)?;
+    Ok(VaultRecoveryVerifyResult { manifest })
 }
 
 fn db_lock_status_for_vault(

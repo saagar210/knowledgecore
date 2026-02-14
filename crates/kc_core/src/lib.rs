@@ -11,6 +11,7 @@ pub mod ingest;
 pub mod lineage;
 pub mod locator;
 pub mod object_store;
+pub mod recovery;
 pub mod retrieval;
 pub mod rpc_service;
 pub mod services;

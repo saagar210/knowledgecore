@@ -11,7 +11,9 @@ pub fn vault_open(req: rpc::VaultOpenReq) -> rpc::RpcResponse<rpc::VaultOpenRes>
 }
 
 #[tauri::command]
-pub fn vault_lock_status(req: rpc::VaultLockStatusReq) -> rpc::RpcResponse<rpc::VaultLockStatusRes> {
+pub fn vault_lock_status(
+    req: rpc::VaultLockStatusReq,
+) -> rpc::RpcResponse<rpc::VaultLockStatusRes> {
     rpc::vault_lock_status_rpc(req)
 }
 
@@ -47,17 +49,44 @@ pub fn vault_encryption_migrate(
 }
 
 #[tauri::command]
-pub fn ingest_scan_folder(req: rpc::IngestScanFolderReq) -> rpc::RpcResponse<rpc::IngestScanFolderRes> {
+pub fn vault_recovery_status(
+    req: rpc::VaultRecoveryStatusReq,
+) -> rpc::RpcResponse<rpc::VaultRecoveryStatusRes> {
+    rpc::vault_recovery_status_rpc(req)
+}
+
+#[tauri::command]
+pub fn vault_recovery_generate(
+    req: rpc::VaultRecoveryGenerateReq,
+) -> rpc::RpcResponse<rpc::VaultRecoveryGenerateRes> {
+    rpc::vault_recovery_generate_rpc(req)
+}
+
+#[tauri::command]
+pub fn vault_recovery_verify(
+    req: rpc::VaultRecoveryVerifyReq,
+) -> rpc::RpcResponse<rpc::VaultRecoveryVerifyRes> {
+    rpc::vault_recovery_verify_rpc(req)
+}
+
+#[tauri::command]
+pub fn ingest_scan_folder(
+    req: rpc::IngestScanFolderReq,
+) -> rpc::RpcResponse<rpc::IngestScanFolderRes> {
     rpc::ingest_scan_folder_rpc(req)
 }
 
 #[tauri::command]
-pub fn ingest_inbox_start(req: rpc::IngestInboxStartReq) -> rpc::RpcResponse<rpc::IngestInboxStartRes> {
+pub fn ingest_inbox_start(
+    req: rpc::IngestInboxStartReq,
+) -> rpc::RpcResponse<rpc::IngestInboxStartRes> {
     rpc::ingest_inbox_start_rpc(req)
 }
 
 #[tauri::command]
-pub fn ingest_inbox_stop(req: rpc::IngestInboxStopReq) -> rpc::RpcResponse<rpc::IngestInboxStopRes> {
+pub fn ingest_inbox_stop(
+    req: rpc::IngestInboxStopReq,
+) -> rpc::RpcResponse<rpc::IngestInboxStopRes> {
     rpc::ingest_inbox_stop_rpc(req)
 }
 

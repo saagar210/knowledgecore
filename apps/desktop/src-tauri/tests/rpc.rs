@@ -1,16 +1,17 @@
-use apps_desktop_tauri::rpc::{
-    lineage_overlay_add_rpc, lineage_overlay_list_rpc, lineage_overlay_remove_rpc,
-    lineage_query_v2_rpc,
-    ingest_inbox_start_rpc, ingest_inbox_stop_rpc, jobs_list_rpc, vault_encryption_enable_rpc,
-    vault_encryption_migrate_rpc, vault_encryption_status_rpc, vault_init_rpc, vault_open_rpc,
-    vault_lock_rpc, vault_lock_status_rpc, vault_unlock_rpc,
-    LineageOverlayAddReq, LineageOverlayListReq, LineageOverlayRemoveReq, LineageQueryV2Req,
-    IngestInboxStartReq, IngestInboxStopReq, JobsListReq, RpcResponse, VaultEncryptionEnableReq,
-    VaultEncryptionMigrateReq, VaultEncryptionStatusReq, VaultInitReq, VaultLockReq,
-    VaultLockStatusReq, VaultOpenReq, VaultUnlockReq, SyncPullReq, SyncPushReq, SyncStatusReq,
-    sync_pull_rpc, sync_push_rpc, sync_status_rpc, LineageQueryReq, lineage_query_rpc,
-};
 use apps_desktop_tauri::commands;
+use apps_desktop_tauri::rpc::{
+    ingest_inbox_start_rpc, ingest_inbox_stop_rpc, jobs_list_rpc, lineage_overlay_add_rpc,
+    lineage_overlay_list_rpc, lineage_overlay_remove_rpc, lineage_query_rpc, lineage_query_v2_rpc,
+    sync_pull_rpc, sync_push_rpc, sync_status_rpc, vault_encryption_enable_rpc,
+    vault_encryption_migrate_rpc, vault_encryption_status_rpc, vault_init_rpc, vault_lock_rpc,
+    vault_lock_status_rpc, vault_open_rpc, vault_recovery_generate_rpc, vault_recovery_status_rpc,
+    vault_recovery_verify_rpc, vault_unlock_rpc, IngestInboxStartReq, IngestInboxStopReq,
+    JobsListReq, LineageOverlayAddReq, LineageOverlayListReq, LineageOverlayRemoveReq,
+    LineageQueryReq, LineageQueryV2Req, RpcResponse, SyncPullReq, SyncPushReq, SyncStatusReq,
+    VaultEncryptionEnableReq, VaultEncryptionMigrateReq, VaultEncryptionStatusReq, VaultInitReq,
+    VaultLockReq, VaultLockStatusReq, VaultOpenReq, VaultRecoveryGenerateReq,
+    VaultRecoveryStatusReq, VaultRecoveryVerifyReq, VaultUnlockReq,
+};
 use kc_core::app_error::AppError;
 use std::sync::{Mutex, OnceLock};
 
@@ -200,6 +201,56 @@ fn rpc_vault_encryption_status_enable_and_migrate() {
 }
 
 #[test]
+fn rpc_vault_recovery_status_generate_and_verify() {
+    let root = tempfile::tempdir().expect("tempdir").keep();
+    let output = root.join("recovery-output");
+
+    let init = vault_init_rpc(VaultInitReq {
+        vault_path: root.to_string_lossy().to_string(),
+        vault_slug: "demo".to_string(),
+        now_ms: 1,
+    });
+    match init {
+        RpcResponse::Ok { .. } => {}
+        RpcResponse::Err { error } => panic!("vault init failed: {}", error.code),
+    }
+
+    let status_before = vault_recovery_status_rpc(VaultRecoveryStatusReq {
+        vault_path: root.to_string_lossy().to_string(),
+    });
+    match status_before {
+        RpcResponse::Ok { data } => {
+            assert!(data.last_bundle_path.is_none());
+        }
+        RpcResponse::Err { error } => panic!("recovery status failed: {}", error.code),
+    }
+
+    let generated = vault_recovery_generate_rpc(VaultRecoveryGenerateReq {
+        vault_path: root.to_string_lossy().to_string(),
+        output_dir: output.to_string_lossy().to_string(),
+        passphrase: "vault-passphrase".to_string(),
+        now_ms: 100,
+    });
+    let (bundle_path, phrase) = match generated {
+        RpcResponse::Ok { data } => {
+            assert_eq!(data.manifest.schema_version, 1);
+            (data.bundle_path, data.recovery_phrase)
+        }
+        RpcResponse::Err { error } => panic!("recovery generate failed: {}", error.code),
+    };
+
+    let verified = vault_recovery_verify_rpc(VaultRecoveryVerifyReq {
+        vault_path: root.to_string_lossy().to_string(),
+        bundle_path,
+        recovery_phrase: phrase,
+    });
+    match verified {
+        RpcResponse::Ok { data } => assert_eq!(data.manifest.schema_version, 1),
+        RpcResponse::Err { error } => panic!("recovery verify failed: {}", error.code),
+    }
+}
+
+#[test]
 fn rpc_sync_status_and_push() {
     let root = tempfile::tempdir().expect("tempdir").keep();
     let sync_target = root.join("sync-target");
@@ -384,8 +435,11 @@ fn rpc_lineage_query_is_deterministic_and_sorted() {
 
     match res_a {
         RpcResponse::Ok { data } => {
-            let node_keys: Vec<(String, String)> =
-                data.nodes.iter().map(|n| (n.kind.clone(), n.node_id.clone())).collect();
+            let node_keys: Vec<(String, String)> = data
+                .nodes
+                .iter()
+                .map(|n| (n.kind.clone(), n.node_id.clone()))
+                .collect();
             let mut sorted_node_keys = node_keys.clone();
             sorted_node_keys.sort();
             assert_eq!(node_keys, sorted_node_keys);

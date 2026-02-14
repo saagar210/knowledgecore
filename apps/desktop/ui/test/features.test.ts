@@ -20,14 +20,17 @@ import { loadRelated } from "../src/features/related";
 import { runSearch } from "../src/features/search";
 import {
   enableVaultEncryption,
+  generateVaultRecovery,
   lockVault,
   loadVaultLockStatus,
+  loadVaultRecoveryStatus,
   loadSettingsDependencies,
   loadSyncStatus,
   loadVaultEncryptionStatus,
   migrateVaultEncryption,
   runSyncPull,
   runSyncPush,
+  verifyVaultRecovery,
   unlockVault
 } from "../src/features/settings";
 import { vaultInit, vaultOpen } from "../src/features/vault";
@@ -98,6 +101,38 @@ function mockApi(): DesktopRpcApi {
         migrated_objects: 1,
         already_encrypted_objects: 0,
         event_id: 42
+      }),
+    vaultRecoveryStatus: () =>
+      ok({
+        vault_id: "v1",
+        encryption_enabled: true,
+        last_bundle_path: null
+      }),
+    vaultRecoveryGenerate: () =>
+      ok({
+        bundle_path: "/tmp/recovery",
+        recovery_phrase: "abcd1234-efgh5678-ijkl9012-mnop3456",
+        manifest: {
+          schema_version: 1,
+          vault_id: "v1",
+          created_at_ms: 7,
+          phrase_checksum:
+            "blake3:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          payload_hash:
+            "blake3:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+        }
+      }),
+    vaultRecoveryVerify: () =>
+      ok({
+        manifest: {
+          schema_version: 1,
+          vault_id: "v1",
+          created_at_ms: 7,
+          phrase_checksum:
+            "blake3:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          payload_hash:
+            "blake3:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+        }
       }),
     ingestScanFolder: () => ok({ ingested: 2 }),
     ingestInboxStart: () => ok({ job_id: "j1", doc_id: "d1" }),
@@ -332,6 +367,26 @@ describe("feature controllers", () => {
         vault_path: "/tmp/v",
         passphrase: "pass",
         now_ms: 6
+      })
+    ).toMatchObject({ kind: "data" });
+    expect(
+      await loadVaultRecoveryStatus(api, {
+        vault_path: "/tmp/v"
+      })
+    ).toMatchObject({ kind: "data" });
+    expect(
+      await generateVaultRecovery(api, {
+        vault_path: "/tmp/v",
+        output_dir: "/tmp/recovery",
+        passphrase: "pass",
+        now_ms: 6
+      })
+    ).toMatchObject({ kind: "data" });
+    expect(
+      await verifyVaultRecovery(api, {
+        vault_path: "/tmp/v",
+        bundle_path: "/tmp/recovery",
+        recovery_phrase: "phrase"
       })
     ).toMatchObject({ kind: "data" });
     expect(

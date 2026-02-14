@@ -111,6 +111,38 @@ export type VaultEncryptionMigrateRes = {
   already_encrypted_objects: number;
   event_id: number;
 };
+export type VaultRecoveryStatusReq = { vault_path: string };
+export type VaultRecoveryStatusRes = {
+  vault_id: string;
+  encryption_enabled: boolean;
+  last_bundle_path: string | null;
+};
+export type RecoveryManifest = {
+  schema_version: number;
+  vault_id: string;
+  created_at_ms: number;
+  phrase_checksum: string;
+  payload_hash: string;
+};
+export type VaultRecoveryGenerateReq = {
+  vault_path: string;
+  output_dir: string;
+  passphrase: string;
+  now_ms: number;
+};
+export type VaultRecoveryGenerateRes = {
+  bundle_path: string;
+  recovery_phrase: string;
+  manifest: RecoveryManifest;
+};
+export type VaultRecoveryVerifyReq = {
+  vault_path: string;
+  bundle_path: string;
+  recovery_phrase: string;
+};
+export type VaultRecoveryVerifyRes = {
+  manifest: RecoveryManifest;
+};
 export type IngestScanFolderReq = {
   vault_path: string;
   scan_root: string;
@@ -254,6 +286,12 @@ export const rpcMethods = {
     rpc<VaultEncryptionEnableReq, VaultEncryptionEnableRes>("vault_encryption_enable", req),
   vaultEncryptionMigrate: (req: VaultEncryptionMigrateReq) =>
     rpc<VaultEncryptionMigrateReq, VaultEncryptionMigrateRes>("vault_encryption_migrate", req),
+  vaultRecoveryStatus: (req: VaultRecoveryStatusReq) =>
+    rpc<VaultRecoveryStatusReq, VaultRecoveryStatusRes>("vault_recovery_status", req),
+  vaultRecoveryGenerate: (req: VaultRecoveryGenerateReq) =>
+    rpc<VaultRecoveryGenerateReq, VaultRecoveryGenerateRes>("vault_recovery_generate", req),
+  vaultRecoveryVerify: (req: VaultRecoveryVerifyReq) =>
+    rpc<VaultRecoveryVerifyReq, VaultRecoveryVerifyRes>("vault_recovery_verify", req),
   ingestScanFolder: (req: IngestScanFolderReq) => rpc<IngestScanFolderReq, IngestScanFolderRes>("ingest_scan_folder", req),
   ingestInboxStart: (req: IngestInboxStartReq) => rpc<IngestInboxStartReq, IngestInboxStartRes>("ingest_inbox_start", req),
   ingestInboxStop: (req: IngestInboxStopReq) => rpc<IngestInboxStopReq, IngestInboxStopRes>("ingest_inbox_stop", req),

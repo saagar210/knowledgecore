@@ -91,6 +91,9 @@ AppError schema v1 and stable error taxonomy; UI branches on code only.
   - `KC_TRUST_READ_FAILED`
   - `KC_TRUST_WRITE_FAILED`
   - `KC_TRUST_EVENT_WRITE_FAILED`
+- Recovery:
+  - `KC_RECOVERY_BUNDLE_INVALID`
+  - `KC_RECOVERY_PHRASE_INVALID`
 - Lineage:
   - `KC_LINEAGE_INVALID_DEPTH`
   - `KC_LINEAGE_DOC_NOT_FOUND`

@@ -1,0 +1,50 @@
+use jsonschema::JSONSchema;
+use kc_core::recovery::generate_recovery_bundle;
+use kc_core::vault::vault_init;
+
+fn recovery_manifest_schema() -> serde_json::Value {
+    serde_json::json!({
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "$id": "kc://schemas/recovery-bundle-manifest/v1",
+      "type": "object",
+      "required": [
+        "schema_version",
+        "vault_id",
+        "created_at_ms",
+        "phrase_checksum",
+        "payload_hash"
+      ],
+      "properties": {
+        "schema_version": { "const": 1 },
+        "vault_id": { "type": "string", "minLength": 1 },
+        "created_at_ms": { "type": "integer" },
+        "phrase_checksum": { "type": "string", "pattern": "^blake3:[0-9a-f]{64}$" },
+        "payload_hash": { "type": "string", "pattern": "^blake3:[0-9a-f]{64}$" }
+      },
+      "additionalProperties": false
+    })
+}
+
+#[test]
+fn schema_recovery_manifest_accepts_generated_payload() {
+    let root = tempfile::tempdir().expect("tempdir").keep();
+    let vault = vault_init(&root.join("vault"), "demo", 1).expect("vault init");
+    let generated =
+        generate_recovery_bundle(&vault.vault_id, &root.join("out"), "vault-passphrase", 100)
+            .expect("generate recovery");
+    let value = serde_json::to_value(generated.manifest).expect("manifest value");
+    let schema = JSONSchema::compile(&recovery_manifest_schema()).expect("compile schema");
+    assert!(schema.is_valid(&value));
+}
+
+#[test]
+fn schema_recovery_manifest_rejects_missing_payload_hash() {
+    let schema = JSONSchema::compile(&recovery_manifest_schema()).expect("compile schema");
+    let invalid = serde_json::json!({
+      "schema_version": 1,
+      "vault_id": "vault-id",
+      "created_at_ms": 100,
+      "phrase_checksum": "blake3:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+    });
+    assert!(!schema.is_valid(&invalid));
+}

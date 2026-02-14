@@ -194,6 +194,57 @@ pub struct VaultEncryptionMigrateRes {
 
 #[derive(Debug, Deserialize)]
 #[serde(deny_unknown_fields)]
+pub struct VaultRecoveryStatusReq {
+    pub vault_path: String,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct VaultRecoveryStatusRes {
+    pub vault_id: String,
+    pub encryption_enabled: bool,
+    pub last_bundle_path: Option<String>,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct VaultRecoveryGenerateReq {
+    pub vault_path: String,
+    pub output_dir: String,
+    pub passphrase: String,
+    pub now_ms: i64,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct RecoveryManifestRes {
+    pub schema_version: i64,
+    pub vault_id: String,
+    pub created_at_ms: i64,
+    pub phrase_checksum: String,
+    pub payload_hash: String,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct VaultRecoveryGenerateRes {
+    pub bundle_path: String,
+    pub recovery_phrase: String,
+    pub manifest: RecoveryManifestRes,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct VaultRecoveryVerifyReq {
+    pub vault_path: String,
+    pub bundle_path: String,
+    pub recovery_phrase: String,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct VaultRecoveryVerifyRes {
+    pub manifest: RecoveryManifestRes,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct IngestScanFolderReq {
     pub vault_path: String,
     pub scan_root: String,
@@ -507,7 +558,11 @@ pub struct LineageOverlayListRes {
 }
 
 pub fn vault_init_rpc(req: VaultInitReq) -> RpcResponse<VaultInitRes> {
-    match rpc_service::vault_init_service(std::path::Path::new(&req.vault_path), &req.vault_slug, req.now_ms) {
+    match rpc_service::vault_init_service(
+        std::path::Path::new(&req.vault_path),
+        &req.vault_slug,
+        req.now_ms,
+    ) {
         Ok(vault_id) => RpcResponse::ok(VaultInitRes { vault_id }),
         Err(error) => RpcResponse::err(error),
     }
@@ -523,7 +578,9 @@ pub fn vault_open_rpc(req: VaultOpenReq) -> RpcResponse<VaultOpenRes> {
     }
 }
 
-fn map_encryption_status(status: kc_core::rpc_service::VaultEncryptionStatus) -> VaultEncryptionStatusRes {
+fn map_encryption_status(
+    status: kc_core::rpc_service::VaultEncryptionStatus,
+) -> VaultEncryptionStatusRes {
     VaultEncryptionStatusRes {
         enabled: status.enabled,
         mode: status.mode,
@@ -531,6 +588,16 @@ fn map_encryption_status(status: kc_core::rpc_service::VaultEncryptionStatus) ->
         kdf_algorithm: status.kdf_algorithm,
         objects_total: status.objects_total,
         objects_encrypted: status.objects_encrypted,
+    }
+}
+
+fn map_recovery_manifest(manifest: kc_core::recovery::RecoveryManifestV1) -> RecoveryManifestRes {
+    RecoveryManifestRes {
+        schema_version: manifest.schema_version,
+        vault_id: manifest.vault_id,
+        created_at_ms: manifest.created_at_ms,
+        phrase_checksum: manifest.phrase_checksum,
+        payload_hash: manifest.payload_hash,
     }
 }
 
@@ -543,7 +610,9 @@ fn map_lock_status(status: kc_core::rpc_service::VaultDbLockStatus) -> VaultLock
     }
 }
 
-pub fn vault_encryption_status_rpc(req: VaultEncryptionStatusReq) -> RpcResponse<VaultEncryptionStatusRes> {
+pub fn vault_encryption_status_rpc(
+    req: VaultEncryptionStatusReq,
+) -> RpcResponse<VaultEncryptionStatusRes> {
     match rpc_service::vault_encryption_status_service(std::path::Path::new(&req.vault_path)) {
         Ok(status) => RpcResponse::ok(map_encryption_status(status)),
         Err(error) => RpcResponse::err(error),
@@ -558,7 +627,8 @@ pub fn vault_lock_status_rpc(req: VaultLockStatusReq) -> RpcResponse<VaultLockSt
 }
 
 pub fn vault_unlock_rpc(req: VaultUnlockReq) -> RpcResponse<VaultUnlockRes> {
-    match rpc_service::vault_unlock_service(std::path::Path::new(&req.vault_path), &req.passphrase) {
+    match rpc_service::vault_unlock_service(std::path::Path::new(&req.vault_path), &req.passphrase)
+    {
         Ok(status) => RpcResponse::ok(VaultUnlockRes {
             status: map_lock_status(status),
         }),
@@ -575,7 +645,9 @@ pub fn vault_lock_rpc(req: VaultLockReq) -> RpcResponse<VaultLockRes> {
     }
 }
 
-pub fn vault_encryption_enable_rpc(req: VaultEncryptionEnableReq) -> RpcResponse<VaultEncryptionEnableRes> {
+pub fn vault_encryption_enable_rpc(
+    req: VaultEncryptionEnableReq,
+) -> RpcResponse<VaultEncryptionEnableRes> {
     match rpc_service::vault_encryption_enable_service(
         std::path::Path::new(&req.vault_path),
         &req.passphrase,
@@ -587,7 +659,9 @@ pub fn vault_encryption_enable_rpc(req: VaultEncryptionEnableReq) -> RpcResponse
     }
 }
 
-pub fn vault_encryption_migrate_rpc(req: VaultEncryptionMigrateReq) -> RpcResponse<VaultEncryptionMigrateRes> {
+pub fn vault_encryption_migrate_rpc(
+    req: VaultEncryptionMigrateReq,
+) -> RpcResponse<VaultEncryptionMigrateRes> {
     match rpc_service::vault_encryption_migrate_service(
         std::path::Path::new(&req.vault_path),
         &req.passphrase,
@@ -598,6 +672,52 @@ pub fn vault_encryption_migrate_rpc(req: VaultEncryptionMigrateReq) -> RpcRespon
             migrated_objects: out.migrated_objects,
             already_encrypted_objects: out.already_encrypted_objects,
             event_id: out.event_id,
+        }),
+        Err(error) => RpcResponse::err(error),
+    }
+}
+
+pub fn vault_recovery_status_rpc(
+    req: VaultRecoveryStatusReq,
+) -> RpcResponse<VaultRecoveryStatusRes> {
+    match rpc_service::vault_recovery_status_service(std::path::Path::new(&req.vault_path)) {
+        Ok(status) => RpcResponse::ok(VaultRecoveryStatusRes {
+            vault_id: status.vault_id,
+            encryption_enabled: status.encryption_enabled,
+            last_bundle_path: status.last_bundle_path,
+        }),
+        Err(error) => RpcResponse::err(error),
+    }
+}
+
+pub fn vault_recovery_generate_rpc(
+    req: VaultRecoveryGenerateReq,
+) -> RpcResponse<VaultRecoveryGenerateRes> {
+    match rpc_service::vault_recovery_generate_service(
+        std::path::Path::new(&req.vault_path),
+        std::path::Path::new(&req.output_dir),
+        &req.passphrase,
+        req.now_ms,
+    ) {
+        Ok(out) => RpcResponse::ok(VaultRecoveryGenerateRes {
+            bundle_path: out.bundle_path.display().to_string(),
+            recovery_phrase: out.recovery_phrase,
+            manifest: map_recovery_manifest(out.manifest),
+        }),
+        Err(error) => RpcResponse::err(error),
+    }
+}
+
+pub fn vault_recovery_verify_rpc(
+    req: VaultRecoveryVerifyReq,
+) -> RpcResponse<VaultRecoveryVerifyRes> {
+    match rpc_service::vault_recovery_verify_service(
+        std::path::Path::new(&req.vault_path),
+        std::path::Path::new(&req.bundle_path),
+        &req.recovery_phrase,
+    ) {
+        Ok(out) => RpcResponse::ok(VaultRecoveryVerifyRes {
+            manifest: map_recovery_manifest(out.manifest),
         }),
         Err(error) => RpcResponse::err(error),
     }
@@ -660,7 +780,8 @@ pub fn search_query_rpc(req: SearchQueryReq) -> RpcResponse<SearchQueryRes> {
 }
 
 pub fn locator_resolve_rpc(req: LocatorResolveReq) -> RpcResponse<LocatorResolveRes> {
-    match rpc_service::locator_resolve_service(std::path::Path::new(&req.vault_path), &req.locator) {
+    match rpc_service::locator_resolve_service(std::path::Path::new(&req.vault_path), &req.locator)
+    {
         Ok(text) => RpcResponse::ok(LocatorResolveRes { text }),
         Err(error) => RpcResponse::err(error),
     }
@@ -703,7 +824,10 @@ pub fn ask_question_rpc(req: AskQuestionReq) -> RpcResponse<AskQuestionRes> {
 }
 
 pub fn events_list_rpc(req: EventsListReq) -> RpcResponse<EventsListRes> {
-    match rpc_service::events_list_service(std::path::Path::new(&req.vault_path), req.limit.unwrap_or(50)) {
+    match rpc_service::events_list_service(
+        std::path::Path::new(&req.vault_path),
+        req.limit.unwrap_or(50),
+    ) {
         Ok(events) => RpcResponse::ok(EventsListRes {
             events: events
                 .into_iter()
@@ -735,7 +859,8 @@ fn map_sync_head(head: kc_core::sync::SyncHeadV1) -> SyncHeadRes {
 }
 
 pub fn sync_status_rpc(req: SyncStatusReq) -> RpcResponse<SyncStatusRes> {
-    match rpc_service::sync_status_service(std::path::Path::new(&req.vault_path), &req.target_path) {
+    match rpc_service::sync_status_service(std::path::Path::new(&req.vault_path), &req.target_path)
+    {
         Ok(status) => RpcResponse::ok(SyncStatusRes {
             target_path: status.target_path,
             remote_head: status.remote_head.map(map_sync_head),
@@ -813,7 +938,9 @@ pub fn lineage_query_rpc(req: LineageQueryReq) -> RpcResponse<LineageQueryRes> {
     }
 }
 
-fn map_lineage_overlay_entry(entry: kc_core::lineage::LineageOverlayEntryV1) -> LineageOverlayEntryRes {
+fn map_lineage_overlay_entry(
+    entry: kc_core::lineage::LineageOverlayEntryV1,
+) -> LineageOverlayEntryRes {
     LineageOverlayEntryRes {
         overlay_id: entry.overlay_id,
         doc_id: entry.doc_id,
@@ -897,9 +1024,15 @@ pub fn lineage_overlay_remove_rpc(
 }
 
 pub fn lineage_overlay_list_rpc(req: LineageOverlayListReq) -> RpcResponse<LineageOverlayListRes> {
-    match rpc_service::lineage_overlay_list_service(std::path::Path::new(&req.vault_path), &req.doc_id) {
+    match rpc_service::lineage_overlay_list_service(
+        std::path::Path::new(&req.vault_path),
+        &req.doc_id,
+    ) {
         Ok(overlays) => RpcResponse::ok(LineageOverlayListRes {
-            overlays: overlays.into_iter().map(map_lineage_overlay_entry).collect(),
+            overlays: overlays
+                .into_iter()
+                .map(map_lineage_overlay_entry)
+                .collect(),
         }),
         Err(error) => RpcResponse::err(error),
     }

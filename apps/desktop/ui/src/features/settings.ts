@@ -12,6 +12,12 @@ import type {
   VaultEncryptionEnableRes,
   VaultEncryptionMigrateReq,
   VaultEncryptionMigrateRes,
+  VaultRecoveryGenerateReq,
+  VaultRecoveryGenerateRes,
+  VaultRecoveryStatusReq,
+  VaultRecoveryStatusRes,
+  VaultRecoveryVerifyReq,
+  VaultRecoveryVerifyRes,
   VaultEncryptionStatusReq,
   VaultEncryptionStatusRes,
   SyncPullReq,
@@ -70,6 +76,27 @@ export async function migrateVaultEncryption(
   req: VaultEncryptionMigrateReq
 ): Promise<ViewState<VaultEncryptionMigrateRes>> {
   return nextStateFromRpc(await api.vaultEncryptionMigrate(req));
+}
+
+export async function loadVaultRecoveryStatus(
+  api: DesktopRpcApi,
+  req: VaultRecoveryStatusReq
+): Promise<ViewState<VaultRecoveryStatusRes>> {
+  return nextStateFromRpc(await api.vaultRecoveryStatus(req));
+}
+
+export async function generateVaultRecovery(
+  api: DesktopRpcApi,
+  req: VaultRecoveryGenerateReq
+): Promise<ViewState<VaultRecoveryGenerateRes>> {
+  return nextStateFromRpc(await api.vaultRecoveryGenerate(req));
+}
+
+export async function verifyVaultRecovery(
+  api: DesktopRpcApi,
+  req: VaultRecoveryVerifyReq
+): Promise<ViewState<VaultRecoveryVerifyRes>> {
+  return nextStateFromRpc(await api.vaultRecoveryVerify(req));
 }
 
 export async function loadSyncStatus(
