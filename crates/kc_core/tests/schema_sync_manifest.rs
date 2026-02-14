@@ -3,15 +3,31 @@ use jsonschema::JSONSchema;
 fn sync_head_schema() -> serde_json::Value {
     serde_json::json!({
       "$schema": "https://json-schema.org/draft/2020-12/schema",
-      "$id": "kc://schemas/sync-head/v1",
+      "$id": "kc://schemas/sync-head/v2",
       "type": "object",
       "required": ["schema_version", "snapshot_id", "manifest_hash", "created_at_ms"],
       "properties": {
-        "schema_version": { "const": 1 },
+        "schema_version": { "type": "integer", "enum": [1, 2] },
         "snapshot_id": { "type": "string" },
         "manifest_hash": { "type": "string", "pattern": "^blake3:[0-9a-f]{64}$" },
-        "created_at_ms": { "type": "integer" }
+        "created_at_ms": { "type": "integer" },
+        "trust": {
+          "type": ["object", "null"],
+          "required": ["model", "fingerprint", "updated_at_ms"],
+          "properties": {
+            "model": { "type": "string", "const": "passphrase_v1" },
+            "fingerprint": { "type": "string", "pattern": "^blake3:[0-9a-f]{64}$" },
+            "updated_at_ms": { "type": "integer" }
+          },
+          "additionalProperties": false
+        }
       },
+      "allOf": [
+        {
+          "if": { "properties": { "schema_version": { "const": 2 } }, "required": ["schema_version"] },
+          "then": { "required": ["trust"] }
+        }
+      ],
       "additionalProperties": false
     })
 }
@@ -39,7 +55,10 @@ fn sync_conflict_schema() -> serde_json::Value {
         "local_manifest_hash": { "type": "string", "pattern": "^blake3:[0-9a-f]{64}$" },
         "remote_head_snapshot_id": { "type": ["string", "null"] },
         "remote_head_manifest_hash": { "type": ["string", "null"] },
-        "seen_remote_snapshot_id": { "type": ["string", "null"] }
+        "seen_remote_snapshot_id": { "type": ["string", "null"] },
+        "target": { "type": ["string", "null"] },
+        "local_trust_fingerprint": { "type": ["string", "null"], "pattern": "^blake3:[0-9a-f]{64}$" },
+        "remote_trust_fingerprint": { "type": ["string", "null"], "pattern": "^blake3:[0-9a-f]{64}$" }
       },
       "additionalProperties": false
     })
@@ -49,12 +68,29 @@ fn sync_conflict_schema() -> serde_json::Value {
 fn schema_sync_head_accepts_valid_payload() {
     let schema = JSONSchema::compile(&sync_head_schema()).expect("compile sync head schema");
     let payload = serde_json::json!({
-      "schema_version": 1,
+      "schema_version": 2,
+      "snapshot_id": "blake3:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "manifest_hash": "blake3:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "created_at_ms": 100,
+      "trust": {
+        "model": "passphrase_v1",
+        "fingerprint": "blake3:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "updated_at_ms": 100
+      }
+    });
+    assert!(schema.is_valid(&payload));
+}
+
+#[test]
+fn schema_sync_head_v2_rejects_missing_trust() {
+    let schema = JSONSchema::compile(&sync_head_schema()).expect("compile sync head schema");
+    let invalid = serde_json::json!({
+      "schema_version": 2,
       "snapshot_id": "blake3:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
       "manifest_hash": "blake3:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
       "created_at_ms": 100
     });
-    assert!(schema.is_valid(&payload));
+    assert!(!schema.is_valid(&invalid));
 }
 
 #[test]

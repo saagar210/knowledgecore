@@ -5,11 +5,23 @@ use crate::export::{export_bundle, ExportOptions};
 use crate::hashing::blake3_hex_prefixed;
 use crate::sync_s3::S3SyncTransport;
 use crate::sync_transport::{FsSyncTransport, SyncTargetUri, SyncTransport};
-use crate::vault::vault_open;
+use crate::vault::{vault_open, VaultJsonV2};
 use rusqlite::{params, Connection};
 use serde::{Deserialize, Serialize};
 use std::fs;
+use std::io::Cursor;
 use std::path::{Path, PathBuf};
+
+const TRUST_MODEL_PASSPHRASE_V1: &str = "passphrase_v1";
+const S3_LOCK_KEY: &str = "locks/write.lock";
+const S3_LOCK_TTL_MS: i64 = 60_000;
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SyncTrustV1 {
+    pub model: String,
+    pub fingerprint: String,
+    pub updated_at_ms: i64,
+}
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SyncHeadV1 {
@@ -17,6 +29,8 @@ pub struct SyncHeadV1 {
     pub snapshot_id: String,
     pub manifest_hash: String,
     pub created_at_ms: i64,
+    #[serde(default)]
+    pub trust: Option<SyncTrustV1>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -51,6 +65,22 @@ pub struct SyncConflictArtifactV1 {
     pub remote_head_snapshot_id: Option<String>,
     pub remote_head_manifest_hash: Option<String>,
     pub seen_remote_snapshot_id: Option<String>,
+    #[serde(default)]
+    pub target: Option<String>,
+    #[serde(default)]
+    pub local_trust_fingerprint: Option<String>,
+    #[serde(default)]
+    pub remote_trust_fingerprint: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+struct SyncS3WriteLockV1 {
+    schema_version: i64,
+    holder: String,
+    vault_id: String,
+    acquired_at_ms: i64,
+    expires_at_ms: i64,
+    trust_fingerprint: String,
 }
 
 fn sync_error(code: &str, message: &str, details: serde_json::Value) -> AppError {
@@ -240,6 +270,76 @@ fn copy_tree_sorted(src: &Path, dst: &Path) -> AppResult<()> {
     Ok(())
 }
 
+fn unpack_zip_snapshot(zip_bytes: &[u8], output_dir: &Path) -> AppResult<()> {
+    fs::create_dir_all(output_dir).map_err(|e| {
+        sync_error(
+            "KC_SYNC_TARGET_INVALID",
+            "failed creating zip unpack directory",
+            serde_json::json!({ "error": e.to_string(), "path": output_dir }),
+        )
+    })?;
+
+    let mut archive = zip::ZipArchive::new(Cursor::new(zip_bytes)).map_err(|e| {
+        sync_error(
+            "KC_SYNC_TARGET_INVALID",
+            "failed opening sync snapshot zip",
+            serde_json::json!({ "error": e.to_string() }),
+        )
+    })?;
+
+    let mut names = Vec::new();
+    for idx in 0..archive.len() {
+        let file = archive.by_index(idx).map_err(|e| {
+            sync_error(
+                "KC_SYNC_TARGET_INVALID",
+                "failed reading zip entry during sync snapshot unpack",
+                serde_json::json!({ "error": e.to_string(), "index": idx }),
+            )
+        })?;
+        if file.name().ends_with('/') {
+            continue;
+        }
+        names.push(file.name().to_string());
+    }
+    names.sort();
+
+    for name in names {
+        let mut file = archive.by_name(&name).map_err(|e| {
+            sync_error(
+                "KC_SYNC_TARGET_INVALID",
+                "failed opening zip entry by name during sync snapshot unpack",
+                serde_json::json!({ "error": e.to_string(), "name": name }),
+            )
+        })?;
+        let out_path = output_dir.join(&name);
+        if let Some(parent) = out_path.parent() {
+            fs::create_dir_all(parent).map_err(|e| {
+                sync_error(
+                    "KC_SYNC_TARGET_INVALID",
+                    "failed creating zip unpack parent",
+                    serde_json::json!({ "error": e.to_string(), "path": parent }),
+                )
+            })?;
+        }
+        let mut out = fs::File::create(&out_path).map_err(|e| {
+            sync_error(
+                "KC_SYNC_TARGET_INVALID",
+                "failed creating zip unpack file",
+                serde_json::json!({ "error": e.to_string(), "path": out_path }),
+            )
+        })?;
+        std::io::copy(&mut file, &mut out).map_err(|e| {
+            sync_error(
+                "KC_SYNC_TARGET_INVALID",
+                "failed writing zip unpack file",
+                serde_json::json!({ "error": e.to_string(), "path": out_path }),
+            )
+        })?;
+    }
+
+    Ok(())
+}
+
 fn compute_manifest_hash(bundle_dir: &Path) -> AppResult<String> {
     let bytes = fs::read(bundle_dir.join("manifest.json")).map_err(|e| {
         sync_error(
@@ -278,6 +378,38 @@ fn build_local_snapshot(vault_path: &Path, now_ms: i64) -> AppResult<(PathBuf, S
     Ok((bundle, manifest_hash))
 }
 
+fn build_local_snapshot_zip(vault_path: &Path, now_ms: i64) -> AppResult<(PathBuf, PathBuf, String)> {
+    let staging_root = std::env::temp_dir().join(format!(
+        "kc_sync_export_zip_{}_{}",
+        std::process::id(),
+        now_ms
+    ));
+    fs::create_dir_all(&staging_root).map_err(|e| {
+        sync_error(
+            "KC_SYNC_STATE_FAILED",
+            "failed creating local sync zip staging directory",
+            serde_json::json!({ "error": e.to_string(), "path": staging_root }),
+        )
+    })?;
+
+    let zip_path = export_bundle(
+        vault_path,
+        &staging_root,
+        &ExportOptions {
+            include_vectors: true,
+            as_zip: true,
+        },
+        now_ms,
+    )?;
+    let bundle_dir = staging_root.join(format!("export_{}", now_ms));
+    let manifest_hash = compute_manifest_hash(&bundle_dir)?;
+    Ok((zip_path, bundle_dir, manifest_hash))
+}
+
+fn snapshot_id_for_manifest(manifest_hash: &str, now_ms: i64) -> String {
+    blake3_hex_prefixed(format!("kc.sync.snapshot.v2\n{}\n{}", manifest_hash, now_ms).as_bytes())
+}
+
 fn create_conflict_artifact(
     target_path: &Path,
     vault_id: &str,
@@ -285,6 +417,7 @@ fn create_conflict_artifact(
     local_manifest_hash: &str,
     remote_head: Option<&SyncHeadV1>,
     seen_remote_snapshot_id: Option<String>,
+    local_trust_fingerprint: Option<String>,
 ) -> AppResult<PathBuf> {
     let artifact = SyncConflictArtifactV1 {
         schema_version: 1,
@@ -295,6 +428,10 @@ fn create_conflict_artifact(
         remote_head_snapshot_id: remote_head.map(|h| h.snapshot_id.clone()),
         remote_head_manifest_hash: remote_head.map(|h| h.manifest_hash.clone()),
         seen_remote_snapshot_id,
+        target: Some(target_path.display().to_string()),
+        local_trust_fingerprint,
+        remote_trust_fingerprint: remote_head
+            .and_then(|h| h.trust.as_ref().map(|t| t.fingerprint.clone())),
     };
     let canonical = to_canonical_bytes(&serde_json::to_value(&artifact).map_err(|e| {
         sync_error(
@@ -326,6 +463,45 @@ fn create_conflict_artifact(
         )
     })?;
     Ok(path)
+}
+
+fn create_conflict_artifact_s3(
+    transport: &S3SyncTransport,
+    vault_id: &str,
+    now_ms: i64,
+    local_manifest_hash: &str,
+    remote_head: Option<&SyncHeadV1>,
+    seen_remote_snapshot_id: Option<String>,
+    local_trust_fingerprint: Option<String>,
+) -> AppResult<String> {
+    let artifact = SyncConflictArtifactV1 {
+        schema_version: 1,
+        kind: "sync_conflict".to_string(),
+        vault_id: vault_id.to_string(),
+        now_ms,
+        local_manifest_hash: local_manifest_hash.to_string(),
+        remote_head_snapshot_id: remote_head.map(|h| h.snapshot_id.clone()),
+        remote_head_manifest_hash: remote_head.map(|h| h.manifest_hash.clone()),
+        seen_remote_snapshot_id,
+        target: Some(transport.target().display()),
+        local_trust_fingerprint,
+        remote_trust_fingerprint: remote_head
+            .and_then(|h| h.trust.as_ref().map(|t| t.fingerprint.clone())),
+    };
+
+    let canonical = to_canonical_bytes(&serde_json::to_value(&artifact).map_err(|e| {
+        sync_error(
+            "KC_SYNC_CONFLICT",
+            "failed serializing s3 sync conflict artifact",
+            serde_json::json!({ "error": e.to_string() }),
+        )
+    })?)?;
+    let digest = blake3_hex_prefixed(&canonical);
+    let digest = digest.strip_prefix("blake3:").unwrap_or(&digest);
+    let id = digest[..digest.len().min(16)].to_string();
+    let key = format!("conflicts/conflict_{}_{}.json", now_ms, id);
+    transport.write_bytes(&key, &canonical, "application/json")?;
+    Ok(key)
 }
 
 fn should_conflict(
@@ -383,10 +559,198 @@ fn apply_snapshot_to_vault(snapshot_dir: &Path, vault_path: &Path) -> AppResult<
     Ok(())
 }
 
-pub fn sync_status(
-    conn: &Connection,
-    target_path: &Path,
-) -> AppResult<SyncStatusV1> {
+fn derive_local_sync_trust(vault: &VaultJsonV2, now_ms: i64) -> AppResult<SyncTrustV1> {
+    let passphrase = std::env::var("KC_VAULT_PASSPHRASE").map_err(|_| {
+        sync_error(
+            "KC_SYNC_AUTH_FAILED",
+            "remote sync requires KC_VAULT_PASSPHRASE",
+            serde_json::json!({ "env": "KC_VAULT_PASSPHRASE" }),
+        )
+    })?;
+
+    let key = crate::object_store::derive_object_store_key(
+        &passphrase,
+        &vault.encryption.kdf.salt_id,
+        vault.encryption.kdf.memory_kib,
+        vault.encryption.kdf.iterations,
+        vault.encryption.kdf.parallelism,
+    )
+    .map_err(|e| {
+        sync_error(
+            "KC_SYNC_AUTH_FAILED",
+            "failed deriving sync trust fingerprint from passphrase",
+            serde_json::json!({ "error": e.message, "source_code": e.code }),
+        )
+    })?;
+
+    let mut key_hex = String::with_capacity(64);
+    for b in key {
+        key_hex.push_str(&format!("{:02x}", b));
+    }
+
+    let fingerprint = blake3_hex_prefixed(
+        format!(
+            "kc.sync.passphrase.v1\n{}\n{}",
+            vault.encryption.kdf.salt_id, key_hex
+        )
+        .as_bytes(),
+    );
+
+    Ok(SyncTrustV1 {
+        model: TRUST_MODEL_PASSPHRASE_V1.to_string(),
+        fingerprint,
+        updated_at_ms: now_ms,
+    })
+}
+
+fn ensure_remote_trust_matches(
+    remote_head: Option<&SyncHeadV1>,
+    local: &SyncTrustV1,
+) -> AppResult<()> {
+    let Some(head) = remote_head else {
+        return Ok(());
+    };
+    let remote = head.trust.as_ref().ok_or_else(|| {
+        sync_error(
+            "KC_SYNC_KEY_MISMATCH",
+            "remote sync head is missing trust metadata",
+            serde_json::json!({ "snapshot_id": head.snapshot_id }),
+        )
+    })?;
+
+    if remote.model != TRUST_MODEL_PASSPHRASE_V1 {
+        return Err(sync_error(
+            "KC_SYNC_KEY_MISMATCH",
+            "remote sync head uses unsupported trust model",
+            serde_json::json!({
+                "expected": TRUST_MODEL_PASSPHRASE_V1,
+                "actual": remote.model,
+                "snapshot_id": head.snapshot_id
+            }),
+        ));
+    }
+
+    if remote.fingerprint != local.fingerprint {
+        return Err(sync_error(
+            "KC_SYNC_KEY_MISMATCH",
+            "remote sync trust fingerprint does not match local passphrase",
+            serde_json::json!({
+                "expected": local.fingerprint,
+                "actual": remote.fingerprint,
+                "snapshot_id": head.snapshot_id
+            }),
+        ));
+    }
+
+    Ok(())
+}
+
+fn read_s3_lock(transport: &S3SyncTransport) -> AppResult<Option<SyncS3WriteLockV1>> {
+    let Some(bytes) = transport.read_bytes(S3_LOCK_KEY)? else {
+        return Ok(None);
+    };
+    serde_json::from_slice(&bytes).map(Some).map_err(|e| {
+        sync_error(
+            "KC_SYNC_TARGET_INVALID",
+            "failed parsing sync write lock",
+            serde_json::json!({
+                "error": e.to_string(),
+                "target": transport.target().display(),
+                "key": S3_LOCK_KEY
+            }),
+        )
+    })
+}
+
+fn acquire_s3_lock(
+    transport: &S3SyncTransport,
+    vault_id: &str,
+    trust: &SyncTrustV1,
+    now_ms: i64,
+) -> AppResult<SyncS3WriteLockV1> {
+    if let Some(lock) = read_s3_lock(transport)? {
+        if lock.expires_at_ms > now_ms {
+            return Err(sync_error(
+                "KC_SYNC_LOCKED",
+                "remote sync target is already locked",
+                serde_json::json!({
+                    "holder": lock.holder,
+                    "expires_at_ms": lock.expires_at_ms,
+                    "target": transport.target().display()
+                }),
+            ));
+        }
+        transport.delete_key(S3_LOCK_KEY)?;
+    }
+
+    let lock = SyncS3WriteLockV1 {
+        schema_version: 1,
+        holder: format!("{}:{}", vault_id, now_ms),
+        vault_id: vault_id.to_string(),
+        acquired_at_ms: now_ms,
+        expires_at_ms: now_ms + S3_LOCK_TTL_MS,
+        trust_fingerprint: trust.fingerprint.clone(),
+    };
+    let bytes = to_canonical_bytes(&serde_json::to_value(&lock).map_err(|e| {
+        sync_error(
+            "KC_SYNC_TARGET_INVALID",
+            "failed serializing sync lock payload",
+            serde_json::json!({ "error": e.to_string() }),
+        )
+    })?)?;
+
+    let created = transport.write_bytes_if_absent(S3_LOCK_KEY, &bytes, "application/json")?;
+    if !created {
+        if let Some(existing) = read_s3_lock(transport)? {
+            return Err(sync_error(
+                "KC_SYNC_LOCKED",
+                "remote sync target lock already exists",
+                serde_json::json!({
+                    "holder": existing.holder,
+                    "expires_at_ms": existing.expires_at_ms,
+                    "target": transport.target().display()
+                }),
+            ));
+        }
+        return Err(sync_error(
+            "KC_SYNC_LOCKED",
+            "remote sync target lock already exists",
+            serde_json::json!({ "target": transport.target().display() }),
+        ));
+    }
+
+    Ok(lock)
+}
+
+fn release_s3_lock(transport: &S3SyncTransport, holder: &str) -> AppResult<()> {
+    let Some(existing) = read_s3_lock(transport)? else {
+        return Ok(());
+    };
+    if existing.holder == holder {
+        transport.delete_key(S3_LOCK_KEY)?;
+    }
+    Ok(())
+}
+
+fn with_s3_lock<T>(
+    transport: &S3SyncTransport,
+    vault_id: &str,
+    trust: &SyncTrustV1,
+    now_ms: i64,
+    f: impl FnOnce() -> AppResult<T>,
+) -> AppResult<T> {
+    let lock = acquire_s3_lock(transport, vault_id, trust, now_ms)?;
+    let result = f();
+    let release_result = release_s3_lock(transport, &lock.holder);
+
+    match (result, release_result) {
+        (Ok(value), Ok(())) => Ok(value),
+        (Ok(_), Err(e)) => Err(e),
+        (Err(e), _) => Err(e),
+    }
+}
+
+pub fn sync_status(conn: &Connection, target_path: &Path) -> AppResult<SyncStatusV1> {
     ensure_sync_tables(conn)?;
     let remote_head = read_head(target_path)?;
     let seen_remote_snapshot_id = read_state(conn, "sync_remote_head_seen")?;
@@ -448,6 +812,7 @@ pub fn sync_push(
             &local_manifest_hash,
             remote_head.as_ref(),
             seen_remote,
+            None,
         )?;
         return Err(sync_error(
             "KC_SYNC_CONFLICT",
@@ -456,9 +821,7 @@ pub fn sync_push(
         ));
     }
 
-    let snapshot_id = blake3_hex_prefixed(
-        format!("kc.sync.snapshot.v1\n{}\n{}", local_manifest_hash, now_ms).as_bytes(),
-    );
+    let snapshot_id = snapshot_id_for_manifest(&local_manifest_hash, now_ms);
     let snapshot_dir = target_path.join("snapshots").join(&snapshot_id);
     if snapshot_dir.exists() {
         fs::remove_dir_all(&snapshot_dir).map_err(|e| {
@@ -479,10 +842,11 @@ pub fn sync_push(
     copy_tree_sorted(&local_bundle, &snapshot_dir)?;
 
     let head = SyncHeadV1 {
-        schema_version: 1,
+        schema_version: 2,
         snapshot_id: snapshot_id.clone(),
         manifest_hash: local_manifest_hash.clone(),
         created_at_ms: now_ms,
+        trust: None,
     };
     write_head(target_path, &head)?;
 
@@ -510,6 +874,116 @@ pub fn sync_push(
     })
 }
 
+fn sync_push_s3_target(
+    conn: &Connection,
+    vault_path: &Path,
+    transport: S3SyncTransport,
+    now_ms: i64,
+) -> AppResult<SyncPushResultV1> {
+    ensure_sync_tables(conn)?;
+    let vault = vault_open(vault_path)?;
+    let local_trust = derive_local_sync_trust(&vault, now_ms)?;
+
+    let seen_remote = read_state(conn, "sync_remote_head_seen")?;
+    let last_applied_manifest = read_state(conn, "sync_last_applied_manifest_hash")?;
+
+    let (zip_path, _bundle_dir, local_manifest_hash) = build_local_snapshot_zip(vault_path, now_ms)?;
+    let remote_head = transport.read_head()?;
+    ensure_remote_trust_matches(remote_head.as_ref(), &local_trust)?;
+
+    if should_conflict(
+        remote_head.as_ref(),
+        seen_remote.as_deref(),
+        last_applied_manifest.as_deref(),
+        &local_manifest_hash,
+    ) {
+        let conflict_key = create_conflict_artifact_s3(
+            &transport,
+            &vault.vault_id,
+            now_ms,
+            &local_manifest_hash,
+            remote_head.as_ref(),
+            seen_remote,
+            Some(local_trust.fingerprint.clone()),
+        )?;
+        return Err(sync_error(
+            "KC_SYNC_CONFLICT",
+            "remote and local changes diverged; conflict artifact emitted",
+            serde_json::json!({ "conflict_artifact": conflict_key, "target": transport.target().display() }),
+        ));
+    }
+
+    with_s3_lock(&transport, &vault.vault_id, &local_trust, now_ms, || {
+        let latest_remote_head = transport.read_head()?;
+        ensure_remote_trust_matches(latest_remote_head.as_ref(), &local_trust)?;
+
+        if should_conflict(
+            latest_remote_head.as_ref(),
+            seen_remote.as_deref(),
+            last_applied_manifest.as_deref(),
+            &local_manifest_hash,
+        ) {
+            let conflict_key = create_conflict_artifact_s3(
+                &transport,
+                &vault.vault_id,
+                now_ms,
+                &local_manifest_hash,
+                latest_remote_head.as_ref(),
+                seen_remote.clone(),
+                Some(local_trust.fingerprint.clone()),
+            )?;
+            return Err(sync_error(
+                "KC_SYNC_CONFLICT",
+                "remote and local changes diverged; conflict artifact emitted",
+                serde_json::json!({ "conflict_artifact": conflict_key, "target": transport.target().display() }),
+            ));
+        }
+
+        let snapshot_id = snapshot_id_for_manifest(&local_manifest_hash, now_ms);
+        let snapshot_key = format!("snapshots/{}.zip", snapshot_id);
+        let zip_bytes = fs::read(&zip_path).map_err(|e| {
+            sync_error(
+                "KC_SYNC_STATE_FAILED",
+                "failed reading local snapshot zip for upload",
+                serde_json::json!({ "error": e.to_string(), "path": zip_path }),
+            )
+        })?;
+        transport.write_bytes(&snapshot_key, &zip_bytes, "application/zip")?;
+
+        let head = SyncHeadV1 {
+            schema_version: 2,
+            snapshot_id: snapshot_id.clone(),
+            manifest_hash: local_manifest_hash.clone(),
+            created_at_ms: now_ms,
+            trust: Some(local_trust.clone()),
+        };
+        transport.write_head(&head)?;
+
+        write_state(conn, "sync_remote_head_seen", &snapshot_id, now_ms)?;
+        write_state(
+            conn,
+            "sync_last_applied_manifest_hash",
+            &local_manifest_hash,
+            now_ms,
+        )?;
+        write_state(conn, "sync_last_applied_snapshot_id", &snapshot_id, now_ms)?;
+        write_snapshot_log(
+            conn,
+            &snapshot_id,
+            "push",
+            now_ms,
+            &snapshot_key,
+            &local_manifest_hash,
+        )?;
+
+        Ok(SyncPushResultV1 {
+            snapshot_id,
+            manifest_hash: local_manifest_hash,
+            remote_head: head,
+        })
+    })
+}
+
 pub fn sync_push_target(
     conn: &Connection,
     vault_path: &Path,
@@ -518,11 +992,9 @@ pub fn sync_push_target(
 ) -> AppResult<SyncPushResultV1> {
     match SyncTargetUri::parse(target_uri)? {
         SyncTargetUri::FilePath { path } => sync_push(conn, vault_path, Path::new(&path), now_ms),
-        SyncTargetUri::S3 { .. } => Err(sync_error(
-            "KC_SYNC_TARGET_UNSUPPORTED",
-            "s3 sync push is not enabled in this milestone",
-            serde_json::json!({ "target": target_uri }),
-        )),
+        SyncTargetUri::S3 { bucket, prefix } => {
+            sync_push_s3_target(conn, vault_path, S3SyncTransport::new(bucket, prefix), now_ms)
+        }
     }
 }
 
@@ -561,6 +1033,7 @@ pub fn sync_pull(
             &local_manifest_hash,
             Some(&remote_head),
             seen_remote,
+            None,
         )?;
         return Err(sync_error(
             "KC_SYNC_CONFLICT",
@@ -618,6 +1091,151 @@ pub fn sync_pull(
     })
 }
 
+fn sync_pull_s3_target(
+    conn: &Connection,
+    vault_path: &Path,
+    transport: S3SyncTransport,
+    now_ms: i64,
+) -> AppResult<SyncPullResultV1> {
+    ensure_sync_tables(conn)?;
+    let db_path = main_db_path(conn)?;
+    let vault = vault_open(vault_path)?;
+    let local_trust = derive_local_sync_trust(&vault, now_ms)?;
+
+    let remote_head = transport.read_head()?.ok_or_else(|| {
+        sync_error(
+            "KC_SYNC_TARGET_INVALID",
+            "sync target has no head.json",
+            serde_json::json!({ "target": transport.target().display() }),
+        )
+    })?;
+    ensure_remote_trust_matches(Some(&remote_head), &local_trust)?;
+
+    let seen_remote = read_state(conn, "sync_remote_head_seen")?;
+    let last_applied_manifest = read_state(conn, "sync_last_applied_manifest_hash")?;
+
+    let (_local_bundle, local_manifest_hash) = build_local_snapshot(vault_path, now_ms)?;
+
+    if should_conflict(
+        Some(&remote_head),
+        seen_remote.as_deref(),
+        last_applied_manifest.as_deref(),
+        &local_manifest_hash,
+    ) {
+        let conflict_key = create_conflict_artifact_s3(
+            &transport,
+            &vault.vault_id,
+            now_ms,
+            &local_manifest_hash,
+            Some(&remote_head),
+            seen_remote,
+            Some(local_trust.fingerprint.clone()),
+        )?;
+        return Err(sync_error(
+            "KC_SYNC_CONFLICT",
+            "remote and local changes diverged; conflict artifact emitted",
+            serde_json::json!({ "conflict_artifact": conflict_key, "target": transport.target().display() }),
+        ));
+    }
+
+    with_s3_lock(&transport, &vault.vault_id, &local_trust, now_ms, || {
+        let remote_head_locked = transport.read_head()?.ok_or_else(|| {
+            sync_error(
+                "KC_SYNC_TARGET_INVALID",
+                "sync target has no head.json",
+                serde_json::json!({ "target": transport.target().display() }),
+            )
+        })?;
+        ensure_remote_trust_matches(Some(&remote_head_locked), &local_trust)?;
+
+        if should_conflict(
+            Some(&remote_head_locked),
+            seen_remote.as_deref(),
+            last_applied_manifest.as_deref(),
+            &local_manifest_hash,
+        ) {
+            let conflict_key = create_conflict_artifact_s3(
+                &transport,
+                &vault.vault_id,
+                now_ms,
+                &local_manifest_hash,
+                Some(&remote_head_locked),
+                seen_remote.clone(),
+                Some(local_trust.fingerprint.clone()),
+            )?;
+            return Err(sync_error(
+                "KC_SYNC_CONFLICT",
+                "remote and local changes diverged; conflict artifact emitted",
+                serde_json::json!({ "conflict_artifact": conflict_key, "target": transport.target().display() }),
+            ));
+        }
+
+        let snapshot_key = format!("snapshots/{}.zip", remote_head_locked.snapshot_id);
+        let zip_bytes = transport.read_bytes(&snapshot_key)?.ok_or_else(|| {
+            sync_error(
+                "KC_SYNC_TARGET_INVALID",
+                "remote snapshot zip is missing for sync head",
+                serde_json::json!({
+                    "snapshot_id": remote_head_locked.snapshot_id,
+                    "key": snapshot_key,
+                    "target": transport.target().display()
+                }),
+            )
+        })?;
+
+        let unpack_dir = std::env::temp_dir().join(format!(
+            "kc_sync_pull_unpack_{}_{}",
+            std::process::id(),
+            now_ms
+        ));
+        if unpack_dir.exists() {
+            fs::remove_dir_all(&unpack_dir).map_err(|e| {
+                sync_error(
+                    "KC_SYNC_APPLY_FAILED",
+                    "failed clearing existing sync unpack directory",
+                    serde_json::json!({ "error": e.to_string(), "path": unpack_dir }),
+                )
+            })?;
+        }
+        unpack_zip_snapshot(&zip_bytes, &unpack_dir)?;
+        apply_snapshot_to_vault(&unpack_dir, vault_path)?;
+
+        let post_conn = open_db(&db_path)?;
+        write_state(
+            &post_conn,
+            "sync_remote_head_seen",
+            &remote_head_locked.snapshot_id,
+            now_ms,
+        )?;
+        write_state(
+            &post_conn,
+            "sync_last_applied_manifest_hash",
+            &remote_head_locked.manifest_hash,
+            now_ms,
+        )?;
+        write_state(
+            &post_conn,
+            "sync_last_applied_snapshot_id",
+            &remote_head_locked.snapshot_id,
+            now_ms,
+        )?;
+        write_snapshot_log(
+            &post_conn,
+            &remote_head_locked.snapshot_id,
+            "pull",
+            now_ms,
+            &snapshot_key,
+            &remote_head_locked.manifest_hash,
+        )?;
+
+        Ok(SyncPullResultV1 {
+            snapshot_id: remote_head_locked.snapshot_id.clone(),
+            manifest_hash: remote_head_locked.manifest_hash.clone(),
+            remote_head: remote_head_locked,
+        })
+    })
+}
+
 pub fn sync_pull_target(
     conn: &Connection,
     vault_path: &Path,
@@ -626,10 +1244,8 @@ pub fn sync_pull_target(
 ) -> AppResult<SyncPullResultV1> {
     match SyncTargetUri::parse(target_uri)? {
         SyncTargetUri::FilePath { path } => sync_pull(conn, vault_path, Path::new(&path), now_ms),
-        SyncTargetUri::S3 { .. } => Err(sync_error(
-            "KC_SYNC_TARGET_UNSUPPORTED",
-            "s3 sync pull is not enabled in this milestone",
-            serde_json::json!({ "target": target_uri }),
-        )),
+        SyncTargetUri::S3 { bucket, prefix } => {
+            sync_pull_s3_target(conn, vault_path, S3SyncTransport::new(bucket, prefix), now_ms)
+        }
     }
 }

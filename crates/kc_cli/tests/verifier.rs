@@ -1,4 +1,4 @@
-use kc_cli::verifier::verify_bundle;
+use kc_cli::verifier::{verify_bundle, verify_sync_head_payload};
 use kc_core::hashing::blake3_hex_prefixed;
 
 fn base_manifest(db_hash: String) -> serde_json::Value {
@@ -350,4 +350,34 @@ fn verifier_accepts_deterministic_zip_bundle() {
     let (code, report) = verify_bundle(&zip_path).expect("verify zip");
     assert_eq!(code, 0);
     assert_eq!(report.status, "ok");
+}
+
+#[test]
+fn verifier_sync_head_accepts_v2_with_trust() {
+    let payload = serde_json::json!({
+        "schema_version": 2,
+        "snapshot_id": "blake3:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "manifest_hash": "blake3:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "created_at_ms": 100,
+        "trust": {
+            "model": "passphrase_v1",
+            "fingerprint": "blake3:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+            "updated_at_ms": 100
+        }
+    });
+    let bytes = serde_json::to_vec(&payload).expect("sync head bytes");
+    verify_sync_head_payload(&bytes).expect("sync head should validate");
+}
+
+#[test]
+fn verifier_sync_head_rejects_v2_without_trust() {
+    let payload = serde_json::json!({
+        "schema_version": 2,
+        "snapshot_id": "blake3:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "manifest_hash": "blake3:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "created_at_ms": 100
+    });
+    let bytes = serde_json::to_vec(&payload).expect("sync head bytes");
+    let err = verify_sync_head_payload(&bytes).expect_err("sync head should fail schema");
+    assert_eq!(err.code, "KC_VERIFY_FAILED");
 }

@@ -150,6 +150,75 @@ fn manifest_schema() -> Value {
     })
 }
 
+#[allow(dead_code)]
+fn sync_head_schema() -> Value {
+    serde_json::json!({
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "$id": "kc://schemas/sync-head/v2",
+      "type": "object",
+      "required": ["schema_version", "snapshot_id", "manifest_hash", "created_at_ms"],
+      "properties": {
+        "schema_version": { "type": "integer", "enum": [1, 2] },
+        "snapshot_id": { "type": "string" },
+        "manifest_hash": { "type": "string", "pattern": "^blake3:[0-9a-f]{64}$" },
+        "created_at_ms": { "type": "integer" },
+        "trust": {
+          "type": ["object", "null"],
+          "required": ["model", "fingerprint", "updated_at_ms"],
+          "properties": {
+            "model": { "type": "string", "const": "passphrase_v1" },
+            "fingerprint": { "type": "string", "pattern": "^blake3:[0-9a-f]{64}$" },
+            "updated_at_ms": { "type": "integer" }
+          },
+          "additionalProperties": false
+        }
+      },
+      "allOf": [
+        {
+          "if": { "properties": { "schema_version": { "const": 2 } }, "required": ["schema_version"] },
+          "then": { "required": ["trust"] }
+        }
+      ],
+      "additionalProperties": false
+    })
+}
+
+#[allow(dead_code)]
+pub fn verify_sync_head_payload(sync_head_json: &[u8]) -> AppResult<()> {
+    let payload: Value = serde_json::from_slice(sync_head_json).map_err(|e| {
+        AppError::new(
+            "KC_VERIFY_FAILED",
+            "verify",
+            "failed parsing sync head payload",
+            false,
+            serde_json::json!({ "error": e.to_string() }),
+        )
+    })?;
+    let schema = JSONSchema::compile(&sync_head_schema()).map_err(|e| {
+        AppError::new(
+            "KC_VERIFY_FAILED",
+            "verify",
+            "failed compiling sync head schema",
+            false,
+            serde_json::json!({ "error": e.to_string() }),
+        )
+    })?;
+    if let Some(first_error) = schema.validate(&payload).err().and_then(|mut e| e.next()) {
+        return Err(AppError::new(
+            "KC_VERIFY_FAILED",
+            "verify",
+            "sync head payload failed schema validation",
+            false,
+            serde_json::json!({
+                "instance_path": first_error.instance_path.to_string(),
+                "schema_path": first_error.schema_path.to_string(),
+                "error": first_error.to_string(),
+            }),
+        ));
+    }
+    Ok(())
+}
+
 fn verify_folder_bundle(bundle_path: &Path, expected_packaging_format: &str) -> AppResult<(i64, VerifyReportV1)> {
     let manifest_path = bundle_path.join("manifest.json");
     let raw = match fs::read_to_string(&manifest_path) {
