@@ -1,7 +1,7 @@
 # Post-D–K Operations and Follow-up Policy
 
 ## Purpose
-Define stable post-delivery operations policy for KnowledgeCore Desktop, including benchmark governance, local git hygiene, and carry-forward follow-up handling after S/T/U/V execution.
+Define stable post-delivery operations policy for KnowledgeCore Desktop, including benchmark governance, local git hygiene, and carry-forward follow-up handling after S/T/U/V and W/X/Y/Z execution.
 
 ## Scope
 - Applies to local development and pre-release validation runs.
@@ -14,6 +14,10 @@ Define stable post-delivery operations policy for KnowledgeCore Desktop, includi
 - Phase S trust and recovery contracts are active runtime capabilities.
 - Phase T conservative auto-merge preview/apply flow is active and deterministic.
 - Phase U collaborative lineage turn-lock contracts are active across core/CLI/RPC/UI.
+- Phase W managed identity trust v2 (OIDC + device certificate chain) is active.
+- Phase X recovery escrow v2 (provider abstraction with AWS-first adapter) is active.
+- Phase Y sync merge policy `conservative_plus_v2` is active and deterministic.
+- Phase Z lineage governance v2 (vault RBAC + scoped locks) is active across core/CLI/RPC/UI.
 - Carry-forward items now exclude previously delivered deferred capabilities.
 
 ## Bench Baseline Governance
@@ -80,12 +84,12 @@ Define stable post-delivery operations policy for KnowledgeCore Desktop, includi
 - Avoid long-lived milestone branches once merged.
 - Keep only `master` unless there is an active in-progress milestone.
 
-## Deferred Items Carry-forward Policy (Post-V)
+## Deferred Items Carry-forward Policy (Post-Z)
 - The following remain deferred until explicitly promoted:
-  - managed identity or PKI-based trust exchange (beyond manual fingerprint verification),
-  - deterministic auto-merge policies beyond conservative disjoint-only mode,
-  - multi-document or team-role lineage lock governance flows,
-  - remote/escrow recovery-key management integrations.
+  - policy-driven OIDC provider governance automation (beyond current deterministic local provider model),
+  - additional escrow providers beyond AWS-first adapter (e.g., GCP/Azure/HSM variants),
+  - merge policies beyond `conservative_plus_v2`,
+  - lineage governance conditions beyond role-rank precedence (attribute/condition-based access).
 - Promotions must include:
   - explicit phase assignment,
   - schema/API impact statement,
