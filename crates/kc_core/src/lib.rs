@@ -15,5 +15,6 @@ pub mod locator;
 pub mod snippet;
 pub mod chunking;
 pub mod export;
+pub mod rpc_service;
 
 pub use app_error::AppError;

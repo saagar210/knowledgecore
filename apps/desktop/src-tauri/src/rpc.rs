@@ -1,19 +1,11 @@
 use kc_ask::{AskRequest, AskService, RetrievedOnlyAskService};
 use kc_cli::verifier::verify_bundle;
 use kc_core::app_error::AppError;
-use kc_core::canonical::load_canonical_text;
-use kc_core::db::open_db;
-use kc_core::export::{export_bundle, ExportOptions};
-use kc_core::hashing::blake3_hex_prefixed;
-use kc_core::ingest::ingest_bytes;
-use kc_core::locator::{resolve_locator_strict, LocatorV1};
-use kc_core::object_store::ObjectStore;
-use kc_core::types::DocId;
-use kc_core::vault::{vault_open, vault_paths};
+use kc_core::locator::LocatorV1;
+use kc_core::rpc_service;
 use serde::de::Error as DeError;
 use serde::ser::SerializeMap;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
-use std::fs;
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum RpcResponse<T> {
@@ -95,9 +87,11 @@ impl<'de, T: Deserialize<'de>> Deserialize<'de> for RpcResponse<T> {
 }
 
 #[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct VaultInitReq {
     pub vault_path: String,
     pub vault_slug: String,
+    pub now_ms: i64,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -106,6 +100,7 @@ pub struct VaultInitRes {
 }
 
 #[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct VaultOpenReq {
     pub vault_path: String,
 }
@@ -117,10 +112,12 @@ pub struct VaultOpenRes {
 }
 
 #[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct IngestScanFolderReq {
     pub vault_path: String,
     pub scan_root: String,
     pub source_kind: String,
+    pub now_ms: i64,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -129,21 +126,39 @@ pub struct IngestScanFolderRes {
 }
 
 #[derive(Debug, Deserialize)]
-pub struct IngestInboxOnceReq {
+#[serde(deny_unknown_fields)]
+pub struct IngestInboxStartReq {
     pub vault_path: String,
     pub file_path: String,
     pub source_kind: String,
+    pub now_ms: i64,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
-pub struct IngestInboxOnceRes {
+pub struct IngestInboxStartRes {
+    pub job_id: String,
     pub doc_id: String,
 }
 
 #[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct IngestInboxStopReq {
+    pub vault_path: String,
+    pub job_id: String,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct IngestInboxStopRes {
+    pub stopped: bool,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct SearchQueryReq {
     pub vault_path: String,
     pub query: String,
+    pub now_ms: i64,
+    pub limit: Option<usize>,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -159,6 +174,7 @@ pub struct SearchQueryRes {
 }
 
 #[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct LocatorResolveReq {
     pub vault_path: String,
     pub locator: LocatorV1,
@@ -170,10 +186,12 @@ pub struct LocatorResolveRes {
 }
 
 #[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct ExportBundleReq {
     pub vault_path: String,
     pub export_dir: String,
     pub include_vectors: bool,
+    pub now_ms: i64,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -182,6 +200,7 @@ pub struct ExportBundleRes {
 }
 
 #[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct VerifyBundleReq {
     pub bundle_path: String,
 }
@@ -193,9 +212,11 @@ pub struct VerifyBundleRes {
 }
 
 #[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct AskQuestionReq {
     pub vault_path: String,
     pub question: String,
+    pub now_ms: i64,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -205,6 +226,7 @@ pub struct AskQuestionRes {
 }
 
 #[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct EventsListReq {
     pub vault_path: String,
     pub limit: Option<i64>,
@@ -223,6 +245,7 @@ pub struct EventsListRes {
 }
 
 #[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct JobsListReq {
     pub vault_path: String,
 }
@@ -232,27 +255,15 @@ pub struct JobsListRes {
     pub jobs: Vec<String>,
 }
 
-fn mime_for_path(path: &std::path::Path) -> String {
-    match path.extension().and_then(|x| x.to_str()).unwrap_or_default() {
-        "md" => "text/markdown".to_string(),
-        "html" | "htm" => "text/html".to_string(),
-        "pdf" => "application/pdf".to_string(),
-        "txt" => "text/plain".to_string(),
-        _ => "application/octet-stream".to_string(),
-    }
-}
-
-pub fn vault_init_rpc(req: VaultInitReq, now_ms: i64) -> RpcResponse<VaultInitRes> {
-    match kc_core::vault::vault_init(std::path::Path::new(&req.vault_path), &req.vault_slug, now_ms) {
-        Ok(vault) => RpcResponse::ok(VaultInitRes {
-            vault_id: vault.vault_id,
-        }),
+pub fn vault_init_rpc(req: VaultInitReq) -> RpcResponse<VaultInitRes> {
+    match rpc_service::vault_init_service(std::path::Path::new(&req.vault_path), &req.vault_slug, req.now_ms) {
+        Ok(vault_id) => RpcResponse::ok(VaultInitRes { vault_id }),
         Err(error) => RpcResponse::err(error),
     }
 }
 
 pub fn vault_open_rpc(req: VaultOpenReq) -> RpcResponse<VaultOpenRes> {
-    match vault_open(std::path::Path::new(&req.vault_path)) {
+    match rpc_service::vault_open_service(std::path::Path::new(&req.vault_path)) {
         Ok(vault) => RpcResponse::ok(VaultOpenRes {
             vault_id: vault.vault_id,
             vault_slug: vault.vault_slug,
@@ -261,142 +272,75 @@ pub fn vault_open_rpc(req: VaultOpenReq) -> RpcResponse<VaultOpenRes> {
     }
 }
 
-pub fn ingest_scan_folder_rpc(req: IngestScanFolderReq, now_ms: i64) -> RpcResponse<IngestScanFolderRes> {
-    let result = (|| {
-        let vault = vault_open(std::path::Path::new(&req.vault_path))?;
-        let conn = open_db(&std::path::Path::new(&req.vault_path).join(vault.db.relative_path))?;
-        let store = ObjectStore::new(vault_paths(std::path::Path::new(&req.vault_path)).objects_dir);
-        let mut ingested = 0i64;
-        for entry in walkdir::WalkDir::new(&req.scan_root)
-            .into_iter()
-            .filter_map(Result::ok)
-            .filter(|e| e.file_type().is_file())
-        {
-            let path = entry.path();
-            let bytes = fs::read(path).map_err(|e| {
-                AppError::new(
-                    "KC_INGEST_FAILED",
-                    "ingest",
-                    "failed reading scan file",
-                    true,
-                    serde_json::json!({ "error": e.to_string(), "path": path }),
-                )
-            })?;
-            ingest_bytes(
-                &conn,
-                &store,
-                &bytes,
-                &mime_for_path(path),
-                &req.source_kind,
-                now_ms,
-                Some(&path.to_string_lossy()),
-                now_ms,
-            )?;
-            ingested += 1;
-        }
-        Ok::<_, AppError>(IngestScanFolderRes { ingested })
-    })();
-    match result {
-        Ok(data) => RpcResponse::ok(data),
+pub fn ingest_scan_folder_rpc(req: IngestScanFolderReq) -> RpcResponse<IngestScanFolderRes> {
+    match rpc_service::ingest_scan_folder_service(
+        std::path::Path::new(&req.vault_path),
+        std::path::Path::new(&req.scan_root),
+        &req.source_kind,
+        req.now_ms,
+    ) {
+        Ok(ingested) => RpcResponse::ok(IngestScanFolderRes { ingested }),
         Err(error) => RpcResponse::err(error),
     }
 }
 
-pub fn ingest_inbox_once_rpc(req: IngestInboxOnceReq, now_ms: i64) -> RpcResponse<IngestInboxOnceRes> {
-    let result = (|| {
-        let vault = vault_open(std::path::Path::new(&req.vault_path))?;
-        let conn = open_db(&std::path::Path::new(&req.vault_path).join(vault.db.relative_path))?;
-        let store = ObjectStore::new(vault_paths(std::path::Path::new(&req.vault_path)).objects_dir);
-        let path = std::path::Path::new(&req.file_path);
-        let bytes = fs::read(path).map_err(|e| {
-            AppError::new(
-                "KC_INGEST_FAILED",
-                "ingest",
-                "failed reading inbox file",
-                true,
-                serde_json::json!({ "error": e.to_string(), "path": path }),
-            )
-        })?;
-        let out = ingest_bytes(
-            &conn,
-            &store,
-            &bytes,
-            &mime_for_path(path),
-            &req.source_kind,
-            now_ms,
-            Some(&path.to_string_lossy()),
-            now_ms,
-        )?;
-        Ok::<_, AppError>(IngestInboxOnceRes { doc_id: out.doc_id.0 })
-    })();
-    match result {
-        Ok(data) => RpcResponse::ok(data),
+pub fn ingest_inbox_start_rpc(req: IngestInboxStartReq) -> RpcResponse<IngestInboxStartRes> {
+    match rpc_service::ingest_inbox_start_service(
+        std::path::Path::new(&req.vault_path),
+        std::path::Path::new(&req.file_path),
+        &req.source_kind,
+        req.now_ms,
+    ) {
+        Ok(out) => RpcResponse::ok(IngestInboxStartRes {
+            job_id: out.job_id,
+            doc_id: out.doc_id,
+        }),
+        Err(error) => RpcResponse::err(error),
+    }
+}
+
+pub fn ingest_inbox_stop_rpc(req: IngestInboxStopReq) -> RpcResponse<IngestInboxStopRes> {
+    let _ = req.vault_path;
+    match rpc_service::ingest_inbox_stop_service(&req.job_id) {
+        Ok(stopped) => RpcResponse::ok(IngestInboxStopRes { stopped }),
         Err(error) => RpcResponse::err(error),
     }
 }
 
 pub fn search_query_rpc(req: SearchQueryReq) -> RpcResponse<SearchQueryRes> {
-    let result = (|| {
-        let vault = vault_open(std::path::Path::new(&req.vault_path))?;
-        let conn = open_db(&std::path::Path::new(&req.vault_path).join(vault.db.relative_path))?;
-        let store = ObjectStore::new(vault_paths(std::path::Path::new(&req.vault_path)).objects_dir);
-        let mut stmt = conn.prepare(
-            "SELECT doc_id FROM canonical_text ORDER BY created_event_id DESC, doc_id ASC LIMIT 20",
-        ).map_err(|e| AppError::new("KC_RETRIEVAL_FAILED", "search", "failed preparing search query", false, serde_json::json!({ "error": e.to_string() })))?;
-        let rows = stmt
-            .query_map([], |row| row.get::<_, String>(0))
-            .map_err(|e| AppError::new("KC_RETRIEVAL_FAILED", "search", "failed running search query", false, serde_json::json!({ "error": e.to_string() })))?;
-
-        let mut hits = Vec::new();
-        for row in rows {
-            let doc_id = row.map_err(|e| {
-                AppError::new(
-                    "KC_RETRIEVAL_FAILED",
-                    "search",
-                    "failed reading search row",
-                    false,
-                    serde_json::json!({ "error": e.to_string() }),
-                )
-            })?;
-            let text = String::from_utf8(load_canonical_text(&conn, &store, &DocId(doc_id.clone()))?).unwrap_or_default();
-            if text.to_lowercase().contains(&req.query.to_lowercase()) {
-                hits.push(SearchHit {
-                    doc_id,
-                    score: 1.0,
-                    snippet: text.chars().take(120).collect(),
-                });
-            }
-        }
-        Ok::<_, AppError>(SearchQueryRes { hits })
-    })();
-    match result {
-        Ok(data) => RpcResponse::ok(data),
+    match rpc_service::search_query_service(
+        std::path::Path::new(&req.vault_path),
+        &req.query,
+        req.now_ms,
+        req.limit.unwrap_or(20),
+    ) {
+        Ok(hits) => RpcResponse::ok(SearchQueryRes {
+            hits: hits
+                .into_iter()
+                .map(|h| SearchHit {
+                    doc_id: h.doc_id,
+                    score: h.score,
+                    snippet: h.snippet,
+                })
+                .collect(),
+        }),
         Err(error) => RpcResponse::err(error),
     }
 }
 
 pub fn locator_resolve_rpc(req: LocatorResolveReq) -> RpcResponse<LocatorResolveRes> {
-    let result = (|| {
-        let vault = vault_open(std::path::Path::new(&req.vault_path))?;
-        let conn = open_db(&std::path::Path::new(&req.vault_path).join(vault.db.relative_path))?;
-        let store = ObjectStore::new(vault_paths(std::path::Path::new(&req.vault_path)).objects_dir);
-        let text = resolve_locator_strict(&conn, &store, &req.locator)?;
-        Ok::<_, AppError>(LocatorResolveRes { text })
-    })();
-    match result {
-        Ok(data) => RpcResponse::ok(data),
+    match rpc_service::locator_resolve_service(std::path::Path::new(&req.vault_path), &req.locator) {
+        Ok(text) => RpcResponse::ok(LocatorResolveRes { text }),
         Err(error) => RpcResponse::err(error),
     }
 }
 
-pub fn export_bundle_rpc(req: ExportBundleReq, now_ms: i64) -> RpcResponse<ExportBundleRes> {
-    match export_bundle(
+pub fn export_bundle_rpc(req: ExportBundleReq) -> RpcResponse<ExportBundleRes> {
+    match rpc_service::export_bundle_service(
         std::path::Path::new(&req.vault_path),
         std::path::Path::new(&req.export_dir),
-        &ExportOptions {
-            include_vectors: req.include_vectors,
-        },
-        now_ms,
+        req.include_vectors,
+        req.now_ms,
     ) {
         Ok(path) => RpcResponse::ok(ExportBundleRes {
             bundle_path: path.display().to_string(),
@@ -412,12 +356,12 @@ pub fn verify_bundle_rpc(req: VerifyBundleReq) -> RpcResponse<VerifyBundleRes> {
     }
 }
 
-pub fn ask_question_rpc(req: AskQuestionReq, now_ms: i64) -> RpcResponse<AskQuestionRes> {
+pub fn ask_question_rpc(req: AskQuestionReq) -> RpcResponse<AskQuestionRes> {
     let service = RetrievedOnlyAskService::default();
     match service.ask(AskRequest {
         vault_path: std::path::PathBuf::from(&req.vault_path),
         question: req.question,
-        now_ms,
+        now_ms: req.now_ms,
     }) {
         Ok(out) => RpcResponse::ok(AskQuestionRes {
             answer_text: out.answer_text,
@@ -428,77 +372,31 @@ pub fn ask_question_rpc(req: AskQuestionReq, now_ms: i64) -> RpcResponse<AskQues
 }
 
 pub fn events_list_rpc(req: EventsListReq) -> RpcResponse<EventsListRes> {
-    let result = (|| {
-        let vault = vault_open(std::path::Path::new(&req.vault_path))?;
-        let conn = open_db(&std::path::Path::new(&req.vault_path).join(vault.db.relative_path))?;
-        let limit = req.limit.unwrap_or(50).max(1);
-        let mut stmt = conn
-            .prepare("SELECT event_id, ts_ms, type FROM events ORDER BY event_id DESC LIMIT ?1")
-            .map_err(|e| {
-                AppError::new(
-                    "KC_DB_INTEGRITY_FAILED",
-                    "events",
-                    "failed preparing events query",
-                    false,
-                    serde_json::json!({ "error": e.to_string() }),
-                )
-            })?;
-        let rows = stmt
-            .query_map([limit], |row| {
-                Ok(EventItem {
-                    event_id: row.get(0)?,
-                    ts_ms: row.get(1)?,
-                    event_type: row.get(2)?,
+    match rpc_service::events_list_service(std::path::Path::new(&req.vault_path), req.limit.unwrap_or(50)) {
+        Ok(events) => RpcResponse::ok(EventsListRes {
+            events: events
+                .into_iter()
+                .map(|e| EventItem {
+                    event_id: e.event_id,
+                    ts_ms: e.ts_ms,
+                    event_type: e.event_type,
                 })
-            })
-            .map_err(|e| {
-                AppError::new(
-                    "KC_DB_INTEGRITY_FAILED",
-                    "events",
-                    "failed querying events",
-                    false,
-                    serde_json::json!({ "error": e.to_string() }),
-                )
-            })?;
-        let mut events = Vec::new();
-        for row in rows {
-            events.push(row.map_err(|e| {
-                AppError::new(
-                    "KC_DB_INTEGRITY_FAILED",
-                    "events",
-                    "failed decoding event row",
-                    false,
-                    serde_json::json!({ "error": e.to_string() }),
-                )
-            })?);
-        }
-        Ok::<_, AppError>(EventsListRes { events })
-    })();
-    match result {
-        Ok(data) => RpcResponse::ok(data),
+                .collect(),
+        }),
         Err(error) => RpcResponse::err(error),
     }
 }
 
-pub fn jobs_list_rpc(_req: JobsListReq) -> RpcResponse<JobsListRes> {
-    RpcResponse::ok(JobsListRes { jobs: vec![] })
+pub fn jobs_list_rpc(req: JobsListReq) -> RpcResponse<JobsListRes> {
+    match rpc_service::jobs_list_service(std::path::Path::new(&req.vault_path)) {
+        Ok(jobs) => RpcResponse::ok(JobsListRes { jobs }),
+        Err(error) => RpcResponse::err(error),
+    }
 }
 
+#[allow(dead_code)]
 pub fn rpc_health_snapshot(vault_path: &str) -> RpcResponse<serde_json::Value> {
-    let result = (|| {
-        let vault = vault_open(std::path::Path::new(vault_path))?;
-        let conn = open_db(&std::path::Path::new(vault_path).join(vault.db.relative_path.clone()))?;
-        let db_bytes = fs::read(std::path::Path::new(vault_path).join(vault.db.relative_path)).map_err(|e| {
-            AppError::new("KC_RPC_FAILED", "rpc", "failed reading db for health snapshot", false, serde_json::json!({ "error": e.to_string() }))
-        })?;
-        let event_count: i64 = conn.query_row("SELECT COUNT(*) FROM events", [], |r| r.get(0)).unwrap_or(0);
-        Ok::<_, AppError>(serde_json::json!({
-            "vaultId": vault.vault_id,
-            "dbHash": blake3_hex_prefixed(&db_bytes),
-            "eventCount": event_count
-        }))
-    })();
-    match result {
+    match rpc_service::rpc_health_snapshot_service(std::path::Path::new(vault_path)) {
         Ok(data) => RpcResponse::ok(data),
         Err(error) => RpcResponse::err(error),
     }

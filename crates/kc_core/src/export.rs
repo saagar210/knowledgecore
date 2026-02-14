@@ -12,7 +12,21 @@ pub struct ExportOptions {
     pub include_vectors: bool,
 }
 
-pub fn export_bundle(vault_path: &Path, export_dir: &Path, _opts: &ExportOptions, now_ms: i64) -> AppResult<PathBuf> {
+fn rel_for_path(base: &Path, path: &Path) -> AppResult<String> {
+    path.strip_prefix(base)
+        .map(|p| p.to_string_lossy().replace('\\', "/"))
+        .map_err(|e| {
+            AppError::new(
+                "KC_EXPORT_FAILED",
+                "export",
+                "failed deriving relative path for export entry",
+                false,
+                serde_json::json!({ "error": e.to_string(), "base": base, "path": path }),
+            )
+        })
+}
+
+pub fn export_bundle(vault_path: &Path, export_dir: &Path, opts: &ExportOptions, now_ms: i64) -> AppResult<PathBuf> {
     let vault = vault_open(vault_path)?;
     let paths = vault_paths(vault_path);
 
@@ -150,6 +164,67 @@ pub fn export_bundle(vault_path: &Path, export_dir: &Path, _opts: &ExportOptions
         ah.cmp(bh).then(ap.cmp(bp))
     });
 
+    let mut vectors = Vec::new();
+    if opts.include_vectors && paths.vectors_dir.exists() {
+        let mut vector_paths: Vec<_> = walkdir::WalkDir::new(&paths.vectors_dir)
+            .into_iter()
+            .filter_map(Result::ok)
+            .filter(|e| e.file_type().is_file())
+            .map(|e| e.path().to_path_buf())
+            .collect();
+        vector_paths.sort();
+
+        for src in vector_paths {
+            let rel_src = rel_for_path(vault_path, &src)?;
+            let dst = bundle_dir.join(&rel_src);
+            if let Some(parent) = dst.parent() {
+                fs::create_dir_all(parent).map_err(|e| {
+                    AppError::new(
+                        "KC_EXPORT_FAILED",
+                        "export",
+                        "failed creating vectors destination directory",
+                        false,
+                        serde_json::json!({ "error": e.to_string(), "path": parent }),
+                    )
+                })?;
+            }
+            fs::copy(&src, &dst).map_err(|e| {
+                AppError::new(
+                    "KC_EXPORT_FAILED",
+                    "export",
+                    "failed copying vector index file",
+                    false,
+                    serde_json::json!({ "error": e.to_string(), "from": src, "to": dst }),
+                )
+            })?;
+            let bytes = fs::read(&dst).map_err(|e| {
+                AppError::new(
+                    "KC_EXPORT_FAILED",
+                    "export",
+                    "failed reading copied vector index file",
+                    false,
+                    serde_json::json!({ "error": e.to_string(), "path": dst }),
+                )
+            })?;
+            vectors.push(serde_json::json!({
+                "relative_path": rel_src,
+                "hash": blake3_hex_prefixed(&bytes),
+                "bytes": bytes.len(),
+            }));
+        }
+    }
+    vectors.sort_by(|a, b| {
+        let ap = a
+            .get("relative_path")
+            .and_then(|x| x.as_str())
+            .unwrap_or_default();
+        let bp = b
+            .get("relative_path")
+            .and_then(|x| x.as_str())
+            .unwrap_or_default();
+        ap.cmp(bp)
+    });
+
     let chunking_config_hash = hash_chunking_config(&default_chunking_config_v1())?;
 
     let manifest = serde_json::json!({
@@ -176,7 +251,7 @@ pub fn export_bundle(vault_path: &Path, export_dir: &Path, _opts: &ExportOptions
         },
         "objects": objects,
         "indexes": {
-            "vectors": []
+            "vectors": vectors
         }
     });
 

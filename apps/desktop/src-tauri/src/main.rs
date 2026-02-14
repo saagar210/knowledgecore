@@ -2,11 +2,10 @@ mod rpc;
 
 use serde_json::Value;
 
-fn dispatch(cmd: &str, req: Value, now_ms: i64) -> Value {
+fn dispatch(cmd: &str, req: Value) -> Value {
     match cmd {
         "vault_init" => serde_json::to_value(rpc::vault_init_rpc(
             serde_json::from_value(req).expect("vault_init req"),
-            now_ms,
         ))
         .expect("serialize vault_init"),
         "vault_open" => {
@@ -15,14 +14,16 @@ fn dispatch(cmd: &str, req: Value, now_ms: i64) -> Value {
         }
         "ingest_scan_folder" => serde_json::to_value(rpc::ingest_scan_folder_rpc(
             serde_json::from_value(req).expect("ingest_scan_folder req"),
-            now_ms,
         ))
         .expect("serialize ingest_scan_folder"),
-        "ingest_inbox_once" => serde_json::to_value(rpc::ingest_inbox_once_rpc(
-            serde_json::from_value(req).expect("ingest_inbox_once req"),
-            now_ms,
+        "ingest_inbox_start" => serde_json::to_value(rpc::ingest_inbox_start_rpc(
+            serde_json::from_value(req).expect("ingest_inbox_start req"),
         ))
-        .expect("serialize ingest_inbox_once"),
+        .expect("serialize ingest_inbox_start"),
+        "ingest_inbox_stop" => serde_json::to_value(rpc::ingest_inbox_stop_rpc(
+            serde_json::from_value(req).expect("ingest_inbox_stop req"),
+        ))
+        .expect("serialize ingest_inbox_stop"),
         "search_query" => {
             serde_json::to_value(rpc::search_query_rpc(serde_json::from_value(req).expect("search_query req")))
                 .expect("serialize search_query")
@@ -33,7 +34,6 @@ fn dispatch(cmd: &str, req: Value, now_ms: i64) -> Value {
         .expect("serialize locator_resolve"),
         "export_bundle" => serde_json::to_value(rpc::export_bundle_rpc(
             serde_json::from_value(req).expect("export_bundle req"),
-            now_ms,
         ))
         .expect("serialize export_bundle"),
         "verify_bundle" => {
@@ -42,7 +42,6 @@ fn dispatch(cmd: &str, req: Value, now_ms: i64) -> Value {
         }
         "ask_question" => serde_json::to_value(rpc::ask_question_rpc(
             serde_json::from_value(req).expect("ask_question req"),
-            now_ms,
         ))
         .expect("serialize ask_question"),
         "events_list" => serde_json::to_value(rpc::events_list_rpc(
@@ -65,6 +64,6 @@ fn dispatch(cmd: &str, req: Value, now_ms: i64) -> Value {
 }
 
 fn main() {
-    let snapshot = dispatch("jobs_list", serde_json::json!({ "vault_path": "." }), 0);
+    let snapshot = dispatch("jobs_list", serde_json::json!({ "vault_path": "." }));
     println!("kc_desktop_tauri rpc runtime: {}", snapshot);
 }

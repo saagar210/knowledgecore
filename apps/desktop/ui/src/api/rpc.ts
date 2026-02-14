@@ -74,24 +74,42 @@ export async function rpc<TReq, TRes>(cmd: string, req: TReq): Promise<RpcResp<T
 }
 
 export type VaultInitReq = { vault_path: string; vault_slug: string };
+export type VaultInitReqV1 = { vault_path: string; vault_slug: string; now_ms: number };
 export type VaultInitRes = { vault_id: string };
 export type VaultOpenReq = { vault_path: string };
 export type VaultOpenRes = { vault_id: string; vault_slug: string };
-export type IngestScanFolderReq = { vault_path: string; scan_root: string; source_kind: string };
+export type IngestScanFolderReq = {
+  vault_path: string;
+  scan_root: string;
+  source_kind: string;
+  now_ms: number;
+};
 export type IngestScanFolderRes = { ingested: number };
-export type IngestInboxOnceReq = { vault_path: string; file_path: string; source_kind: string };
-export type IngestInboxOnceRes = { doc_id: string };
-export type SearchQueryReq = { vault_path: string; query: string };
+export type IngestInboxStartReq = {
+  vault_path: string;
+  file_path: string;
+  source_kind: string;
+  now_ms: number;
+};
+export type IngestInboxStartRes = { job_id: string; doc_id: string };
+export type IngestInboxStopReq = { vault_path: string; job_id: string };
+export type IngestInboxStopRes = { stopped: boolean };
+export type SearchQueryReq = { vault_path: string; query: string; now_ms: number; limit?: number };
 export type SearchHit = { doc_id: string; score: number; snippet: string };
 export type SearchQueryRes = { hits: SearchHit[] };
 export type LocatorV1 = { v: number; doc_id: { 0: string } | string; canonical_hash: { 0: string } | string; range: { start: number; end: number }; hints?: unknown };
 export type LocatorResolveReq = { vault_path: string; locator: LocatorV1 };
 export type LocatorResolveRes = { text: string };
-export type ExportBundleReq = { vault_path: string; export_dir: string; include_vectors: boolean };
+export type ExportBundleReq = {
+  vault_path: string;
+  export_dir: string;
+  include_vectors: boolean;
+  now_ms: number;
+};
 export type ExportBundleRes = { bundle_path: string };
 export type VerifyBundleReq = { bundle_path: string };
 export type VerifyBundleRes = { exit_code: number; report: unknown };
-export type AskQuestionReq = { vault_path: string; question: string };
+export type AskQuestionReq = { vault_path: string; question: string; now_ms: number };
 export type AskQuestionRes = { answer_text: string; trace_path: string };
 export type EventsListReq = { vault_path: string; limit?: number };
 export type EventItem = { event_id: number; ts_ms: number; event_type: string };
@@ -100,10 +118,11 @@ export type JobsListReq = { vault_path: string };
 export type JobsListRes = { jobs: string[] };
 
 export const rpcMethods = {
-  vaultInit: (req: VaultInitReq) => rpc<VaultInitReq, VaultInitRes>("vault_init", req),
+  vaultInit: (req: VaultInitReqV1) => rpc<VaultInitReqV1, VaultInitRes>("vault_init", req),
   vaultOpen: (req: VaultOpenReq) => rpc<VaultOpenReq, VaultOpenRes>("vault_open", req),
   ingestScanFolder: (req: IngestScanFolderReq) => rpc<IngestScanFolderReq, IngestScanFolderRes>("ingest_scan_folder", req),
-  ingestInboxOnce: (req: IngestInboxOnceReq) => rpc<IngestInboxOnceReq, IngestInboxOnceRes>("ingest_inbox_once", req),
+  ingestInboxStart: (req: IngestInboxStartReq) => rpc<IngestInboxStartReq, IngestInboxStartRes>("ingest_inbox_start", req),
+  ingestInboxStop: (req: IngestInboxStopReq) => rpc<IngestInboxStopReq, IngestInboxStopRes>("ingest_inbox_stop", req),
   searchQuery: (req: SearchQueryReq) => rpc<SearchQueryReq, SearchQueryRes>("search_query", req),
   locatorResolve: (req: LocatorResolveReq) => rpc<LocatorResolveReq, LocatorResolveRes>("locator_resolve", req),
   exportBundle: (req: ExportBundleReq) => rpc<ExportBundleReq, ExportBundleRes>("export_bundle", req),

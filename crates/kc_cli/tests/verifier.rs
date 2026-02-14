@@ -137,3 +137,43 @@ fn verifier_errors_are_sorted_by_code_then_path() {
     expected.sort_by(|a, b| a.code.cmp(&b.code).then(a.path.cmp(&b.path)));
     assert_eq!(sorted.iter().map(|e| (&e.code, &e.path)).collect::<Vec<_>>(), expected.iter().map(|e| (&e.code, &e.path)).collect::<Vec<_>>());
 }
+
+#[test]
+fn verifier_checks_vector_index_files() {
+    let root = tempfile::tempdir().expect("tempdir").keep();
+    let bundle = root.join("bundle5");
+    std::fs::create_dir_all(bundle.join("db")).expect("mkdir db");
+    std::fs::create_dir_all(bundle.join("index/vectors")).expect("mkdir vectors");
+    std::fs::write(bundle.join("db/knowledge.sqlite"), b"db").expect("write db");
+    std::fs::write(bundle.join("index/vectors/a.vec"), b"aaa").expect("write vec");
+
+    let manifest = serde_json::json!({
+        "manifest_version": 1,
+        "vault_id": "11111111-1111-1111-1111-111111111111",
+        "schema_versions": {
+            "vault": 1,
+            "locator": 1,
+            "app_error": 1,
+            "rpc": 1
+        },
+        "chunking_config_hash": "blake3:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+        "db": {
+            "relative_path": "db/knowledge.sqlite",
+            "hash": blake3_hex_prefixed(b"db")
+        },
+        "objects": [],
+        "indexes": {
+            "vectors": [{
+                "relative_path": "index/vectors/a.vec",
+                "hash": blake3_hex_prefixed(b"aaa"),
+                "bytes": 3
+            }]
+        }
+    });
+    std::fs::write(bundle.join("manifest.json"), serde_json::to_vec(&manifest).expect("json"))
+        .expect("write manifest");
+
+    let (code, report) = verify_bundle(&bundle).expect("verify");
+    assert_eq!(code, 0);
+    assert_eq!(report.checked.indexes, 1);
+}

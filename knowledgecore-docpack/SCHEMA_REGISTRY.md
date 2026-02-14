@@ -24,7 +24,7 @@ Authoritative registry of all versioned schemas and contracts. Any schema additi
 | Verifier report | 1 | `spec/13-verifier-and-reporting.md` | kc_cli | UI/automation | 1 | stable exit codes; deterministic ordering; schema-validated manifest input | additive ok | bump on exit/order/schema rule change |
 | AppError | 1 | `spec/14-error-contract-app-error-taxonomy.md` | all | UI/CLI/RPC | 1-adj | UI branches on code only | additive codes ok | bump on struct change |
 | Trace log | 1 | `spec/17-trace-log-schema-and-redaction.md` | kc_ask | UI/automation | 1 | deterministic retrieval chunk ordering + locator ordering | additive ok | bump on struct change |
-| RPC envelope | 1 | `spec/19-tauri-rpc-surface.md` | src-tauri | UI | 1-adj | ok/data or ok/error | additive methods ok | bump on breaking change |
+| RPC envelope | 1 | `spec/19-tauri-rpc-surface.md` | src-tauri | UI | 1-adj | strict one-of envelope; methods include `ingest_inbox_start/stop`; deterministic reqs carry `now_ms` | additive methods ok | bump on breaking change |
 
 ## Schema validation workflow
 - JSON schema validation tests (Rust `jsonschema` crate):
@@ -32,6 +32,8 @@ Authoritative registry of all versioned schemas and contracts. Any schema additi
   - `cargo test -p kc_cli -- schema_*`
 - RPC round-trip serialization tests:
   - `cargo test -p apps_desktop_tauri -- rpc_*`
+  - Deterministic RPC request schema tests:
+    - `cargo test -p apps_desktop_tauri -- rpc_schema_*`
 
 ## Assumption
 - Formal JSON Schemas are embedded in spec files and mirrored into Rust tests as literals to validate at build time.

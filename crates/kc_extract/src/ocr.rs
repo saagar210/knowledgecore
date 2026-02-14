@@ -1,5 +1,7 @@
 use kc_core::app_error::{AppError, AppResult};
+use kc_core::hashing::blake3_hex_prefixed;
 use std::fs;
+use std::path::PathBuf;
 use std::process::Command;
 
 pub struct OcrConfig {
@@ -11,8 +13,8 @@ pub fn should_run_ocr(extracted_len: usize, alnum_ratio: f64) -> bool {
     extracted_len < 800 || alnum_ratio < 0.10
 }
 
-fn tesseract_identity(tesseract_cmd: &str) -> AppResult<()> {
-    Command::new(tesseract_cmd)
+pub fn tesseract_version(tesseract_cmd: &str) -> AppResult<String> {
+    let output = Command::new(tesseract_cmd)
         .arg("--version")
         .output()
         .map_err(|e| {
@@ -24,7 +26,48 @@ fn tesseract_identity(tesseract_cmd: &str) -> AppResult<()> {
                 serde_json::json!({ "error": e.to_string(), "command": tesseract_cmd }),
             )
         })?;
-    Ok(())
+
+    if !output.status.success() {
+        return Err(AppError::new(
+            "KC_TESSERACT_UNAVAILABLE",
+            "extract",
+            "tesseract command failed while checking version",
+            true,
+            serde_json::json!({
+                "status": output.status.code(),
+                "stderr": String::from_utf8_lossy(&output.stderr).to_string(),
+            }),
+        ));
+    }
+
+    Ok(String::from_utf8_lossy(&output.stdout)
+        .lines()
+        .next()
+        .unwrap_or_default()
+        .to_string())
+}
+
+pub fn traineddata_hashes(language: &str) -> Vec<String> {
+    let mut candidates: Vec<PathBuf> = Vec::new();
+    if let Ok(prefix) = std::env::var("TESSDATA_PREFIX") {
+        candidates.push(PathBuf::from(prefix).join(format!("{language}.traineddata")));
+    }
+    candidates.push(PathBuf::from(format!(
+        "/usr/share/tesseract-ocr/5/tessdata/{language}.traineddata"
+    )));
+    candidates.push(PathBuf::from(format!(
+        "/usr/local/share/tessdata/{language}.traineddata"
+    )));
+
+    let mut hashes: Vec<String> = candidates
+        .into_iter()
+        .filter_map(|path| fs::read(path).ok())
+        .map(|bytes| blake3_hex_prefixed(&bytes))
+        .collect();
+
+    hashes.sort();
+    hashes.dedup();
+    hashes
 }
 
 pub fn ocr_pdf_via_images(pdf_bytes: &[u8], ocr_cfg: &OcrConfig) -> AppResult<String> {
@@ -35,7 +78,7 @@ pub fn ocr_pdf_via_images(pdf_bytes: &[u8], ocr_cfg: &OcrConfig) -> AppResult<St
     }
 
     let tesseract_cmd = ocr_cfg.tesseract_cmd.as_deref().unwrap_or("tesseract");
-    tesseract_identity(tesseract_cmd)?;
+    let _ = tesseract_version(tesseract_cmd)?;
 
     let dir = tempfile::tempdir().map_err(|e| {
         AppError::new(

@@ -1,7 +1,7 @@
 use crate::html::canonicalize_html;
 use crate::md::canonicalize_markdown;
 use crate::normalize::normalize_text_v1;
-use crate::ocr::{ocr_pdf_via_images, should_run_ocr, OcrConfig};
+use crate::ocr::{ocr_pdf_via_images, should_run_ocr, tesseract_version, traineddata_hashes, OcrConfig};
 use crate::pdf::{extract_pdf_text, PdfiumConfig};
 use kc_core::app_error::{AppError, AppResult};
 use kc_core::canon_json::to_canonical_bytes;
@@ -23,6 +23,7 @@ impl ExtractService for DefaultExtractor {
     fn extract_canonical(&self, input: ExtractInput<'_>) -> AppResult<CanonicalTextArtifact> {
         let mut ocr_used = false;
         let mut ocr_status = "not_attempted".to_string();
+        let ocr_language = "eng".to_string();
         let raw = match input.mime {
             "text/markdown" => {
                 let text = String::from_utf8(input.bytes.to_vec()).map_err(|e| {
@@ -55,7 +56,7 @@ impl ExtractService for DefaultExtractor {
                         input.bytes,
                         &OcrConfig {
                             tesseract_cmd: None,
-                            language: "eng".to_string(),
+                            language: ocr_language.clone(),
                         },
                     )
                     {
@@ -87,17 +88,21 @@ impl ExtractService for DefaultExtractor {
         let normalized = normalize_text_v1(&raw);
         let canonical_bytes = normalized.into_bytes();
         let hash = blake3_hex_prefixed(&canonical_bytes);
+        let tesseract_cmd = "tesseract";
+        let tesseract_version = tesseract_version(tesseract_cmd).unwrap_or_default();
+        let trained_hashes = traineddata_hashes(&ocr_language);
 
         let toolchain_json = String::from_utf8(
             to_canonical_bytes(&serde_json::json!({
                 "pdfium": {
                     "identity": self.toolchain.pdfium_identity,
-                    "backend": "pdftotext",
+                    "backend": "pdfium-render",
                 },
                 "tesseract": {
                     "identity": self.toolchain.tesseract_identity,
-                    "language": "eng",
-                    "traineddata_hashes": [],
+                    "version": tesseract_version,
+                    "language": ocr_language,
+                    "traineddata_hashes": trained_hashes,
                     "params": {
                         "psm": 6
                     },

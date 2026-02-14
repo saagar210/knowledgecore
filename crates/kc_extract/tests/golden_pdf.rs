@@ -37,6 +37,18 @@ fn golden_pdf_extractor_hashes_canonical() {
     let toolchain: serde_json::Value = serde_json::from_str(&out.toolchain_json).expect("toolchain json");
     assert!(toolchain.get("pdfium").is_some());
     assert!(toolchain.get("tesseract").is_some());
+    assert_eq!(
+        toolchain
+            .get("pdfium")
+            .and_then(|x| x.get("backend"))
+            .and_then(|x| x.as_str()),
+        Some("pdfium-render")
+    );
+    assert!(toolchain
+        .get("tesseract")
+        .and_then(|x| x.get("traineddata_hashes"))
+        .and_then(|x| x.as_array())
+        .is_some());
     let flags: serde_json::Value = serde_json::from_str(&out.extractor_flags_json).expect("flags json");
     assert_eq!(flags.get("source_kind").and_then(|x| x.as_str()), Some("manuals"));
 }

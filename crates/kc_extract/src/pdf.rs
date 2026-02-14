@@ -1,7 +1,6 @@
 use crate::markers::page_marker;
 use kc_core::app_error::{AppError, AppResult};
-use std::fs;
-use std::process::Command;
+use pdfium_render::prelude::*;
 
 pub struct PdfiumConfig {
     pub library_path: Option<String>,
@@ -31,91 +30,78 @@ fn alnum_ratio(content: &str) -> f64 {
     alnum as f64 / total as f64
 }
 
-fn parse_pages(text: &str) -> String {
-    let mut output = String::new();
-    for (idx, page) in text.split('\u{000C}').enumerate() {
-        let trimmed = page.trim();
-        if trimmed.is_empty() {
-            continue;
-        }
-        if !output.is_empty() {
-            output.push('\n');
-        }
-        output.push_str(&page_marker(idx + 1));
-        output.push('\n');
-        output.push_str(trimmed);
+fn bind_pdfium(cfg: &PdfiumConfig) -> AppResult<Pdfium> {
+    let bindings = match &cfg.library_path {
+        Some(path) => Pdfium::bind_to_library(path),
+        None => Pdfium::bind_to_system_library(),
     }
-    if output.is_empty() {
-        output = format!("{}\n", page_marker(1));
-    }
-    output
+    .map_err(|e| {
+        AppError::new(
+            "KC_PDFIUM_UNAVAILABLE",
+            "extract",
+            "pdfium library is unavailable",
+            true,
+            serde_json::json!({
+                "error": e.to_string(),
+                "library_path": cfg.library_path,
+            }),
+        )
+    })?;
+
+    Ok(Pdfium::new(bindings))
 }
 
-fn extract_pdf_via_command(pdf_bytes: &[u8]) -> AppResult<String> {
-    let dir = tempfile::tempdir().map_err(|e| {
-        AppError::new(
-            "KC_CANONICAL_EXTRACT_FAILED",
-            "extract",
-            "failed creating temporary directory for pdf extraction",
-            false,
-            serde_json::json!({ "error": e.to_string() }),
-        )
-    })?;
-    let input_path = dir.path().join("input.pdf");
-    fs::write(&input_path, pdf_bytes).map_err(|e| {
-        AppError::new(
-            "KC_CANONICAL_EXTRACT_FAILED",
-            "extract",
-            "failed writing temporary pdf file",
-            false,
-            serde_json::json!({ "error": e.to_string() }),
-        )
-    })?;
-
-    let output = Command::new("pdftotext")
-        .arg("-layout")
-        .arg("-nopgbrk")
-        .arg(&input_path)
-        .arg("-")
-        .output()
+fn extract_pdf_via_pdfium(pdf_bytes: &[u8], cfg: &PdfiumConfig) -> AppResult<String> {
+    let pdfium = bind_pdfium(cfg)?;
+    let doc = pdfium
+        .load_pdf_from_byte_vec(pdf_bytes.to_vec(), None)
         .map_err(|e| {
             AppError::new(
-                "KC_PDFIUM_UNAVAILABLE",
+                "KC_CANONICAL_EXTRACT_FAILED",
                 "extract",
-                "pdftotext/PDF backend is unavailable",
-                true,
+                "failed opening pdf document",
+                false,
                 serde_json::json!({ "error": e.to_string() }),
             )
         })?;
 
-    if !output.status.success() {
-        return Err(AppError::new(
-            "KC_CANONICAL_EXTRACT_FAILED",
-            "extract",
-            "pdf text extraction command failed",
-            false,
-            serde_json::json!({
-                "status": output.status.code(),
-                "stderr": String::from_utf8_lossy(&output.stderr).to_string(),
-            }),
-        ));
+    let mut output = String::new();
+    for (idx, page) in doc.pages().iter().enumerate() {
+        let page_text = page
+            .text()
+            .map_err(|e| {
+                AppError::new(
+                    "KC_CANONICAL_EXTRACT_FAILED",
+                    "extract",
+                    "failed extracting page text",
+                    false,
+                    serde_json::json!({ "error": e.to_string(), "page": idx + 1 }),
+                )
+            })?
+            .all()
+            .trim()
+            .to_string();
+
+        if !output.is_empty() {
+            output.push('\n');
+        }
+        output.push_str(&page_marker(idx + 1));
+        if !page_text.is_empty() {
+            output.push('\n');
+            output.push_str(&page_text);
+        }
     }
 
-    let text = String::from_utf8(output.stdout).map_err(|e| {
-        AppError::new(
-            "KC_CANONICAL_EXTRACT_FAILED",
-            "extract",
-            "pdf extraction output was not utf8",
-            false,
-            serde_json::json!({ "error": e.to_string() }),
-        )
-    })?;
-    Ok(parse_pages(&text))
+    if output.is_empty() {
+        output = format!("{}\n", page_marker(1));
+    }
+
+    Ok(output)
 }
 
-pub fn extract_pdf_text(pdf_bytes: &[u8], _cfg: &PdfiumConfig) -> AppResult<PdfExtractOutput> {
+pub fn extract_pdf_text(pdf_bytes: &[u8], cfg: &PdfiumConfig) -> AppResult<PdfExtractOutput> {
     let text = if pdf_bytes.starts_with(b"%PDF") {
-        extract_pdf_via_command(pdf_bytes)?
+        extract_pdf_via_pdfium(pdf_bytes, cfg)?
     } else {
         let decoded = String::from_utf8(pdf_bytes.to_vec()).map_err(|e| {
             AppError::new(
@@ -128,6 +114,7 @@ pub fn extract_pdf_text(pdf_bytes: &[u8], _cfg: &PdfiumConfig) -> AppResult<PdfE
         })?;
         format!("{}\n{}", page_marker(1), decoded)
     };
+
     let ratio = alnum_ratio(&text);
 
     Ok(PdfExtractOutput {

@@ -60,3 +60,54 @@ fn export_manifest_has_deterministic_object_order() {
     let db_actual = blake3_hex_prefixed(&std::fs::read(bundle.join(db_rel)).expect("read db"));
     assert_eq!(db_hash, db_actual);
 }
+
+#[test]
+fn export_manifest_includes_vectors_when_enabled() {
+    let root = tempfile::tempdir().expect("tempdir").keep();
+    let vault_root = root.join("vault");
+    let export_root = root.join("exports");
+
+    vault_init(&vault_root, "demo", 1000).expect("vault init");
+    let _conn = open_db(&vault_root.join("db/knowledge.sqlite")).expect("open db");
+    std::fs::create_dir_all(vault_root.join("index/vectors")).expect("mkdir vectors");
+    std::fs::write(vault_root.join("index/vectors/b.vec"), b"bbb").expect("write b");
+    std::fs::write(vault_root.join("index/vectors/a.vec"), b"aaa").expect("write a");
+
+    let bundle = export_bundle(
+        &vault_root,
+        &export_root,
+        &ExportOptions {
+            include_vectors: true,
+        },
+        124,
+    )
+    .expect("export");
+
+    let manifest: serde_json::Value =
+        serde_json::from_slice(&std::fs::read(bundle.join("manifest.json")).expect("read manifest"))
+            .expect("parse manifest");
+
+    let vectors = manifest
+        .get("indexes")
+        .and_then(|x| x.get("vectors"))
+        .and_then(|x| x.as_array())
+        .expect("vectors array");
+    assert_eq!(vectors.len(), 2);
+
+    let rels: Vec<String> = vectors
+        .iter()
+        .map(|v| {
+            v.get("relative_path")
+                .and_then(|x| x.as_str())
+                .unwrap_or_default()
+                .to_string()
+        })
+        .collect();
+    assert_eq!(
+        rels,
+        vec![
+            "index/vectors/a.vec".to_string(),
+            "index/vectors/b.vec".to_string()
+        ]
+    );
+}

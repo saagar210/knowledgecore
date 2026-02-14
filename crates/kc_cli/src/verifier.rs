@@ -182,6 +182,12 @@ pub fn verify_bundle(bundle_path: &Path) -> AppResult<(i64, VerifyReportV1)> {
         .and_then(|x| x.as_array())
         .cloned()
         .unwrap_or_default();
+    let vectors = manifest
+        .get("indexes")
+        .and_then(|x| x.get("vectors"))
+        .and_then(|x| x.as_array())
+        .cloned()
+        .unwrap_or_default();
 
     for obj in &objects {
         let path = obj
@@ -226,6 +232,49 @@ pub fn verify_bundle(bundle_path: &Path) -> AppResult<(i64, VerifyReportV1)> {
         }
     }
 
+    for idx in &vectors {
+        let path = idx
+            .get("relative_path")
+            .and_then(|x| x.as_str())
+            .unwrap_or_default()
+            .to_string();
+        let expected_hash = idx
+            .get("hash")
+            .and_then(|x| x.as_str())
+            .unwrap_or_default()
+            .to_string();
+
+        let abs = bundle_path.join(&path);
+        if !abs.exists() {
+            errors.push(VerifyErrorEntry {
+                code: "OBJECT_MISSING".to_string(),
+                path,
+                expected: Some(expected_hash),
+                actual: None,
+            });
+            continue;
+        }
+
+        let actual_hash = blake3_hex_prefixed(&fs::read(&abs).map_err(|e| {
+            AppError::new(
+                "KC_VERIFY_FAILED",
+                "verify",
+                "failed to read index file during verification",
+                false,
+                serde_json::json!({ "error": e.to_string() }),
+            )
+        })?);
+
+        if actual_hash != expected_hash {
+            errors.push(VerifyErrorEntry {
+                code: "OBJECT_HASH_MISMATCH".to_string(),
+                path,
+                expected: Some(expected_hash),
+                actual: Some(actual_hash),
+            });
+        }
+    }
+
     let code = if errors.is_empty() {
         0
     } else if errors.iter().any(|e| e.code == "DB_HASH_MISMATCH") {
@@ -243,7 +292,7 @@ pub fn verify_bundle(bundle_path: &Path) -> AppResult<(i64, VerifyReportV1)> {
         errors,
         CheckedCounts {
             objects: objects.len() as i64,
-            indexes: 0,
+            indexes: vectors.len() as i64,
         },
     ))
 }
