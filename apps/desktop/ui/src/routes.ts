@@ -31,5 +31,5 @@ export const routeDescriptors: RouteDescriptor[] = [
   { id: "verify", title: "Verifier", rpcMethod: "verifyBundle" },
   { id: "events", title: "Events", rpcMethod: "eventsList" },
   { id: "settings", title: "Settings", rpcMethod: "jobsList" },
-  { id: "lineage", title: "Lineage", rpcMethod: "lineageQuery" }
+  { id: "lineage", title: "Lineage", rpcMethod: "lineageQueryV2" }
 ];

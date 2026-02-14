@@ -201,6 +201,47 @@ export type LineageQueryRes = {
   nodes: LineageNode[];
   edges: LineageEdge[];
 };
+export type LineageEdgeV2 = {
+  from_node_id: string;
+  to_node_id: string;
+  relation: string;
+  evidence: string;
+  origin: string;
+};
+export type LineageQueryV2Req = LineageQueryReq;
+export type LineageQueryV2Res = {
+  schema_version: number;
+  seed_doc_id: string;
+  depth: number;
+  generated_at_ms: number;
+  nodes: LineageNode[];
+  edges: LineageEdgeV2[];
+};
+export type LineageOverlayEntry = {
+  overlay_id: string;
+  doc_id: string;
+  from_node_id: string;
+  to_node_id: string;
+  relation: string;
+  evidence: string;
+  created_at_ms: number;
+  created_by: string;
+};
+export type LineageOverlayAddReq = {
+  vault_path: string;
+  doc_id: string;
+  from_node_id: string;
+  to_node_id: string;
+  relation: string;
+  evidence: string;
+  created_at_ms: number;
+  created_by?: string;
+};
+export type LineageOverlayAddRes = { overlay: LineageOverlayEntry };
+export type LineageOverlayRemoveReq = { vault_path: string; overlay_id: string };
+export type LineageOverlayRemoveRes = { removed_overlay_id: string };
+export type LineageOverlayListReq = { vault_path: string; doc_id: string };
+export type LineageOverlayListRes = { overlays: LineageOverlayEntry[] };
 export type PreviewStatusReq = Record<string, never>;
 export type PreviewCapabilityDraft = {
   schema_version: number;
@@ -245,7 +286,15 @@ export const rpcMethods = {
   syncPush: (req: SyncPushReq) => rpc<SyncPushReq, SyncPushRes>("sync_push", req),
   syncPull: (req: SyncPullReq) => rpc<SyncPullReq, SyncPullRes>("sync_pull", req),
   lineageQuery: (req: LineageQueryReq) =>
-    rpc<LineageQueryReq, LineageQueryRes>("lineage_query", req)
+    rpc<LineageQueryReq, LineageQueryRes>("lineage_query", req),
+  lineageQueryV2: (req: LineageQueryV2Req) =>
+    rpc<LineageQueryV2Req, LineageQueryV2Res>("lineage_query_v2", req),
+  lineageOverlayAdd: (req: LineageOverlayAddReq) =>
+    rpc<LineageOverlayAddReq, LineageOverlayAddRes>("lineage_overlay_add", req),
+  lineageOverlayRemove: (req: LineageOverlayRemoveReq) =>
+    rpc<LineageOverlayRemoveReq, LineageOverlayRemoveRes>("lineage_overlay_remove", req),
+  lineageOverlayList: (req: LineageOverlayListReq) =>
+    rpc<LineageOverlayListReq, LineageOverlayListRes>("lineage_overlay_list", req)
 };
 
 export function previewRpcEnabled(): boolean {

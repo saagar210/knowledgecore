@@ -13,6 +13,6 @@ describe("route coverage", () => {
   it("has descriptors for each route", () => {
     expect(routeDescriptors.length).toBe(appRoutes.length);
     expect(routeDescriptors.find((d) => d.id === "ask")?.rpcMethod).toBe("askQuestion");
-    expect(routeDescriptors.find((d) => d.id === "lineage")?.rpcMethod).toBe("lineageQuery");
+    expect(routeDescriptors.find((d) => d.id === "lineage")?.rpcMethod).toBe("lineageQueryV2");
   });
 });

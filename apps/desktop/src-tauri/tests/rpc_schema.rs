@@ -2,7 +2,8 @@ use apps_desktop_tauri::rpc::{
     AskQuestionReq, SearchQueryReq, VaultEncryptionEnableReq, VaultEncryptionMigrateReq,
     VaultEncryptionStatusReq, VaultInitReq, SyncPushReq, SyncPullReq, SyncStatusReq,
     VaultLockReq, VaultLockStatusReq, VaultUnlockReq,
-    LineageQueryReq,
+    LineageOverlayAddReq, LineageOverlayListReq, LineageOverlayRemoveReq, LineageQueryReq,
+    LineageQueryV2Req,
 };
 
 #[test]
@@ -139,6 +140,66 @@ fn rpc_schema_lineage_rejects_unknown_fields() {
         "extra": "nope"
     });
     assert!(serde_json::from_value::<LineageQueryReq>(invalid).is_err());
+}
+
+#[test]
+fn rpc_schema_requires_now_ms_for_lineage_query_v2() {
+    let missing_now = serde_json::json!({
+        "vault_path": "/tmp/vault",
+        "seed_doc_id": "doc-1",
+        "depth": 1
+    });
+    assert!(serde_json::from_value::<LineageQueryV2Req>(missing_now).is_err());
+}
+
+#[test]
+fn rpc_schema_lineage_overlay_add_requires_created_at_ms() {
+    let missing_created_at = serde_json::json!({
+        "vault_path": "/tmp/vault",
+        "doc_id": "doc-1",
+        "from_node_id": "doc:doc-1",
+        "to_node_id": "chunk:c1",
+        "relation": "supports",
+        "evidence": "manual"
+    });
+    assert!(serde_json::from_value::<LineageOverlayAddReq>(missing_created_at).is_err());
+}
+
+#[test]
+fn rpc_schema_lineage_overlay_requests_validate_shapes() {
+    let add = serde_json::json!({
+        "vault_path": "/tmp/vault",
+        "doc_id": "doc-1",
+        "from_node_id": "doc:doc-1",
+        "to_node_id": "chunk:c1",
+        "relation": "supports",
+        "evidence": "manual",
+        "created_at_ms": 123,
+        "created_by": "user"
+    });
+    assert!(serde_json::from_value::<LineageOverlayAddReq>(add).is_ok());
+
+    let list = serde_json::json!({
+        "vault_path": "/tmp/vault",
+        "doc_id": "doc-1"
+    });
+    assert!(serde_json::from_value::<LineageOverlayListReq>(list).is_ok());
+
+    let remove = serde_json::json!({
+        "vault_path": "/tmp/vault",
+        "overlay_id": "blake3:abcd"
+    });
+    assert!(serde_json::from_value::<LineageOverlayRemoveReq>(remove).is_ok());
+}
+
+#[test]
+fn rpc_schema_lineage_overlay_rejects_unknown_fields() {
+    let invalid = serde_json::json!({
+        "vault_path": "/tmp/vault",
+        "overlay_id": "blake3:abcd",
+        "extra": "nope"
+    });
+    assert!(serde_json::from_value::<LineageOverlayRemoveReq>(invalid).is_err());
 }
 
 #[cfg(not(feature = "phase_l_preview"))]

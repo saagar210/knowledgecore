@@ -116,6 +116,32 @@ pub fn lineage_query(req: rpc::LineageQueryReq) -> rpc::RpcResponse<rpc::Lineage
     rpc::lineage_query_rpc(req)
 }
 
+#[tauri::command]
+pub fn lineage_query_v2(req: rpc::LineageQueryV2Req) -> rpc::RpcResponse<rpc::LineageQueryV2Res> {
+    rpc::lineage_query_v2_rpc(req)
+}
+
+#[tauri::command]
+pub fn lineage_overlay_add(
+    req: rpc::LineageOverlayAddReq,
+) -> rpc::RpcResponse<rpc::LineageOverlayAddRes> {
+    rpc::lineage_overlay_add_rpc(req)
+}
+
+#[tauri::command]
+pub fn lineage_overlay_remove(
+    req: rpc::LineageOverlayRemoveReq,
+) -> rpc::RpcResponse<rpc::LineageOverlayRemoveRes> {
+    rpc::lineage_overlay_remove_rpc(req)
+}
+
+#[tauri::command]
+pub fn lineage_overlay_list(
+    req: rpc::LineageOverlayListReq,
+) -> rpc::RpcResponse<rpc::LineageOverlayListRes> {
+    rpc::lineage_overlay_list_rpc(req)
+}
+
 #[cfg(feature = "phase_l_preview")]
 #[tauri::command]
 pub fn preview_status(req: rpc::PreviewStatusReq) -> rpc::RpcResponse<rpc::PreviewStatusRes> {

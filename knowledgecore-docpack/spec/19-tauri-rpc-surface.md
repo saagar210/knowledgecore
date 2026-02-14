@@ -90,6 +90,12 @@ Versioned RPC surface v1, envelope schema, and determinism notes.
          - events_list, jobs_list
          - sync_status, sync_push, sync_pull
          - lineage_query
+         - lineage_query_v2
+         - lineage_overlay_add, lineage_overlay_remove, lineage_overlay_list
+
+         ### Compatibility note
+         - `lineage_query` (v1 response) remains supported during transition.
+         - `lineage_query_v2` is the primary method for overlay-aware lineage responses.
 
          ## Determinism note
          - now_ms is passed by caller (UI/tests) to make snapshots deterministic.

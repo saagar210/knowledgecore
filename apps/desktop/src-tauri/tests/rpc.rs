@@ -1,7 +1,10 @@
 use apps_desktop_tauri::rpc::{
+    lineage_overlay_add_rpc, lineage_overlay_list_rpc, lineage_overlay_remove_rpc,
+    lineage_query_v2_rpc,
     ingest_inbox_start_rpc, ingest_inbox_stop_rpc, jobs_list_rpc, vault_encryption_enable_rpc,
     vault_encryption_migrate_rpc, vault_encryption_status_rpc, vault_init_rpc, vault_open_rpc,
     vault_lock_rpc, vault_lock_status_rpc, vault_unlock_rpc,
+    LineageOverlayAddReq, LineageOverlayListReq, LineageOverlayRemoveReq, LineageQueryV2Req,
     IngestInboxStartReq, IngestInboxStopReq, JobsListReq, RpcResponse, VaultEncryptionEnableReq,
     VaultEncryptionMigrateReq, VaultEncryptionStatusReq, VaultInitReq, VaultLockReq,
     VaultLockStatusReq, VaultOpenReq, VaultUnlockReq, SyncPullReq, SyncPushReq, SyncStatusReq,
@@ -403,6 +406,125 @@ fn rpc_lineage_query_is_deterministic_and_sorted() {
             assert_eq!(edge_keys, sorted_edge_keys);
         }
         RpcResponse::Err { error } => panic!("lineage query failed: {}", error.code),
+    }
+}
+
+#[test]
+fn rpc_lineage_v2_overlay_round_trip_is_deterministic() {
+    let root = tempfile::tempdir().expect("tempdir").keep();
+    let input = root.join("note-lineage-v2.txt");
+    std::fs::write(&input, b"lineage seed v2").expect("write input");
+
+    let init = vault_init_rpc(VaultInitReq {
+        vault_path: root.to_string_lossy().to_string(),
+        vault_slug: "demo".to_string(),
+        now_ms: 1,
+    });
+    match init {
+        RpcResponse::Ok { .. } => {}
+        RpcResponse::Err { error } => panic!("vault init failed: {}", error.code),
+    }
+
+    let started = ingest_inbox_start_rpc(IngestInboxStartReq {
+        vault_path: root.to_string_lossy().to_string(),
+        file_path: input.to_string_lossy().to_string(),
+        source_kind: "notes".to_string(),
+        now_ms: 2,
+    });
+    let seed_doc_id = match started {
+        RpcResponse::Ok { data } => data.doc_id,
+        RpcResponse::Err { error } => panic!("ingest failed: {}", error.code),
+    };
+
+    let added = lineage_overlay_add_rpc(LineageOverlayAddReq {
+        vault_path: root.to_string_lossy().to_string(),
+        doc_id: seed_doc_id.clone(),
+        from_node_id: format!("doc:{seed_doc_id}"),
+        to_node_id: "note:overlay-1".to_string(),
+        relation: "supports".to_string(),
+        evidence: "manual".to_string(),
+        created_at_ms: 3,
+        created_by: Some("desktop-test".to_string()),
+    });
+    let overlay_id = match added {
+        RpcResponse::Ok { data } => {
+            assert_eq!(data.overlay.doc_id, seed_doc_id);
+            data.overlay.overlay_id
+        }
+        RpcResponse::Err { error } => panic!("overlay add failed: {}", error.code),
+    };
+
+    let listed = lineage_overlay_list_rpc(LineageOverlayListReq {
+        vault_path: root.to_string_lossy().to_string(),
+        doc_id: seed_doc_id.clone(),
+    });
+    match listed {
+        RpcResponse::Ok { data } => {
+            assert_eq!(data.overlays.len(), 1);
+            assert_eq!(data.overlays[0].overlay_id, overlay_id);
+        }
+        RpcResponse::Err { error } => panic!("overlay list failed: {}", error.code),
+    }
+
+    let req = LineageQueryV2Req {
+        vault_path: root.to_string_lossy().to_string(),
+        seed_doc_id: seed_doc_id.clone(),
+        depth: 2,
+        now_ms: 4,
+    };
+    let res_a = lineage_query_v2_rpc(req);
+    let res_b = lineage_query_v2_rpc(LineageQueryV2Req {
+        vault_path: root.to_string_lossy().to_string(),
+        seed_doc_id: seed_doc_id.clone(),
+        depth: 2,
+        now_ms: 4,
+    });
+    assert_eq!(
+        serde_json::to_value(&res_a).expect("serialize lineage a"),
+        serde_json::to_value(&res_b).expect("serialize lineage b")
+    );
+
+    match res_a {
+        RpcResponse::Ok { data } => {
+            let has_overlay_edge = data.edges.iter().any(|edge| edge.origin == "overlay");
+            assert!(has_overlay_edge);
+
+            let keys: Vec<(String, String, String, String, String)> = data
+                .edges
+                .iter()
+                .map(|e| {
+                    (
+                        e.from_node_id.clone(),
+                        e.to_node_id.clone(),
+                        e.relation.clone(),
+                        e.evidence.clone(),
+                        e.origin.clone(),
+                    )
+                })
+                .collect();
+            let mut sorted = keys.clone();
+            sorted.sort();
+            assert_eq!(keys, sorted);
+        }
+        RpcResponse::Err { error } => panic!("lineage query v2 failed: {}", error.code),
+    }
+
+    let removed = lineage_overlay_remove_rpc(LineageOverlayRemoveReq {
+        vault_path: root.to_string_lossy().to_string(),
+        overlay_id: overlay_id.clone(),
+    });
+    match removed {
+        RpcResponse::Ok { data } => assert_eq!(data.removed_overlay_id, overlay_id),
+        RpcResponse::Err { error } => panic!("overlay remove failed: {}", error.code),
+    }
+
+    let listed_after_remove = lineage_overlay_list_rpc(LineageOverlayListReq {
+        vault_path: root.to_string_lossy().to_string(),
+        doc_id: seed_doc_id,
+    });
+    match listed_after_remove {
+        RpcResponse::Ok { data } => assert!(data.overlays.is_empty()),
+        RpcResponse::Err { error } => panic!("overlay list after remove failed: {}", error.code),
     }
 }
 

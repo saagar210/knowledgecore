@@ -416,6 +416,56 @@ pub fn lineage_query_service(
     crate::lineage::query_lineage(&conn, seed_doc_id, depth, now_ms)
 }
 
+pub fn lineage_query_v2_service(
+    vault_path: &Path,
+    seed_doc_id: &str,
+    depth: i64,
+    now_ms: i64,
+) -> AppResult<crate::lineage::LineageQueryResV2> {
+    let vault = vault_open(vault_path)?;
+    let conn = open_db(&vault_path.join(vault.db.relative_path))?;
+    crate::lineage::query_lineage_v2(&conn, seed_doc_id, depth, now_ms)
+}
+
+pub fn lineage_overlay_add_service(
+    vault_path: &Path,
+    doc_id: &str,
+    from_node_id: &str,
+    to_node_id: &str,
+    relation: &str,
+    evidence: &str,
+    created_at_ms: i64,
+    created_by: Option<&str>,
+) -> AppResult<crate::lineage::LineageOverlayEntryV1> {
+    let vault = vault_open(vault_path)?;
+    let conn = open_db(&vault_path.join(vault.db.relative_path))?;
+    crate::lineage::lineage_overlay_add(
+        &conn,
+        doc_id,
+        from_node_id,
+        to_node_id,
+        relation,
+        evidence,
+        created_at_ms,
+        created_by.unwrap_or("overlay"),
+    )
+}
+
+pub fn lineage_overlay_remove_service(vault_path: &Path, overlay_id: &str) -> AppResult<()> {
+    let vault = vault_open(vault_path)?;
+    let conn = open_db(&vault_path.join(vault.db.relative_path))?;
+    crate::lineage::lineage_overlay_remove(&conn, overlay_id)
+}
+
+pub fn lineage_overlay_list_service(
+    vault_path: &Path,
+    doc_id: &str,
+) -> AppResult<Vec<crate::lineage::LineageOverlayEntryV1>> {
+    let vault = vault_open(vault_path)?;
+    let conn = open_db(&vault_path.join(vault.db.relative_path))?;
+    crate::lineage::lineage_overlay_list(&conn, doc_id)
+}
+
 fn load_object_hashes(conn: &rusqlite::Connection) -> AppResult<Vec<ObjectHash>> {
     let mut stmt = conn
         .prepare("SELECT object_hash FROM objects ORDER BY object_hash ASC")

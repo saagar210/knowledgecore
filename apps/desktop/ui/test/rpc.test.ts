@@ -33,7 +33,11 @@ describe("rpc client", () => {
       "syncStatus",
       "syncPush",
       "syncPull",
-      "lineageQuery"
+      "lineageQuery",
+      "lineageQueryV2",
+      "lineageOverlayAdd",
+      "lineageOverlayRemove",
+      "lineageOverlayList"
     ]);
   });
 

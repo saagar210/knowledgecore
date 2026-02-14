@@ -426,6 +426,88 @@ pub struct LineageQueryRes {
     pub edges: Vec<LineageEdgeRes>,
 }
 
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct LineageQueryV2Req {
+    pub vault_path: String,
+    pub seed_doc_id: String,
+    pub depth: i64,
+    pub now_ms: i64,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct LineageEdgeV2Res {
+    pub from_node_id: String,
+    pub to_node_id: String,
+    pub relation: String,
+    pub evidence: String,
+    pub origin: String,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct LineageQueryV2Res {
+    pub schema_version: i64,
+    pub seed_doc_id: String,
+    pub depth: i64,
+    pub generated_at_ms: i64,
+    pub nodes: Vec<LineageNodeRes>,
+    pub edges: Vec<LineageEdgeV2Res>,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct LineageOverlayEntryRes {
+    pub overlay_id: String,
+    pub doc_id: String,
+    pub from_node_id: String,
+    pub to_node_id: String,
+    pub relation: String,
+    pub evidence: String,
+    pub created_at_ms: i64,
+    pub created_by: String,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct LineageOverlayAddReq {
+    pub vault_path: String,
+    pub doc_id: String,
+    pub from_node_id: String,
+    pub to_node_id: String,
+    pub relation: String,
+    pub evidence: String,
+    pub created_at_ms: i64,
+    pub created_by: Option<String>,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct LineageOverlayAddRes {
+    pub overlay: LineageOverlayEntryRes,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct LineageOverlayRemoveReq {
+    pub vault_path: String,
+    pub overlay_id: String,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct LineageOverlayRemoveRes {
+    pub removed_overlay_id: String,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct LineageOverlayListReq {
+    pub vault_path: String,
+    pub doc_id: String,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct LineageOverlayListRes {
+    pub overlays: Vec<LineageOverlayEntryRes>,
+}
+
 #[cfg(feature = "phase_l_preview")]
 #[derive(Debug, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -755,6 +837,98 @@ pub fn lineage_query_rpc(req: LineageQueryReq) -> RpcResponse<LineageQueryRes> {
                     evidence: e.evidence,
                 })
                 .collect(),
+        }),
+        Err(error) => RpcResponse::err(error),
+    }
+}
+
+fn map_lineage_overlay_entry(entry: kc_core::lineage::LineageOverlayEntryV1) -> LineageOverlayEntryRes {
+    LineageOverlayEntryRes {
+        overlay_id: entry.overlay_id,
+        doc_id: entry.doc_id,
+        from_node_id: entry.from_node_id,
+        to_node_id: entry.to_node_id,
+        relation: entry.relation,
+        evidence: entry.evidence,
+        created_at_ms: entry.created_at_ms,
+        created_by: entry.created_by,
+    }
+}
+
+pub fn lineage_query_v2_rpc(req: LineageQueryV2Req) -> RpcResponse<LineageQueryV2Res> {
+    match rpc_service::lineage_query_v2_service(
+        std::path::Path::new(&req.vault_path),
+        &req.seed_doc_id,
+        req.depth,
+        req.now_ms,
+    ) {
+        Ok(res) => RpcResponse::ok(LineageQueryV2Res {
+            schema_version: res.schema_version,
+            seed_doc_id: res.seed_doc_id,
+            depth: res.depth,
+            generated_at_ms: res.generated_at_ms,
+            nodes: res
+                .nodes
+                .into_iter()
+                .map(|n| LineageNodeRes {
+                    node_id: n.node_id,
+                    kind: n.kind,
+                    label: n.label,
+                    metadata: n.metadata,
+                })
+                .collect(),
+            edges: res
+                .edges
+                .into_iter()
+                .map(|e| LineageEdgeV2Res {
+                    from_node_id: e.from_node_id,
+                    to_node_id: e.to_node_id,
+                    relation: e.relation,
+                    evidence: e.evidence,
+                    origin: e.origin,
+                })
+                .collect(),
+        }),
+        Err(error) => RpcResponse::err(error),
+    }
+}
+
+pub fn lineage_overlay_add_rpc(req: LineageOverlayAddReq) -> RpcResponse<LineageOverlayAddRes> {
+    match rpc_service::lineage_overlay_add_service(
+        std::path::Path::new(&req.vault_path),
+        &req.doc_id,
+        &req.from_node_id,
+        &req.to_node_id,
+        &req.relation,
+        &req.evidence,
+        req.created_at_ms,
+        req.created_by.as_deref(),
+    ) {
+        Ok(overlay) => RpcResponse::ok(LineageOverlayAddRes {
+            overlay: map_lineage_overlay_entry(overlay),
+        }),
+        Err(error) => RpcResponse::err(error),
+    }
+}
+
+pub fn lineage_overlay_remove_rpc(
+    req: LineageOverlayRemoveReq,
+) -> RpcResponse<LineageOverlayRemoveRes> {
+    match rpc_service::lineage_overlay_remove_service(
+        std::path::Path::new(&req.vault_path),
+        &req.overlay_id,
+    ) {
+        Ok(()) => RpcResponse::ok(LineageOverlayRemoveRes {
+            removed_overlay_id: req.overlay_id,
+        }),
+        Err(error) => RpcResponse::err(error),
+    }
+}
+
+pub fn lineage_overlay_list_rpc(req: LineageOverlayListReq) -> RpcResponse<LineageOverlayListRes> {
+    match rpc_service::lineage_overlay_list_service(std::path::Path::new(&req.vault_path), &req.doc_id) {
+        Ok(overlays) => RpcResponse::ok(LineageOverlayListRes {
+            overlays: overlays.into_iter().map(map_lineage_overlay_entry).collect(),
         }),
         Err(error) => RpcResponse::err(error),
     }

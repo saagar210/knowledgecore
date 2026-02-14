@@ -27,6 +27,10 @@ fn main() {
         commands::sync_push,
         commands::sync_pull,
         commands::lineage_query,
+        commands::lineage_query_v2,
+        commands::lineage_overlay_add,
+        commands::lineage_overlay_remove,
+        commands::lineage_overlay_list,
         commands::preview_status,
         commands::preview_capability,
     ]);
@@ -55,6 +59,10 @@ fn main() {
         commands::sync_push,
         commands::sync_pull,
         commands::lineage_query,
+        commands::lineage_query_v2,
+        commands::lineage_overlay_add,
+        commands::lineage_overlay_remove,
+        commands::lineage_overlay_list,
     ]);
 
     builder.run(tauri::generate_context!()).expect("failed to run tauri app");

@@ -9,7 +9,13 @@ import {
   ingestInboxStop,
   ingestScanFolder
 } from "../src/features/ingest";
-import { queryLineage } from "../src/features/lineage";
+import {
+  addLineageOverlay,
+  listLineageOverlays,
+  queryLineage,
+  queryLineageV2,
+  removeLineageOverlay
+} from "../src/features/lineage";
 import { loadRelated } from "../src/features/related";
 import { runSearch } from "../src/features/search";
 import {
@@ -150,6 +156,58 @@ function mockApi(): DesktopRpcApi {
             to_node_id: "chunk:c1",
             relation: "contains_chunk",
             evidence: "ordinal:0"
+          }
+        ]
+      }),
+    lineageQueryV2: () =>
+      ok({
+        schema_version: 2,
+        seed_doc_id: "d1",
+        depth: 1,
+        generated_at_ms: 9,
+        nodes: [
+          { node_id: "doc:d1", kind: "doc", label: "d1", metadata: {} },
+          { node_id: "chunk:c1", kind: "chunk", label: "Chunk 0", metadata: {} }
+        ],
+        edges: [
+          {
+            from_node_id: "doc:d1",
+            to_node_id: "chunk:c1",
+            relation: "contains_chunk",
+            evidence: "ordinal:0",
+            origin: "system"
+          }
+        ]
+      }),
+    lineageOverlayAdd: () =>
+      ok({
+        overlay: {
+          overlay_id: "blake3:overlay",
+          doc_id: "d1",
+          from_node_id: "doc:d1",
+          to_node_id: "chunk:c2",
+          relation: "supports",
+          evidence: "manual",
+          created_at_ms: 10,
+          created_by: "tester"
+        }
+      }),
+    lineageOverlayRemove: () =>
+      ok({
+        removed_overlay_id: "blake3:overlay"
+      }),
+    lineageOverlayList: () =>
+      ok({
+        overlays: [
+          {
+            overlay_id: "blake3:overlay",
+            doc_id: "d1",
+            from_node_id: "doc:d1",
+            to_node_id: "chunk:c2",
+            relation: "supports",
+            evidence: "manual",
+            created_at_ms: 10,
+            created_by: "tester"
           }
         ]
       })
@@ -302,6 +360,38 @@ describe("feature controllers", () => {
         seed_doc_id: "d1",
         depth: 1,
         now_ms: 9
+      })
+    ).toMatchObject({ kind: "data" });
+    expect(
+      await queryLineageV2(api, {
+        vault_path: "/tmp/v",
+        seed_doc_id: "d1",
+        depth: 1,
+        now_ms: 9
+      })
+    ).toMatchObject({ kind: "data" });
+    expect(
+      await addLineageOverlay(api, {
+        vault_path: "/tmp/v",
+        doc_id: "d1",
+        from_node_id: "doc:d1",
+        to_node_id: "chunk:c2",
+        relation: "supports",
+        evidence: "manual",
+        created_at_ms: 10,
+        created_by: "tester"
+      })
+    ).toMatchObject({ kind: "data" });
+    expect(
+      await listLineageOverlays(api, {
+        vault_path: "/tmp/v",
+        doc_id: "d1"
+      })
+    ).toMatchObject({ kind: "data" });
+    expect(
+      await removeLineageOverlay(api, {
+        vault_path: "/tmp/v",
+        overlay_id: "blake3:overlay"
       })
     ).toMatchObject({ kind: "data" });
   });
