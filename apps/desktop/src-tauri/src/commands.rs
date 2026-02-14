@@ -177,3 +177,24 @@ pub fn lineage_overlay_list(
 ) -> rpc::RpcResponse<rpc::LineageOverlayListRes> {
     rpc::lineage_overlay_list_rpc(req)
 }
+
+#[tauri::command]
+pub fn lineage_lock_acquire(
+    req: rpc::LineageLockAcquireReq,
+) -> rpc::RpcResponse<rpc::LineageLockAcquireRes> {
+    rpc::lineage_lock_acquire_rpc(req)
+}
+
+#[tauri::command]
+pub fn lineage_lock_release(
+    req: rpc::LineageLockReleaseReq,
+) -> rpc::RpcResponse<rpc::LineageLockReleaseRes> {
+    rpc::lineage_lock_release_rpc(req)
+}
+
+#[tauri::command]
+pub fn lineage_lock_status(
+    req: rpc::LineageLockStatusReq,
+) -> rpc::RpcResponse<rpc::LineageLockStatusRes> {
+    rpc::lineage_lock_status_rpc(req)
+}

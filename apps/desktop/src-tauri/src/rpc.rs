@@ -560,6 +560,7 @@ pub struct LineageOverlayAddReq {
     pub to_node_id: String,
     pub relation: String,
     pub evidence: String,
+    pub lock_token: String,
     pub created_at_ms: i64,
     pub created_by: Option<String>,
 }
@@ -574,6 +575,8 @@ pub struct LineageOverlayAddRes {
 pub struct LineageOverlayRemoveReq {
     pub vault_path: String,
     pub overlay_id: String,
+    pub lock_token: String,
+    pub now_ms: i64,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -591,6 +594,60 @@ pub struct LineageOverlayListReq {
 #[derive(Debug, Serialize, Deserialize)]
 pub struct LineageOverlayListRes {
     pub overlays: Vec<LineageOverlayEntryRes>,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct LineageLockAcquireReq {
+    pub vault_path: String,
+    pub doc_id: String,
+    pub owner: String,
+    pub now_ms: i64,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct LineageLockLeaseRes {
+    pub doc_id: String,
+    pub owner: String,
+    pub token: String,
+    pub acquired_at_ms: i64,
+    pub expires_at_ms: i64,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct LineageLockAcquireRes {
+    pub lease: LineageLockLeaseRes,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct LineageLockReleaseReq {
+    pub vault_path: String,
+    pub doc_id: String,
+    pub token: String,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct LineageLockReleaseRes {
+    pub released: bool,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct LineageLockStatusReq {
+    pub vault_path: String,
+    pub doc_id: String,
+    pub now_ms: i64,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct LineageLockStatusRes {
+    pub doc_id: String,
+    pub held: bool,
+    pub owner: Option<String>,
+    pub acquired_at_ms: Option<i64>,
+    pub expires_at_ms: Option<i64>,
+    pub expired: bool,
 }
 
 pub fn vault_init_rpc(req: VaultInitReq) -> RpcResponse<VaultInitRes> {
@@ -1030,6 +1087,27 @@ fn map_lineage_overlay_entry(
     }
 }
 
+fn map_lineage_lock_lease(lease: kc_core::lineage::LineageLockLeaseV1) -> LineageLockLeaseRes {
+    LineageLockLeaseRes {
+        doc_id: lease.doc_id,
+        owner: lease.owner,
+        token: lease.token,
+        acquired_at_ms: lease.acquired_at_ms,
+        expires_at_ms: lease.expires_at_ms,
+    }
+}
+
+fn map_lineage_lock_status(status: kc_core::lineage::LineageLockStatusV1) -> LineageLockStatusRes {
+    LineageLockStatusRes {
+        doc_id: status.doc_id,
+        held: status.held,
+        owner: status.owner,
+        acquired_at_ms: status.acquired_at_ms,
+        expires_at_ms: status.expires_at_ms,
+        expired: status.expired,
+    }
+}
+
 pub fn lineage_query_v2_rpc(req: LineageQueryV2Req) -> RpcResponse<LineageQueryV2Res> {
     match rpc_service::lineage_query_v2_service(
         std::path::Path::new(&req.vault_path),
@@ -1076,6 +1154,7 @@ pub fn lineage_overlay_add_rpc(req: LineageOverlayAddReq) -> RpcResponse<Lineage
         &req.to_node_id,
         &req.relation,
         &req.evidence,
+        &req.lock_token,
         req.created_at_ms,
         req.created_by.as_deref(),
     ) {
@@ -1092,6 +1171,8 @@ pub fn lineage_overlay_remove_rpc(
     match rpc_service::lineage_overlay_remove_service(
         std::path::Path::new(&req.vault_path),
         &req.overlay_id,
+        &req.lock_token,
+        req.now_ms,
     ) {
         Ok(()) => RpcResponse::ok(LineageOverlayRemoveRes {
             removed_overlay_id: req.overlay_id,
@@ -1111,6 +1192,42 @@ pub fn lineage_overlay_list_rpc(req: LineageOverlayListReq) -> RpcResponse<Linea
                 .map(map_lineage_overlay_entry)
                 .collect(),
         }),
+        Err(error) => RpcResponse::err(error),
+    }
+}
+
+pub fn lineage_lock_acquire_rpc(req: LineageLockAcquireReq) -> RpcResponse<LineageLockAcquireRes> {
+    match rpc_service::lineage_lock_acquire_service(
+        std::path::Path::new(&req.vault_path),
+        &req.doc_id,
+        &req.owner,
+        req.now_ms,
+    ) {
+        Ok(lease) => RpcResponse::ok(LineageLockAcquireRes {
+            lease: map_lineage_lock_lease(lease),
+        }),
+        Err(error) => RpcResponse::err(error),
+    }
+}
+
+pub fn lineage_lock_release_rpc(req: LineageLockReleaseReq) -> RpcResponse<LineageLockReleaseRes> {
+    match rpc_service::lineage_lock_release_service(
+        std::path::Path::new(&req.vault_path),
+        &req.doc_id,
+        &req.token,
+    ) {
+        Ok(()) => RpcResponse::ok(LineageLockReleaseRes { released: true }),
+        Err(error) => RpcResponse::err(error),
+    }
+}
+
+pub fn lineage_lock_status_rpc(req: LineageLockStatusReq) -> RpcResponse<LineageLockStatusRes> {
+    match rpc_service::lineage_lock_status_service(
+        std::path::Path::new(&req.vault_path),
+        &req.doc_id,
+        req.now_ms,
+    ) {
+        Ok(status) => RpcResponse::ok(map_lineage_lock_status(status)),
         Err(error) => RpcResponse::err(error),
     }
 }

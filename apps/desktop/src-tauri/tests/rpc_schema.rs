@@ -1,9 +1,10 @@
 use apps_desktop_tauri::rpc::{
     AskQuestionReq, LineageOverlayAddReq, LineageOverlayListReq, LineageOverlayRemoveReq,
-    LineageQueryReq, LineageQueryV2Req, SearchQueryReq, SyncMergePreviewReq, SyncPullReq,
-    SyncPushReq, SyncStatusReq, VaultEncryptionEnableReq, VaultEncryptionMigrateReq,
-    VaultEncryptionStatusReq, VaultInitReq, VaultLockReq, VaultLockStatusReq,
-    VaultRecoveryGenerateReq, VaultRecoveryStatusReq, VaultRecoveryVerifyReq, VaultUnlockReq,
+    LineageLockAcquireReq, LineageLockReleaseReq, LineageLockStatusReq, LineageQueryReq,
+    LineageQueryV2Req, SearchQueryReq, SyncMergePreviewReq, SyncPullReq, SyncPushReq, SyncStatusReq,
+    VaultEncryptionEnableReq, VaultEncryptionMigrateReq, VaultEncryptionStatusReq, VaultInitReq,
+    VaultLockReq, VaultLockStatusReq, VaultRecoveryGenerateReq, VaultRecoveryStatusReq,
+    VaultRecoveryVerifyReq, VaultUnlockReq,
 };
 
 #[test]
@@ -226,9 +227,24 @@ fn rpc_schema_lineage_overlay_add_requires_created_at_ms() {
         "from_node_id": "doc:doc-1",
         "to_node_id": "chunk:c1",
         "relation": "supports",
-        "evidence": "manual"
+        "evidence": "manual",
+        "lock_token": "blake3:token"
     });
     assert!(serde_json::from_value::<LineageOverlayAddReq>(missing_created_at).is_err());
+}
+
+#[test]
+fn rpc_schema_lineage_overlay_add_requires_lock_token() {
+    let missing_lock_token = serde_json::json!({
+        "vault_path": "/tmp/vault",
+        "doc_id": "doc-1",
+        "from_node_id": "doc:doc-1",
+        "to_node_id": "chunk:c1",
+        "relation": "supports",
+        "evidence": "manual",
+        "created_at_ms": 123
+    });
+    assert!(serde_json::from_value::<LineageOverlayAddReq>(missing_lock_token).is_err());
 }
 
 #[test]
@@ -240,6 +256,7 @@ fn rpc_schema_lineage_overlay_requests_validate_shapes() {
         "to_node_id": "chunk:c1",
         "relation": "supports",
         "evidence": "manual",
+        "lock_token": "blake3:token",
         "created_at_ms": 123,
         "created_by": "user"
     });
@@ -253,7 +270,9 @@ fn rpc_schema_lineage_overlay_requests_validate_shapes() {
 
     let remove = serde_json::json!({
         "vault_path": "/tmp/vault",
-        "overlay_id": "blake3:abcd"
+        "overlay_id": "blake3:abcd",
+        "lock_token": "blake3:token",
+        "now_ms": 124
     });
     assert!(serde_json::from_value::<LineageOverlayRemoveReq>(remove).is_ok());
 }
@@ -263,7 +282,46 @@ fn rpc_schema_lineage_overlay_rejects_unknown_fields() {
     let invalid = serde_json::json!({
         "vault_path": "/tmp/vault",
         "overlay_id": "blake3:abcd",
+        "lock_token": "blake3:token",
+        "now_ms": 124,
         "extra": "nope"
     });
     assert!(serde_json::from_value::<LineageOverlayRemoveReq>(invalid).is_err());
+}
+
+#[test]
+fn rpc_schema_lineage_lock_requests_validate_shapes() {
+    let acquire = serde_json::json!({
+        "vault_path": "/tmp/vault",
+        "doc_id": "doc-1",
+        "owner": "desktop",
+        "now_ms": 100
+    });
+    assert!(serde_json::from_value::<LineageLockAcquireReq>(acquire).is_ok());
+
+    let status = serde_json::json!({
+        "vault_path": "/tmp/vault",
+        "doc_id": "doc-1",
+        "now_ms": 101
+    });
+    assert!(serde_json::from_value::<LineageLockStatusReq>(status).is_ok());
+
+    let release = serde_json::json!({
+        "vault_path": "/tmp/vault",
+        "doc_id": "doc-1",
+        "token": "blake3:token"
+    });
+    assert!(serde_json::from_value::<LineageLockReleaseReq>(release).is_ok());
+}
+
+#[test]
+fn rpc_schema_lineage_lock_rejects_unknown_fields() {
+    let invalid = serde_json::json!({
+        "vault_path": "/tmp/vault",
+        "doc_id": "doc-1",
+        "owner": "desktop",
+        "now_ms": 100,
+        "extra": "nope"
+    });
+    assert!(serde_json::from_value::<LineageLockAcquireReq>(invalid).is_err());
 }

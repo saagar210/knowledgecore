@@ -23,6 +23,10 @@ Define deterministic, turn-based edit-lock contracts for lineage overlay mutatio
 - Overlay mutation contracts:
   - `lineage_overlay_add(..., lock_token, created_at_ms, ...)`
   - `lineage_overlay_remove(..., lock_token, now_ms)`
+- Surface contracts:
+  - CLI lock workflows: `kc_cli lineage lock acquire|release|status`
+  - Tauri RPC lock workflows: `lineage_lock_acquire|release|status`
+  - Tauri overlay RPCs require `lock_token`; remove also requires `now_ms`
 - Lock schema fields:
   - `doc_id`
   - `owner`

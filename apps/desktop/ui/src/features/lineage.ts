@@ -1,5 +1,11 @@
 import type {
   DesktopRpcApi,
+  LineageLockAcquireReq,
+  LineageLockAcquireRes,
+  LineageLockReleaseReq,
+  LineageLockReleaseRes,
+  LineageLockStatusReq,
+  LineageLockStatusRes,
   LineageOverlayAddReq,
   LineageOverlayAddRes,
   LineageOverlayListReq,
@@ -46,4 +52,25 @@ export async function listLineageOverlays(
   req: LineageOverlayListReq
 ): Promise<ViewState<LineageOverlayListRes>> {
   return nextStateFromRpc(await api.lineageOverlayList(req));
+}
+
+export async function acquireLineageLock(
+  api: DesktopRpcApi,
+  req: LineageLockAcquireReq
+): Promise<ViewState<LineageLockAcquireRes>> {
+  return nextStateFromRpc(await api.lineageLockAcquire(req));
+}
+
+export async function releaseLineageLock(
+  api: DesktopRpcApi,
+  req: LineageLockReleaseReq
+): Promise<ViewState<LineageLockReleaseRes>> {
+  return nextStateFromRpc(await api.lineageLockRelease(req));
+}
+
+export async function loadLineageLockStatus(
+  api: DesktopRpcApi,
+  req: LineageLockStatusReq
+): Promise<ViewState<LineageLockStatusRes>> {
+  return nextStateFromRpc(await api.lineageLockStatus(req));
 }

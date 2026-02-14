@@ -10,10 +10,13 @@ import {
   ingestScanFolder
 } from "../src/features/ingest";
 import {
+  acquireLineageLock,
   addLineageOverlay,
   listLineageOverlays,
+  loadLineageLockStatus,
   queryLineage,
   queryLineageV2,
+  releaseLineageLock,
   removeLineageOverlay
 } from "../src/features/lineage";
 import { loadRelated } from "../src/features/related";
@@ -255,6 +258,29 @@ function mockApi(): DesktopRpcApi {
           created_by: "tester"
         }
       }),
+    lineageLockAcquire: () =>
+      ok({
+        lease: {
+          doc_id: "d1",
+          owner: "tester",
+          token: "blake3:lock-token",
+          acquired_at_ms: 10,
+          expires_at_ms: 10 + 15 * 60 * 1000
+        }
+      }),
+    lineageLockRelease: () =>
+      ok({
+        released: true
+      }),
+    lineageLockStatus: () =>
+      ok({
+        doc_id: "d1",
+        held: true,
+        owner: "tester",
+        acquired_at_ms: 10,
+        expires_at_ms: 10 + 15 * 60 * 1000,
+        expired: false
+      }),
     lineageOverlayRemove: () =>
       ok({
         removed_overlay_id: "blake3:overlay"
@@ -462,6 +488,21 @@ describe("feature controllers", () => {
       })
     ).toMatchObject({ kind: "data" });
     expect(
+      await acquireLineageLock(api, {
+        vault_path: "/tmp/v",
+        doc_id: "d1",
+        owner: "tester",
+        now_ms: 10
+      })
+    ).toMatchObject({ kind: "data" });
+    expect(
+      await loadLineageLockStatus(api, {
+        vault_path: "/tmp/v",
+        doc_id: "d1",
+        now_ms: 10
+      })
+    ).toMatchObject({ kind: "data" });
+    expect(
       await addLineageOverlay(api, {
         vault_path: "/tmp/v",
         doc_id: "d1",
@@ -469,6 +510,7 @@ describe("feature controllers", () => {
         to_node_id: "chunk:c2",
         relation: "supports",
         evidence: "manual",
+        lock_token: "blake3:lock-token",
         created_at_ms: 10,
         created_by: "tester"
       })
@@ -482,7 +524,16 @@ describe("feature controllers", () => {
     expect(
       await removeLineageOverlay(api, {
         vault_path: "/tmp/v",
-        overlay_id: "blake3:overlay"
+        overlay_id: "blake3:overlay",
+        lock_token: "blake3:lock-token",
+        now_ms: 11
+      })
+    ).toMatchObject({ kind: "data" });
+    expect(
+      await releaseLineageLock(api, {
+        vault_path: "/tmp/v",
+        doc_id: "d1",
+        token: "blake3:lock-token"
       })
     ).toMatchObject({ kind: "data" });
   });

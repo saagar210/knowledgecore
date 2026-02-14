@@ -1,6 +1,9 @@
 use kc_core::app_error::AppResult;
 use kc_core::db::open_db;
-use kc_core::lineage::{lineage_overlay_add, lineage_overlay_list, lineage_overlay_remove};
+use kc_core::lineage::{
+    lineage_lock_acquire, lineage_lock_release, lineage_lock_status, lineage_overlay_add,
+    lineage_overlay_list, lineage_overlay_remove,
+};
 use kc_core::vault::vault_open;
 use std::path::Path;
 
@@ -75,9 +78,58 @@ pub fn run_overlay_list(vault_path: &str, doc_id: &str) -> AppResult<()> {
     Ok(())
 }
 
+pub fn run_lock_acquire(vault_path: &str, doc_id: &str, owner: &str, now_ms: i64) -> AppResult<()> {
+    let vault = vault_open(Path::new(vault_path))?;
+    let conn = open_db(&Path::new(vault_path).join(vault.db.relative_path))?;
+    let lease = lineage_lock_acquire(&conn, doc_id, owner, now_ms)?;
+    println!(
+        "{}",
+        serde_json::to_string_pretty(&serde_json::json!({
+            "status": "ok",
+            "lease": lease
+        }))
+        .unwrap_or_else(|_| "{}".to_string())
+    );
+    Ok(())
+}
+
+pub fn run_lock_release(vault_path: &str, doc_id: &str, token: &str) -> AppResult<()> {
+    let vault = vault_open(Path::new(vault_path))?;
+    let conn = open_db(&Path::new(vault_path).join(vault.db.relative_path))?;
+    lineage_lock_release(&conn, doc_id, token)?;
+    println!(
+        "{}",
+        serde_json::to_string_pretty(&serde_json::json!({
+            "status": "ok",
+            "released": true,
+            "doc_id": doc_id
+        }))
+        .unwrap_or_else(|_| "{}".to_string())
+    );
+    Ok(())
+}
+
+pub fn run_lock_status(vault_path: &str, doc_id: &str, now_ms: i64) -> AppResult<()> {
+    let vault = vault_open(Path::new(vault_path))?;
+    let conn = open_db(&Path::new(vault_path).join(vault.db.relative_path))?;
+    let status = lineage_lock_status(&conn, doc_id, now_ms)?;
+    println!(
+        "{}",
+        serde_json::to_string_pretty(&serde_json::json!({
+            "status": "ok",
+            "lock": status
+        }))
+        .unwrap_or_else(|_| "{}".to_string())
+    );
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
-    use super::{run_overlay_add, run_overlay_list, run_overlay_remove};
+    use super::{
+        run_lock_acquire, run_lock_release, run_lock_status, run_overlay_add, run_overlay_list,
+        run_overlay_remove,
+    };
     use kc_core::db::open_db;
     use kc_core::ingest::ingest_bytes;
     use kc_core::lineage::{lineage_lock_acquire, lineage_overlay_list};
@@ -132,5 +184,11 @@ mod tests {
 
         run_overlay_remove(root.to_string_lossy().as_ref(), &overlay_id, &lock_token, 4)
             .expect("overlay remove");
+
+        run_lock_status(root.to_string_lossy().as_ref(), &doc_id, 5).expect("lock status");
+        run_lock_release(root.to_string_lossy().as_ref(), &doc_id, &lock_token)
+            .expect("lock release");
+        run_lock_acquire(root.to_string_lossy().as_ref(), &doc_id, "cli-test", 6)
+            .expect("lock acquire");
     }
 }

@@ -234,6 +234,10 @@ pub enum LineageCmd {
         #[command(subcommand)]
         cmd: LineageOverlayCmd,
     },
+    Lock {
+        #[command(subcommand)]
+        cmd: LineageLockCmd,
+    },
 }
 
 #[derive(Subcommand)]
@@ -261,5 +265,27 @@ pub enum LineageOverlayCmd {
     List {
         vault_path: String,
         doc_id: String,
+    },
+}
+
+#[derive(Subcommand)]
+pub enum LineageLockCmd {
+    Acquire {
+        vault_path: String,
+        doc_id: String,
+        owner: String,
+        #[arg(long = "now-ms")]
+        now_ms: i64,
+    },
+    Release {
+        vault_path: String,
+        doc_id: String,
+        token: String,
+    },
+    Status {
+        vault_path: String,
+        doc_id: String,
+        #[arg(long = "now-ms")]
+        now_ms: i64,
     },
 }

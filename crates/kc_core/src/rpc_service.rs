@@ -548,6 +548,33 @@ pub fn lineage_overlay_list_service(
     crate::lineage::lineage_overlay_list(&conn, doc_id)
 }
 
+pub fn lineage_lock_acquire_service(
+    vault_path: &Path,
+    doc_id: &str,
+    owner: &str,
+    now_ms: i64,
+) -> AppResult<crate::lineage::LineageLockLeaseV1> {
+    let vault = vault_open(vault_path)?;
+    let conn = open_db(&vault_path.join(vault.db.relative_path))?;
+    crate::lineage::lineage_lock_acquire(&conn, doc_id, owner, now_ms)
+}
+
+pub fn lineage_lock_release_service(vault_path: &Path, doc_id: &str, token: &str) -> AppResult<()> {
+    let vault = vault_open(vault_path)?;
+    let conn = open_db(&vault_path.join(vault.db.relative_path))?;
+    crate::lineage::lineage_lock_release(&conn, doc_id, token)
+}
+
+pub fn lineage_lock_status_service(
+    vault_path: &Path,
+    doc_id: &str,
+    now_ms: i64,
+) -> AppResult<crate::lineage::LineageLockStatusV1> {
+    let vault = vault_open(vault_path)?;
+    let conn = open_db(&vault_path.join(vault.db.relative_path))?;
+    crate::lineage::lineage_lock_status(&conn, doc_id, now_ms)
+}
+
 fn load_object_hashes(conn: &rusqlite::Connection) -> AppResult<Vec<ObjectHash>> {
     let mut stmt = conn
         .prepare("SELECT object_hash FROM objects ORDER BY object_hash ASC")

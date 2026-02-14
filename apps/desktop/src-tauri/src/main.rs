@@ -34,6 +34,9 @@ fn main() {
         commands::lineage_overlay_add,
         commands::lineage_overlay_remove,
         commands::lineage_overlay_list,
+        commands::lineage_lock_acquire,
+        commands::lineage_lock_release,
+        commands::lineage_lock_status,
     ]);
 
     builder

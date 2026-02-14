@@ -2,12 +2,14 @@ use apps_desktop_tauri::commands;
 use apps_desktop_tauri::rpc::{
     ingest_inbox_start_rpc, ingest_inbox_stop_rpc, jobs_list_rpc, lineage_overlay_add_rpc,
     lineage_overlay_list_rpc, lineage_overlay_remove_rpc, lineage_query_rpc, lineage_query_v2_rpc,
+    lineage_lock_acquire_rpc, lineage_lock_release_rpc, lineage_lock_status_rpc,
     sync_merge_preview_rpc, sync_pull_rpc, sync_push_rpc, sync_status_rpc,
     vault_encryption_enable_rpc, vault_encryption_migrate_rpc, vault_encryption_status_rpc,
     vault_init_rpc, vault_lock_rpc, vault_lock_status_rpc, vault_open_rpc,
     vault_recovery_generate_rpc, vault_recovery_status_rpc, vault_recovery_verify_rpc,
-    vault_unlock_rpc, IngestInboxStartReq, IngestInboxStopReq, JobsListReq, LineageOverlayAddReq,
-    LineageOverlayListReq, LineageOverlayRemoveReq, LineageQueryReq, LineageQueryV2Req,
+    vault_unlock_rpc, IngestInboxStartReq, IngestInboxStopReq, JobsListReq, LineageLockAcquireReq,
+    LineageLockReleaseReq, LineageLockStatusReq, LineageOverlayAddReq, LineageOverlayListReq,
+    LineageOverlayRemoveReq, LineageQueryReq, LineageQueryV2Req,
     RpcResponse, SyncMergePreviewReq, SyncPullReq, SyncPushReq, SyncStatusReq,
     VaultEncryptionEnableReq, VaultEncryptionMigrateReq, VaultEncryptionStatusReq, VaultInitReq,
     VaultLockReq, VaultLockStatusReq, VaultOpenReq, VaultRecoveryGenerateReq,
@@ -505,6 +507,30 @@ fn rpc_lineage_v2_overlay_round_trip_is_deterministic() {
         RpcResponse::Err { error } => panic!("ingest failed: {}", error.code),
     };
 
+    let acquired = lineage_lock_acquire_rpc(LineageLockAcquireReq {
+        vault_path: root.to_string_lossy().to_string(),
+        doc_id: seed_doc_id.clone(),
+        owner: "desktop-test".to_string(),
+        now_ms: 3,
+    });
+    let lock_token = match acquired {
+        RpcResponse::Ok { data } => data.lease.token,
+        RpcResponse::Err { error } => panic!("lineage lock acquire failed: {}", error.code),
+    };
+
+    let lock_status = lineage_lock_status_rpc(LineageLockStatusReq {
+        vault_path: root.to_string_lossy().to_string(),
+        doc_id: seed_doc_id.clone(),
+        now_ms: 4,
+    });
+    match lock_status {
+        RpcResponse::Ok { data } => {
+            assert!(data.held);
+            assert_eq!(data.owner.as_deref(), Some("desktop-test"));
+        }
+        RpcResponse::Err { error } => panic!("lineage lock status failed: {}", error.code),
+    }
+
     let added = lineage_overlay_add_rpc(LineageOverlayAddReq {
         vault_path: root.to_string_lossy().to_string(),
         doc_id: seed_doc_id.clone(),
@@ -512,7 +538,8 @@ fn rpc_lineage_v2_overlay_round_trip_is_deterministic() {
         to_node_id: "note:overlay-1".to_string(),
         relation: "supports".to_string(),
         evidence: "manual".to_string(),
-        created_at_ms: 3,
+        lock_token: lock_token.clone(),
+        created_at_ms: 5,
         created_by: Some("desktop-test".to_string()),
     });
     let overlay_id = match added {
@@ -539,14 +566,14 @@ fn rpc_lineage_v2_overlay_round_trip_is_deterministic() {
         vault_path: root.to_string_lossy().to_string(),
         seed_doc_id: seed_doc_id.clone(),
         depth: 2,
-        now_ms: 4,
+        now_ms: 6,
     };
     let res_a = lineage_query_v2_rpc(req);
     let res_b = lineage_query_v2_rpc(LineageQueryV2Req {
         vault_path: root.to_string_lossy().to_string(),
         seed_doc_id: seed_doc_id.clone(),
         depth: 2,
-        now_ms: 4,
+        now_ms: 6,
     });
     assert_eq!(
         serde_json::to_value(&res_a).expect("serialize lineage a"),
@@ -581,10 +608,22 @@ fn rpc_lineage_v2_overlay_round_trip_is_deterministic() {
     let removed = lineage_overlay_remove_rpc(LineageOverlayRemoveReq {
         vault_path: root.to_string_lossy().to_string(),
         overlay_id: overlay_id.clone(),
+        lock_token: lock_token.clone(),
+        now_ms: 7,
     });
     match removed {
         RpcResponse::Ok { data } => assert_eq!(data.removed_overlay_id, overlay_id),
         RpcResponse::Err { error } => panic!("overlay remove failed: {}", error.code),
+    }
+
+    let released = lineage_lock_release_rpc(LineageLockReleaseReq {
+        vault_path: root.to_string_lossy().to_string(),
+        doc_id: seed_doc_id.clone(),
+        token: lock_token,
+    });
+    match released {
+        RpcResponse::Ok { data } => assert!(data.released),
+        RpcResponse::Err { error } => panic!("lineage lock release failed: {}", error.code),
     }
 
     let listed_after_remove = lineage_overlay_list_rpc(LineageOverlayListReq {

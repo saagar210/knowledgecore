@@ -295,14 +295,49 @@ export type LineageOverlayAddReq = {
   to_node_id: string;
   relation: string;
   evidence: string;
+  lock_token: string;
   created_at_ms: number;
   created_by?: string;
 };
 export type LineageOverlayAddRes = { overlay: LineageOverlayEntry };
-export type LineageOverlayRemoveReq = { vault_path: string; overlay_id: string };
+export type LineageOverlayRemoveReq = {
+  vault_path: string;
+  overlay_id: string;
+  lock_token: string;
+  now_ms: number;
+};
 export type LineageOverlayRemoveRes = { removed_overlay_id: string };
 export type LineageOverlayListReq = { vault_path: string; doc_id: string };
 export type LineageOverlayListRes = { overlays: LineageOverlayEntry[] };
+export type LineageLockAcquireReq = {
+  vault_path: string;
+  doc_id: string;
+  owner: string;
+  now_ms: number;
+};
+export type LineageLockLease = {
+  doc_id: string;
+  owner: string;
+  token: string;
+  acquired_at_ms: number;
+  expires_at_ms: number;
+};
+export type LineageLockAcquireRes = { lease: LineageLockLease };
+export type LineageLockReleaseReq = {
+  vault_path: string;
+  doc_id: string;
+  token: string;
+};
+export type LineageLockReleaseRes = { released: boolean };
+export type LineageLockStatusReq = { vault_path: string; doc_id: string; now_ms: number };
+export type LineageLockStatusRes = {
+  doc_id: string;
+  held: boolean;
+  owner: string | null;
+  acquired_at_ms: number | null;
+  expires_at_ms: number | null;
+  expired: boolean;
+};
 export const rpcMethods = {
   vaultInit: (req: VaultInitReqV1) => rpc<VaultInitReqV1, VaultInitRes>("vault_init", req),
   vaultOpen: (req: VaultOpenReq) => rpc<VaultOpenReq, VaultOpenRes>("vault_open", req),
@@ -346,7 +381,13 @@ export const rpcMethods = {
   lineageOverlayRemove: (req: LineageOverlayRemoveReq) =>
     rpc<LineageOverlayRemoveReq, LineageOverlayRemoveRes>("lineage_overlay_remove", req),
   lineageOverlayList: (req: LineageOverlayListReq) =>
-    rpc<LineageOverlayListReq, LineageOverlayListRes>("lineage_overlay_list", req)
+    rpc<LineageOverlayListReq, LineageOverlayListRes>("lineage_overlay_list", req),
+  lineageLockAcquire: (req: LineageLockAcquireReq) =>
+    rpc<LineageLockAcquireReq, LineageLockAcquireRes>("lineage_lock_acquire", req),
+  lineageLockRelease: (req: LineageLockReleaseReq) =>
+    rpc<LineageLockReleaseReq, LineageLockReleaseRes>("lineage_lock_release", req),
+  lineageLockStatus: (req: LineageLockStatusReq) =>
+    rpc<LineageLockStatusReq, LineageLockStatusRes>("lineage_lock_status", req)
 };
 
 export type DesktopRpcApi = typeof rpcMethods;

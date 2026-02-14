@@ -41,7 +41,10 @@ describe("rpc client", () => {
       "lineageQueryV2",
       "lineageOverlayAdd",
       "lineageOverlayRemove",
-      "lineageOverlayList"
+      "lineageOverlayList",
+      "lineageLockAcquire",
+      "lineageLockRelease",
+      "lineageLockStatus"
     ]);
   });
 

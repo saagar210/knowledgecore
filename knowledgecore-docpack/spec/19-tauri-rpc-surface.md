@@ -94,10 +94,12 @@ Versioned RPC surface v1, envelope schema, and determinism notes.
          - lineage_query
          - lineage_query_v2
          - lineage_overlay_add, lineage_overlay_remove, lineage_overlay_list
+         - lineage_lock_acquire, lineage_lock_release, lineage_lock_status
 
          ### Compatibility note
          - `lineage_query` (v1 response) remains supported during transition.
          - `lineage_query_v2` is the primary method for overlay-aware lineage responses.
+         - overlay mutation RPCs require lock-token inputs and lock methods are used to acquire/release per-doc edit leases.
 
          ## Determinism note
          - now_ms is passed by caller (UI/tests) to make snapshots deterministic.

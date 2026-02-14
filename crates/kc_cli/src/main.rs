@@ -17,7 +17,8 @@ mod verifier;
 use clap::Parser;
 use cli::{
     BenchCmd, Cli, Command, DepsCmd, FixturesCmd, GcCmd, IndexCmd, IngestCmd, LineageCmd,
-    LineageOverlayCmd, SyncCmd, VaultCmd, VaultDbEncryptCmd, VaultEncryptCmd, VaultRecoveryCmd,
+    LineageLockCmd, LineageOverlayCmd, SyncCmd, VaultCmd, VaultDbEncryptCmd, VaultEncryptCmd,
+    VaultRecoveryCmd,
 };
 use kc_core::vault::{vault_init, vault_open};
 
@@ -214,6 +215,24 @@ fn main() {
                 LineageOverlayCmd::List { vault_path, doc_id } => {
                     commands::lineage::run_overlay_list(&vault_path, &doc_id)
                 }
+            },
+            LineageCmd::Lock { cmd } => match cmd {
+                LineageLockCmd::Acquire {
+                    vault_path,
+                    doc_id,
+                    owner,
+                    now_ms,
+                } => commands::lineage::run_lock_acquire(&vault_path, &doc_id, &owner, now_ms),
+                LineageLockCmd::Release {
+                    vault_path,
+                    doc_id,
+                    token,
+                } => commands::lineage::run_lock_release(&vault_path, &doc_id, &token),
+                LineageLockCmd::Status {
+                    vault_path,
+                    doc_id,
+                    now_ms,
+                } => commands::lineage::run_lock_status(&vault_path, &doc_id, now_ms),
             },
         },
     };
