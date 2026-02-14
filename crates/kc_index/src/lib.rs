@@ -1,3 +1,4 @@
+pub mod embedding;
 pub mod fts;
 pub mod indexer;
 pub mod vector;

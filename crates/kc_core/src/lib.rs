@@ -10,6 +10,7 @@ pub mod ingest;
 pub mod services;
 pub mod canonical;
 pub mod index_traits;
+pub mod retrieval;
 pub mod locator;
 pub mod chunking;
 pub mod export;
