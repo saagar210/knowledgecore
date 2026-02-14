@@ -8,3 +8,6 @@ license.workspace = true
 kc_core = { path = "../../../crates/kc_core" }
 serde.workspace = true
 serde_json.workspace = true
+
+[dev-dependencies]
+tempfile = "3.23"
