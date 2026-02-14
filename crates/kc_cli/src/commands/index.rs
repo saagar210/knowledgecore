@@ -174,7 +174,7 @@ pub fn run_rebuild(vault_path: &str) -> AppResult<()> {
         row.vector = vec;
     }
 
-    let vectors_path = paths.vectors_dir.join("lancedb-v1.json");
+    let vectors_path = paths.vectors_dir.join("lancedb-v1");
     let mut vector_index = LanceDbVectorIndex::open(embedder, vectors_path)?;
     vector_index.upsert_rows(vector_rows)?;
 
@@ -238,6 +238,6 @@ mod tests {
             .query_row("SELECT COUNT(*) FROM chunks_fts", [], |row| row.get(0))
             .expect("count fts rows");
         assert!(fts_rows >= 1);
-        assert!(root.join("index/vectors/lancedb-v1.json").exists());
+        assert!(root.join("index/vectors/lancedb-v1").exists());
     }
 }

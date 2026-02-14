@@ -28,7 +28,7 @@ impl Embedder for DummyEmbedder {
 
 #[test]
 fn vector_query_returns_ranked_hits() {
-    let db_path = tempfile::tempdir().expect("tempdir").keep().join("vectors/lancedb.json");
+    let db_path = tempfile::tempdir().expect("tempdir").keep().join("vectors/lancedb-v1");
     let mut index = LanceDbVectorIndex::open(DummyEmbedder, &db_path).expect("open index");
     index
         .upsert_rows(vec![
