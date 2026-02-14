@@ -1,6 +1,7 @@
 use kc_core::app_error::AppResult;
+use serde::{Deserialize, Serialize};
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct EmbeddingIdentity {
     pub model_id: String,
     pub model_hash: String,

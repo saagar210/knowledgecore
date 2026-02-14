@@ -14,7 +14,7 @@ Operational runbook for GPT-5.3-Codex (High Reasoning) to implement KnowledgeCor
 - Schema changes include updated registry entries and validation tests.
 
 ## Codex execution protocol (per milestone)
-1) Create branch: `milestone/<NN>-<short-name>`
+1) Create branch: `codex/<NN>-<short-name>`
 2) Implement only the milestone scope from `plan/01-step-by-step-implementation-plan.md`
 3) Run gates from `plan/00-milestones-and-gates.md`
 4) If any gate fails: stop, diagnose, fix, rerun until green

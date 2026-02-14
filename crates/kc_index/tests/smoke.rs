@@ -1,4 +1,5 @@
 #[test]
 fn index_smoke() {
-    assert!(true);
+    let dir = tempfile::tempdir().expect("tempdir");
+    assert!(dir.path().exists());
 }

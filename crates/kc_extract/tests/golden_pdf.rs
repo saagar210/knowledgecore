@@ -34,4 +34,9 @@ fn golden_pdf_extractor_hashes_canonical() {
         .expect("extract");
 
     assert!(out.canonical_hash.0.starts_with("blake3:"));
+    let toolchain: serde_json::Value = serde_json::from_str(&out.toolchain_json).expect("toolchain json");
+    assert!(toolchain.get("pdfium").is_some());
+    assert!(toolchain.get("tesseract").is_some());
+    let flags: serde_json::Value = serde_json::from_str(&out.extractor_flags_json).expect("flags json");
+    assert_eq!(flags.get("source_kind").and_then(|x| x.as_str()), Some("manuals"));
 }

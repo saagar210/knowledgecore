@@ -2,7 +2,7 @@ use kc_core::app_error::AppResult;
 use kc_core::index_traits::VectorIndex;
 use kc_core::types::{ChunkId, DocId};
 use kc_index::embedding::{Embedder, EmbeddingIdentity};
-use kc_index::vector::{InMemoryVectorIndex, VectorRow};
+use kc_index::vector::{LanceDbVectorIndex, VectorRow};
 
 struct DummyEmbedder;
 
@@ -28,8 +28,10 @@ impl Embedder for DummyEmbedder {
 
 #[test]
 fn vector_query_returns_ranked_hits() {
-    let mut index = InMemoryVectorIndex::new(DummyEmbedder);
-    index.upsert_rows(vec![
+    let db_path = tempfile::tempdir().expect("tempdir").keep().join("vectors/lancedb.json");
+    let mut index = LanceDbVectorIndex::open(DummyEmbedder, &db_path).expect("open index");
+    index
+        .upsert_rows(vec![
         VectorRow {
             chunk_id: ChunkId("c1".to_string()),
             doc_id: DocId("d1".to_string()),
@@ -44,8 +46,14 @@ fn vector_query_returns_ranked_hits() {
             text: "beta text".to_string(),
             vector: vec![0.0, 1.0],
         },
-    ]);
+        ])
+        .expect("upsert rows");
 
     let hits = index.query("alpha", 10).expect("query");
     assert_eq!(hits[0].chunk_id.0, "c1");
+    assert_eq!(index.embedding_identity().model_id, "dummy");
+
+    let reloaded = LanceDbVectorIndex::open(DummyEmbedder, &db_path).expect("reload index");
+    let reloaded_hits = reloaded.query("alpha", 10).expect("query from reloaded index");
+    assert_eq!(reloaded_hits[0].chunk_id.0, "c1");
 }

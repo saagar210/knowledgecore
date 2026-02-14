@@ -34,6 +34,21 @@ pub struct ChunkRecord {
     pub chunking_config_hash: ConfigHash,
 }
 
+pub fn default_chunking_config_v1() -> ChunkingConfigV1 {
+    ChunkingConfigV1 {
+        v: 1,
+        md_html: MdHtmlChunkCfg {
+            max_chars: 1200,
+            min_chars: 350,
+        },
+        pdf: PdfChunkCfg {
+            window_chars: 1400,
+            overlap_chars: 200,
+            respect_markers: true,
+        },
+    }
+}
+
 pub fn hash_chunking_config(cfg: &ChunkingConfigV1) -> AppResult<ConfigHash> {
     let value = serde_json::to_value(cfg).map_err(|e| {
         AppError::new(

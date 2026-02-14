@@ -3,6 +3,7 @@ mod commands {
     pub mod bench;
     pub mod deps;
     pub mod export;
+    pub mod fixtures;
     pub mod gc;
     pub mod ingest;
     pub mod index;
@@ -12,7 +13,7 @@ mod commands {
 mod verifier;
 
 use clap::Parser;
-use cli::{BenchCmd, Cli, Command, DepsCmd, GcCmd, IndexCmd, IngestCmd, VaultCmd};
+use cli::{BenchCmd, Cli, Command, DepsCmd, FixturesCmd, GcCmd, IndexCmd, IngestCmd, VaultCmd};
 use kc_core::vault::{vault_init, vault_open};
 
 fn now_ms() -> i64 {
@@ -77,6 +78,11 @@ fn main() {
         },
         Command::Bench { cmd } => match cmd {
             BenchCmd::Run { corpus } => commands::bench::run_bench(&corpus),
+        },
+        Command::Fixtures { cmd } => match cmd {
+            FixturesCmd::Generate { corpus } => commands::fixtures::generate_corpus(&corpus).map(|path| {
+                println!("generated fixtures at {}", path.display());
+            }),
         },
     };
 

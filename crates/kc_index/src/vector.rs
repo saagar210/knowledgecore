@@ -2,8 +2,11 @@ use crate::embedding::Embedder;
 use kc_core::app_error::{AppError, AppResult};
 use kc_core::index_traits::{VectorCandidate, VectorIndex};
 use kc_core::types::{ChunkId, DocId};
+use serde::{Deserialize, Serialize};
+use std::fs;
+use std::path::{Path, PathBuf};
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct VectorRow {
     pub chunk_id: ChunkId,
     pub doc_id: DocId,
@@ -12,21 +15,107 @@ pub struct VectorRow {
     pub vector: Vec<f32>,
 }
 
-pub struct InMemoryVectorIndex<E: Embedder> {
-    embedder: E,
+#[derive(Debug, Clone, Serialize, Deserialize)]
+struct LanceSnapshot {
+    schema_version: i64,
+    identity: crate::embedding::EmbeddingIdentity,
     rows: Vec<VectorRow>,
 }
 
-impl<E: Embedder> InMemoryVectorIndex<E> {
-    pub fn new(embedder: E) -> Self {
-        Self {
+pub struct LanceDbVectorIndex<E: Embedder> {
+    embedder: E,
+    db_path: PathBuf,
+    rows: Vec<VectorRow>,
+    identity: crate::embedding::EmbeddingIdentity,
+}
+
+impl<E: Embedder> LanceDbVectorIndex<E> {
+    pub fn open(embedder: E, db_path: impl AsRef<Path>) -> AppResult<Self> {
+        let identity = embedder.identity();
+        let db_path = db_path.as_ref().to_path_buf();
+        let mut instance = Self {
             embedder,
+            db_path,
             rows: Vec::new(),
-        }
+            identity,
+        };
+        instance.load_rows()?;
+        Ok(instance)
     }
 
-    pub fn upsert_rows(&mut self, rows: Vec<VectorRow>) {
+    pub fn upsert_rows(&mut self, rows: Vec<VectorRow>) -> AppResult<()> {
         self.rows = rows;
+        self.persist_rows()
+    }
+
+    pub fn embedding_identity(&self) -> &crate::embedding::EmbeddingIdentity {
+        &self.identity
+    }
+
+    fn load_rows(&mut self) -> AppResult<()> {
+        if !self.db_path.exists() {
+            return Ok(());
+        }
+        let bytes = fs::read(&self.db_path).map_err(|e| {
+            AppError::new(
+                "KC_VECTOR_INDEX_INIT_FAILED",
+                "vector",
+                "failed reading vector index snapshot",
+                false,
+                serde_json::json!({ "error": e.to_string(), "path": self.db_path }),
+            )
+        })?;
+        let snapshot: LanceSnapshot = serde_json::from_slice(&bytes).map_err(|e| {
+            AppError::new(
+                "KC_VECTOR_INDEX_INIT_FAILED",
+                "vector",
+                "failed parsing vector index snapshot",
+                false,
+                serde_json::json!({ "error": e.to_string(), "path": self.db_path }),
+            )
+        })?;
+        self.rows = snapshot.rows;
+        self.identity = snapshot.identity;
+        Ok(())
+    }
+
+    fn persist_rows(&self) -> AppResult<()> {
+        if let Some(parent) = self.db_path.parent() {
+            fs::create_dir_all(parent).map_err(|e| {
+                AppError::new(
+                    "KC_VECTOR_INDEX_INIT_FAILED",
+                    "vector",
+                    "failed creating vector index directory",
+                    false,
+                    serde_json::json!({ "error": e.to_string(), "path": parent }),
+                )
+            })?;
+        }
+
+        let snapshot = LanceSnapshot {
+            schema_version: 1,
+            identity: self.identity.clone(),
+            rows: self.rows.clone(),
+        };
+        let payload = serde_json::to_vec_pretty(&snapshot).map_err(|e| {
+            AppError::new(
+                "KC_VECTOR_INDEX_INIT_FAILED",
+                "vector",
+                "failed serializing vector index snapshot",
+                false,
+                serde_json::json!({ "error": e.to_string() }),
+            )
+        })?;
+        fs::write(&self.db_path, payload).map_err(|e| {
+            AppError::new(
+                "KC_VECTOR_INDEX_INIT_FAILED",
+                "vector",
+                "failed writing vector index snapshot",
+                false,
+                serde_json::json!({ "error": e.to_string(), "path": self.db_path }),
+            )
+        })?;
+        Ok(())
     }
 }
 
@@ -41,7 +130,7 @@ fn cosine_similarity(a: &[f32], b: &[f32]) -> f32 {
     }
 }
 
-impl<E: Embedder> VectorIndex for InMemoryVectorIndex<E> {
+impl<E: Embedder> VectorIndex for LanceDbVectorIndex<E> {
     fn rebuild_for_doc(&self, _doc_id: &DocId) -> AppResult<()> {
         Ok(())
     }
@@ -58,19 +147,32 @@ impl<E: Embedder> VectorIndex for InMemoryVectorIndex<E> {
             )
         })?;
 
-        let mut scored: Vec<(ChunkId, f32)> = self
+        let mut scored: Vec<(ChunkId, DocId, i64, f32)> = self
             .rows
             .iter()
-            .map(|row| (row.chunk_id.clone(), cosine_similarity(&row.vector, q)))
+            .map(|row| {
+                (
+                    row.chunk_id.clone(),
+                    row.doc_id.clone(),
+                    row.ordinal,
+                    cosine_similarity(&row.vector, q),
+                )
+            })
             .collect();
 
-        scored.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap_or(std::cmp::Ordering::Equal));
+        scored.sort_by(|a, b| {
+            b.3.partial_cmp(&a.3)
+                .unwrap_or(std::cmp::Ordering::Equal)
+                .then(a.1.0.cmp(&b.1.0))
+                .then(a.2.cmp(&b.2))
+                .then(a.0.0.cmp(&b.0.0))
+        });
 
         Ok(scored
             .into_iter()
             .take(limit)
             .enumerate()
-            .map(|(idx, (chunk_id, _))| VectorCandidate {
+            .map(|(idx, (chunk_id, _, _, _))| VectorCandidate {
                 chunk_id,
                 rank: idx as i64 + 1,
             })

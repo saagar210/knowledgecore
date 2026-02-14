@@ -21,6 +21,8 @@ impl DefaultExtractor {
 
 impl ExtractService for DefaultExtractor {
     fn extract_canonical(&self, input: ExtractInput<'_>) -> AppResult<CanonicalTextArtifact> {
+        let mut ocr_used = false;
+        let mut ocr_status = "not_attempted".to_string();
         let raw = match input.mime {
             "text/markdown" => {
                 let text = String::from_utf8(input.bytes.to_vec()).map_err(|e| {
@@ -49,14 +51,24 @@ impl ExtractService for DefaultExtractor {
             "application/pdf" => {
                 let pdf = extract_pdf_text(input.bytes, &PdfiumConfig { library_path: None })?;
                 if should_run_ocr(pdf.extracted_len, pdf.extracted_alnum_ratio) {
-                    ocr_pdf_via_images(
+                    match ocr_pdf_via_images(
                         input.bytes,
                         &OcrConfig {
                             tesseract_cmd: None,
                             language: "eng".to_string(),
                         },
                     )
-                    .unwrap_or(pdf.text_with_page_markers)
+                    {
+                        Ok(ocr_text) => {
+                            ocr_used = true;
+                            ocr_status = "used".to_string();
+                            ocr_text
+                        }
+                        Err(err) => {
+                            ocr_status = format!("fallback:{}", err.code);
+                            pdf.text_with_page_markers
+                        }
+                    }
                 } else {
                     pdf.text_with_page_markers
                 }
@@ -78,14 +90,29 @@ impl ExtractService for DefaultExtractor {
 
         let toolchain_json = String::from_utf8(
             to_canonical_bytes(&serde_json::json!({
-                "pdfium": self.toolchain.pdfium_identity,
-                "tesseract": self.toolchain.tesseract_identity
+                "pdfium": {
+                    "identity": self.toolchain.pdfium_identity,
+                    "backend": "pdftotext",
+                },
+                "tesseract": {
+                    "identity": self.toolchain.tesseract_identity,
+                    "language": "eng",
+                    "traineddata_hashes": [],
+                    "params": {
+                        "psm": 6
+                    },
+                },
+                "ocr_used": ocr_used,
+                "ocr_status": ocr_status,
             }))?,
         )
         .map_err(|e| AppError::internal(&format!("toolchain json encoding failed: {e}")))?;
 
-        let extractor_flags_json = String::from_utf8(to_canonical_bytes(&serde_json::json!({ "mime": input.mime }))?)
-            .map_err(|e| AppError::internal(&format!("flags json encoding failed: {e}")))?;
+        let extractor_flags_json = String::from_utf8(to_canonical_bytes(&serde_json::json!({
+            "mime": input.mime,
+            "source_kind": input.source_kind,
+        }))?)
+        .map_err(|e| AppError::internal(&format!("flags json encoding failed: {e}")))?;
 
         Ok(CanonicalTextArtifact {
             doc_id: input.doc_id.clone(),

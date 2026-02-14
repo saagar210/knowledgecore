@@ -41,6 +41,10 @@ pub enum Command {
         #[command(subcommand)]
         cmd: BenchCmd,
     },
+    Fixtures {
+        #[command(subcommand)]
+        cmd: FixturesCmd,
+    },
 }
 
 #[derive(Subcommand)]
@@ -82,6 +86,14 @@ pub enum DepsCmd {
 #[derive(Subcommand)]
 pub enum BenchCmd {
     Run {
+        #[arg(long)]
+        corpus: String,
+    },
+}
+
+#[derive(Subcommand)]
+pub enum FixturesCmd {
+    Generate {
         #[arg(long)]
         corpus: String,
     },

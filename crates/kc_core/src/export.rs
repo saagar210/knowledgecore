@@ -1,4 +1,5 @@
 use crate::app_error::{AppError, AppResult};
+use crate::chunking::{default_chunking_config_v1, hash_chunking_config};
 use crate::canon_json::to_canonical_bytes;
 use crate::hashing::blake3_hex_prefixed;
 use crate::vault::{vault_open, vault_paths};
@@ -149,6 +150,8 @@ pub fn export_bundle(vault_path: &Path, export_dir: &Path, _opts: &ExportOptions
         ah.cmp(bh).then(ap.cmp(bp))
     });
 
+    let chunking_config_hash = hash_chunking_config(&default_chunking_config_v1())?;
+
     let manifest = serde_json::json!({
         "manifest_version": 1,
         "vault_id": vault.vault_id,
@@ -158,12 +161,23 @@ pub fn export_bundle(vault_path: &Path, export_dir: &Path, _opts: &ExportOptions
             "app_error": 1,
             "rpc": 1
         },
-        "chunking_config_hash": blake3_hex_prefixed(vault.defaults.chunking_config_id.as_bytes()),
+        "toolchain_registry": {
+            "pdfium": vault.toolchain.pdfium.identity,
+            "tesseract": vault.toolchain.tesseract.identity,
+        },
+        "chunking_config_id": vault.defaults.chunking_config_id,
+        "chunking_config_hash": chunking_config_hash.0,
+        "embedding": {
+            "model_id": vault.defaults.embedding_model_id
+        },
         "db": {
             "relative_path": vault.db.relative_path,
             "hash": db_hash
         },
-        "objects": objects
+        "objects": objects,
+        "indexes": {
+            "vectors": []
+        }
     });
 
     let manifest_bytes = to_canonical_bytes(&manifest)?;

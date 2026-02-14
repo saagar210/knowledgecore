@@ -21,8 +21,8 @@ describe("error routing", () => {
     expect(routeForError(b)).toBe("vault-setup");
   });
 
-  it("routes retryable and fatal classes", () => {
-    expect(routeForError(err("KC_X", true, "m"))).toBe("retryable-error");
+  it("routes by code only and ignores retryable flag", () => {
+    expect(routeForError(err("KC_X", true, "m"))).toBe("fatal-error");
     expect(routeForError(err("KC_X", false, "m"))).toBe("fatal-error");
   });
 });

@@ -1,5 +1,6 @@
 use kc_core::app_error::{AppError, AppResult};
 use kc_core::hashing::blake3_hex_prefixed;
+use jsonschema::JSONSchema;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::fs;
@@ -43,6 +44,48 @@ fn report_for(exit_code: i64, mut errors: Vec<VerifyErrorEntry>, checked: Checke
     )
 }
 
+fn manifest_schema() -> Value {
+    serde_json::json!({
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "$id": "kc://schemas/export-manifest/v1",
+      "type": "object",
+      "required": ["manifest_version", "vault_id", "schema_versions", "chunking_config_hash", "db", "objects"],
+      "properties": {
+        "manifest_version": { "const": 1 },
+        "vault_id": { "type": "string" },
+        "schema_versions": { "type": "object" },
+        "toolchain_registry": { "type": "object" },
+        "chunking_config_id": { "type": "string" },
+        "chunking_config_hash": { "type": "string", "pattern": "^blake3:[0-9a-f]{64}$" },
+        "embedding": { "type": "object" },
+        "db": {
+          "type": "object",
+          "required": ["relative_path", "hash"],
+          "properties": {
+            "relative_path": { "type": "string" },
+            "hash": { "type": "string", "pattern": "^blake3:[0-9a-f]{64}$" }
+          },
+          "additionalProperties": false
+        },
+        "objects": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["relative_path", "hash", "bytes"],
+            "properties": {
+              "relative_path": { "type": "string" },
+              "hash": { "type": "string", "pattern": "^blake3:[0-9a-f]{64}$" },
+              "bytes": { "type": "integer", "minimum": 0 }
+            },
+            "additionalProperties": false
+          }
+        },
+        "indexes": { "type": "object" }
+      },
+      "additionalProperties": false
+    })
+}
+
 pub fn verify_bundle(bundle_path: &Path) -> AppResult<(i64, VerifyReportV1)> {
     let manifest_path = bundle_path.join("manifest.json");
     let raw = match fs::read_to_string(&manifest_path) {
@@ -77,19 +120,27 @@ pub fn verify_bundle(bundle_path: &Path) -> AppResult<(i64, VerifyReportV1)> {
         }
     };
 
-    for req in ["manifest_version", "db", "objects"] {
-        if manifest.get(req).is_none() {
-            return Ok(report_for(
-                21,
-                vec![VerifyErrorEntry {
-                    code: "MANIFEST_SCHEMA_INVALID".to_string(),
-                    path: req.to_string(),
-                    expected: Some("present".to_string()),
-                    actual: Some("missing".to_string()),
-                }],
-                CheckedCounts { objects: 0, indexes: 0 },
-            ));
-        }
+    let schema = JSONSchema::compile(&manifest_schema()).map_err(|e| {
+        AppError::new(
+            "KC_VERIFY_FAILED",
+            "verify",
+            "failed compiling manifest schema",
+            false,
+            serde_json::json!({ "error": e.to_string() }),
+        )
+    })?;
+    let mut validation_errors = schema.validate(&manifest).err().into_iter().flatten();
+    if let Some(first_error) = validation_errors.next() {
+        return Ok(report_for(
+            21,
+            vec![VerifyErrorEntry {
+                code: "MANIFEST_SCHEMA_INVALID".to_string(),
+                path: first_error.instance_path.to_string(),
+                expected: Some(first_error.schema_path.to_string()),
+                actual: Some(first_error.to_string()),
+            }],
+            CheckedCounts { objects: 0, indexes: 0 },
+        ));
     }
 
     let mut errors = Vec::new();

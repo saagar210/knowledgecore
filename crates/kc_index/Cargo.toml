@@ -12,6 +12,7 @@ serde_json.workspace = true
 
 [dev-dependencies]
 criterion = "0.7"
+tempfile = "3.23"
 
 [[bench]]
 name = "index_bench"
