@@ -22,6 +22,7 @@ Authoritative registry of all versioned schemas and contracts. Any schema additi
 | SQLite schema | 1 | `spec/03-sqlite-schema-v1-and-migrations.md` | kc_core | all | 1 | migrations deterministic | additive ok | bump user_version on change |
 | Locator v1 | 1 | `spec/10-locator-v1-and-resolver.md` | kc_core | all | 1 | [start,end) char indices; strict hash check | additive hints ok | bump on semantics change |
 | Export manifest | 1 | `spec/12-export-bundles-and-manifest.md` | kc_core | verifier/UI | 1 | deterministic ordering; `vault_id` UUID; db hash; chunking_config_hash uses canonical config hashing; required `encryption` block; object entries carry `hash` (plaintext hash), `storage_hash` (stored payload hash), and `encrypted` flag | additive blocks ok | bump on ordering/hash rule change |
+| ZIP packaging metadata | 1 | `spec/28-deterministic-zip-packaging-v1.md` | kc_core | kc_cli verifier | 1 | entry order lexical; compression stored; fixed mtime `1980-01-01T00:00:00Z`; file mode `0644` | additive fields ok | bump on any deterministic ZIP policy change |
 | Verifier report | 1 | `spec/13-verifier-and-reporting.md` | kc_cli | UI/automation | 1 | stable exit codes (0/20/21/31/40/41/60); deterministic ordering; schema-validated manifest input; encryption-state mismatches map into code 41 | additive ok | bump on exit/order/schema rule change |
 | AppError | 1 | `spec/14-error-contract-app-error-taxonomy.md` | all | UI/CLI/RPC | 1-adj | UI branches on code only | additive codes ok | bump on struct change |
 | Trace log | 1 | `spec/17-trace-log-schema-and-redaction.md` | kc_ask | UI/automation | 1 | `trace_id`/`vault_id` UUID; deterministic retrieval chunk ordering + locator ordering | additive ok | bump on struct change |
@@ -31,7 +32,6 @@ Authoritative registry of all versioned schemas and contracts. Any schema additi
 
 | Schema | Ver | Path | Producer | Consumer | Status | Activation Phase | Invariants | Compat Rules | Bump Rules |
 |---|---:|---|---|---|---|---|---|---|---|
-| ZIP packaging metadata draft | 1 | `spec/23-deterministic-zip-packaging-v1-design-lock.md` | kc_core (feature-gated) | kc_cli/src-tauri/ui preview shells | draft | N1 | deterministic ZIP policy descriptors; non-runtime | draft-only additive fields allowed with tests | bump on ordering/timestamp policy change |
 | Sync manifest draft | 1 | `spec/24-cross-device-sync-v1-design-lock.md` | kc_core (feature-gated) | kc_cli/src-tauri/ui preview shells | draft | N2 | deterministic conflict ordering; non-runtime | draft-only additive fields allowed with tests | bump on conflict policy semantics change |
 | Lineage query draft | 1 | `spec/25-advanced-lineage-ui-v1-design-lock.md` | kc_core (feature-gated) | src-tauri/ui preview shells | draft | N3 | deterministic node/edge ordering; non-runtime | draft-only additive fields allowed with tests | bump on query/result semantics change |
 

@@ -77,7 +77,8 @@ fn main() {
         Command::Export {
             vault_path,
             export_dir,
-        } => commands::export::run_export(&vault_path, &export_dir, now_ms()).map(|bundle| {
+            zip,
+        } => commands::export::run_export(&vault_path, &export_dir, zip, now_ms()).map(|bundle| {
             println!("exported bundle: {}", bundle.display());
         }),
         Command::Verify { bundle_path } => commands::verify::run_verify(&bundle_path).map(|(code, report)| {

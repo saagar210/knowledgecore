@@ -23,6 +23,14 @@ fn base_manifest(db_hash: String) -> serde_json::Value {
                 "salt_id": "vault-kdf-salt-v1"
             }
         },
+        "packaging": {
+            "format": "folder",
+            "zip_policy": {
+                "compression": "stored",
+                "mtime": "1980-01-01T00:00:00Z",
+                "file_mode": "0644"
+            }
+        },
         "chunking_config_hash": "blake3:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
         "db": {
             "relative_path": "db/knowledge.sqlite",
@@ -290,4 +298,56 @@ fn verifier_reports_encryption_mismatch_when_enabled_bundle_has_plain_object() {
             .iter()
             .any(|e| e.code == "OBJECT_ENCRYPTION_MISMATCH")
     );
+}
+
+#[test]
+fn verifier_accepts_deterministic_zip_bundle() {
+    let root = tempfile::tempdir().expect("tempdir").keep();
+    let folder = root.join("bundle11");
+    std::fs::create_dir_all(folder.join("db")).expect("mkdir db");
+    std::fs::create_dir_all(folder.join("store/objects/aa")).expect("mkdir objects");
+    std::fs::write(folder.join("db/knowledge.sqlite"), b"db").expect("write db");
+
+    let payload = b"zip-object";
+    let object_hash = blake3_hex_prefixed(payload);
+    std::fs::write(
+        folder.join(format!("store/objects/aa/{}", object_hash)),
+        payload,
+    )
+    .expect("write object");
+
+    let mut manifest = base_manifest(blake3_hex_prefixed(b"db"));
+    manifest["packaging"]["format"] = serde_json::json!("zip");
+    manifest["objects"] = serde_json::json!([{
+        "relative_path": format!("store/objects/aa/{}", object_hash),
+        "hash": object_hash,
+        "storage_hash": blake3_hex_prefixed(payload),
+        "encrypted": false,
+        "bytes": payload.len()
+    }]);
+    write_manifest(&folder, &manifest);
+
+    let zip_path = root.join("bundle11.zip");
+    let zip_file = std::fs::File::create(&zip_path).expect("create zip");
+    let mut writer = zip::ZipWriter::new(zip_file);
+    let fixed = zip::DateTime::from_date_and_time(1980, 1, 1, 0, 0, 0).expect("fixed");
+    let options = zip::write::FileOptions::default()
+        .compression_method(zip::CompressionMethod::Stored)
+        .last_modified_time(fixed)
+        .unix_permissions(0o644);
+
+    for rel in [
+        "db/knowledge.sqlite",
+        "manifest.json",
+        &format!("store/objects/aa/{}", object_hash),
+    ] {
+        writer.start_file(rel, options).expect("start file");
+        let bytes = std::fs::read(folder.join(rel)).expect("read source");
+        std::io::Write::write_all(&mut writer, &bytes).expect("write zip bytes");
+    }
+    writer.finish().expect("finish zip");
+
+    let (code, report) = verify_bundle(&zip_path).expect("verify zip");
+    assert_eq!(code, 0);
+    assert_eq!(report.status, "ok");
 }

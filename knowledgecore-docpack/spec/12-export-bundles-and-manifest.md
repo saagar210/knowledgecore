@@ -20,6 +20,7 @@ Deterministic export folder bundle and manifest schema + ordering rules.
     "vault_id",
     "schema_versions",
     "encryption",
+    "packaging",
     "chunking_config_hash",
     "db",
     "objects"
@@ -63,6 +64,24 @@ Deterministic export folder bundle and manifest schema + ordering rules.
     },
     "toolchain_registry": {
       "type": "object"
+    },
+    "packaging": {
+      "type": "object",
+      "required": ["format", "zip_policy"],
+      "properties": {
+        "format": { "type": "string", "enum": ["folder", "zip"] },
+        "zip_policy": {
+          "type": "object",
+          "required": ["compression", "mtime", "file_mode"],
+          "properties": {
+            "compression": { "type": "string", "const": "stored" },
+            "mtime": { "type": "string", "const": "1980-01-01T00:00:00Z" },
+            "file_mode": { "type": "string", "const": "0644" }
+          },
+          "additionalProperties": false
+        }
+      },
+      "additionalProperties": false
     },
     "chunking_config_hash": {
       "type": "string",

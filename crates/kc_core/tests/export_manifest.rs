@@ -23,6 +23,7 @@ fn export_manifest_has_deterministic_object_order() {
         &export_root,
         &ExportOptions {
             include_vectors: false,
+            as_zip: false,
         },
         123,
     )
@@ -81,6 +82,13 @@ fn export_manifest_has_deterministic_object_order() {
     );
     assert_eq!(
         manifest
+            .get("packaging")
+            .and_then(|v| v.get("format"))
+            .and_then(|v| v.as_str()),
+        Some("folder")
+    );
+    assert_eq!(
+        manifest
             .get("schema_versions")
             .and_then(|v| v.get("vault"))
             .and_then(|v| v.as_i64()),
@@ -105,6 +113,7 @@ fn export_manifest_includes_vectors_when_enabled() {
         &export_root,
         &ExportOptions {
             include_vectors: true,
+            as_zip: false,
         },
         124,
     )
@@ -137,4 +146,42 @@ fn export_manifest_includes_vectors_when_enabled() {
             "index/vectors/b.vec".to_string()
         ]
     );
+}
+
+#[test]
+fn export_zip_is_byte_stable_for_identical_state() {
+    let root = tempfile::tempdir().expect("tempdir").keep();
+    let vault_root = root.join("vault");
+    let export_root = root.join("exports");
+
+    vault_init(&vault_root, "demo", 1000).expect("vault init");
+    let conn = open_db(&vault_root.join("db/knowledge.sqlite")).expect("open db");
+    let store = ObjectStore::new(vault_root.join("store/objects"));
+    store.put_bytes(&conn, b"zip deterministic", 1).expect("store object");
+
+    let zip_a = export_bundle(
+        &vault_root,
+        &export_root,
+        &ExportOptions {
+            include_vectors: false,
+            as_zip: true,
+        },
+        300,
+    )
+    .expect("export zip a");
+    let zip_b = export_bundle(
+        &vault_root,
+        &export_root,
+        &ExportOptions {
+            include_vectors: false,
+            as_zip: true,
+        },
+        300,
+    )
+    .expect("export zip b");
+
+    assert_eq!(zip_a, zip_b);
+    let bytes_a = std::fs::read(&zip_a).expect("read zip a");
+    let bytes_b = std::fs::read(&zip_b).expect("read zip b");
+    assert_eq!(bytes_a, bytes_b);
 }

@@ -8,7 +8,7 @@ fn export_manifest_schema() -> serde_json::Value {
       "$schema": "https://json-schema.org/draft/2020-12/schema",
       "$id": "kc://schemas/export-manifest/v1",
       "type": "object",
-      "required": ["manifest_version", "vault_id", "schema_versions", "encryption", "chunking_config_hash", "db", "objects"],
+      "required": ["manifest_version", "vault_id", "schema_versions", "encryption", "packaging", "chunking_config_hash", "db", "objects"],
       "properties": {
         "manifest_version": { "const": 1 },
         "vault_id": {
@@ -40,6 +40,24 @@ fn export_manifest_schema() -> serde_json::Value {
           "additionalProperties": false
         },
         "toolchain_registry": { "type": "object" },
+        "packaging": {
+          "type": "object",
+          "required": ["format", "zip_policy"],
+          "properties": {
+            "format": { "type": "string", "enum": ["folder", "zip"] },
+            "zip_policy": {
+              "type": "object",
+              "required": ["compression", "mtime", "file_mode"],
+              "properties": {
+                "compression": { "type": "string", "const": "stored" },
+                "mtime": { "type": "string", "const": "1980-01-01T00:00:00Z" },
+                "file_mode": { "type": "string", "const": "0644" }
+              },
+              "additionalProperties": false
+            }
+          },
+          "additionalProperties": false
+        },
         "chunking_config_id": { "type": "string" },
         "chunking_config_hash": { "type": "string", "pattern": "^blake3:[0-9a-f]{64}$" },
         "embedding": { "type": "object" },
@@ -86,6 +104,7 @@ fn schema_export_manifest_accepts_generated_manifest() {
         &export_root,
         &ExportOptions {
             include_vectors: false,
+            as_zip: false,
         },
         123,
     )
@@ -107,6 +126,26 @@ fn schema_export_manifest_rejects_bad_hash() {
       "manifest_version": 1,
       "vault_id": "123e4567-e89b-12d3-a456-426614174000",
       "schema_versions": {},
+      "encryption": {
+        "enabled": false,
+        "mode": "object_store_xchacha20poly1305",
+        "key_reference": null,
+        "kdf": {
+          "algorithm": "argon2id",
+          "memory_kib": 65536,
+          "iterations": 3,
+          "parallelism": 1,
+          "salt_id": "vault-kdf-salt-v1"
+        }
+      },
+      "packaging": {
+        "format": "folder",
+        "zip_policy": {
+          "compression": "stored",
+          "mtime": "1980-01-01T00:00:00Z",
+          "file_mode": "0644"
+        }
+      },
       "chunking_config_hash": "not-a-hash",
       "db": { "relative_path": "db/knowledge.sqlite", "hash": "blake3:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa" },
       "objects": [],
@@ -122,6 +161,26 @@ fn schema_export_manifest_rejects_non_uuid_vault_id() {
       "manifest_version": 1,
       "vault_id": "not-a-uuid",
       "schema_versions": {},
+      "encryption": {
+        "enabled": false,
+        "mode": "object_store_xchacha20poly1305",
+        "key_reference": null,
+        "kdf": {
+          "algorithm": "argon2id",
+          "memory_kib": 65536,
+          "iterations": 3,
+          "parallelism": 1,
+          "salt_id": "vault-kdf-salt-v1"
+        }
+      },
+      "packaging": {
+        "format": "folder",
+        "zip_policy": {
+          "compression": "stored",
+          "mtime": "1980-01-01T00:00:00Z",
+          "file_mode": "0644"
+        }
+      },
       "chunking_config_hash": "blake3:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
       "db": { "relative_path": "db/knowledge.sqlite", "hash": "blake3:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa" },
       "objects": [],

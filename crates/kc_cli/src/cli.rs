@@ -21,6 +21,8 @@ pub enum Command {
     Export {
         vault_path: String,
         export_dir: String,
+        #[arg(long)]
+        zip: bool,
     },
     Verify {
         bundle_path: String,

@@ -288,7 +288,10 @@ pub fn export_bundle_service(
     crate::export::export_bundle(
         vault_path,
         export_dir,
-        &crate::export::ExportOptions { include_vectors },
+        &crate::export::ExportOptions {
+            include_vectors,
+            as_zip: false,
+        },
         now_ms,
     )
 }

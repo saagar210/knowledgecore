@@ -5,11 +5,87 @@ use crate::hashing::blake3_hex_prefixed;
 use crate::vault::{vault_open, vault_paths};
 use serde::{Deserialize, Serialize};
 use std::fs;
+use std::io::Write;
 use std::path::{Path, PathBuf};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ExportOptions {
     pub include_vectors: bool,
+    #[serde(default)]
+    pub as_zip: bool,
+}
+
+fn zip_fixed_time() -> zip::DateTime {
+    zip::DateTime::from_date_and_time(1980, 1, 1, 0, 0, 0)
+        .expect("valid fixed zip timestamp")
+}
+
+fn create_deterministic_zip(bundle_dir: &Path, zip_path: &Path) -> AppResult<()> {
+    let file = fs::File::create(zip_path).map_err(|e| {
+        AppError::new(
+            "KC_EXPORT_FAILED",
+            "export",
+            "failed creating deterministic zip file",
+            false,
+            serde_json::json!({ "error": e.to_string(), "path": zip_path }),
+        )
+    })?;
+    let mut zip = zip::ZipWriter::new(file);
+    let mut files: Vec<PathBuf> = walkdir::WalkDir::new(bundle_dir)
+        .into_iter()
+        .filter_map(Result::ok)
+        .filter(|e| e.file_type().is_file())
+        .map(|e| e.path().to_path_buf())
+        .collect();
+    files.sort();
+
+    for file_path in files {
+        let rel = rel_for_path(bundle_dir, &file_path)?;
+        let options = zip::write::FileOptions::default()
+            .compression_method(zip::CompressionMethod::Stored)
+            .last_modified_time(zip_fixed_time())
+            .unix_permissions(0o644);
+        zip.start_file(&rel, options).map_err(|e| {
+            AppError::new(
+                "KC_EXPORT_FAILED",
+                "export",
+                "failed starting deterministic zip entry",
+                false,
+                serde_json::json!({ "error": e.to_string(), "entry": rel }),
+            )
+        })?;
+
+        let bytes = fs::read(&file_path).map_err(|e| {
+            AppError::new(
+                "KC_EXPORT_FAILED",
+                "export",
+                "failed reading bundle file for zip",
+                false,
+                serde_json::json!({ "error": e.to_string(), "path": file_path }),
+            )
+        })?;
+        zip.write_all(&bytes).map_err(|e| {
+            AppError::new(
+                "KC_EXPORT_FAILED",
+                "export",
+                "failed writing deterministic zip entry bytes",
+                false,
+                serde_json::json!({ "error": e.to_string(), "entry": rel }),
+            )
+        })?;
+    }
+
+    zip.finish().map_err(|e| {
+        AppError::new(
+            "KC_EXPORT_FAILED",
+            "export",
+            "failed finalizing deterministic zip",
+            false,
+            serde_json::json!({ "error": e.to_string(), "path": zip_path }),
+        )
+    })?;
+
+    Ok(())
 }
 
 fn rel_for_path(base: &Path, path: &Path) -> AppResult<String> {
@@ -269,6 +345,14 @@ pub fn export_bundle(vault_path: &Path, export_dir: &Path, opts: &ExportOptions,
         "embedding": {
             "model_id": vault.defaults.embedding_model_id
         },
+        "packaging": {
+            "format": if opts.as_zip { "zip" } else { "folder" },
+            "zip_policy": {
+                "compression": "stored",
+                "mtime": "1980-01-01T00:00:00Z",
+                "file_mode": "0644"
+            }
+        },
         "db": {
             "relative_path": vault.db.relative_path,
             "hash": db_hash
@@ -289,6 +373,12 @@ pub fn export_bundle(vault_path: &Path, export_dir: &Path, opts: &ExportOptions,
             serde_json::json!({ "error": e.to_string() }),
         )
     })?;
+
+    if opts.as_zip {
+        let zip_path = export_dir.join(format!("export_{}.zip", now_ms));
+        create_deterministic_zip(&bundle_dir, &zip_path)?;
+        return Ok(zip_path);
+    }
 
     Ok(bundle_dir)
 }

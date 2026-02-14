@@ -1,10 +1,11 @@
+use jsonschema::JSONSchema;
 use kc_core::app_error::{AppError, AppResult};
 use kc_core::hashing::blake3_hex_prefixed;
-use jsonschema::JSONSchema;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::fs;
-use std::path::Path;
+use std::path::{Component, Path, PathBuf};
+use std::time::{SystemTime, UNIX_EPOCH};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct VerifyReportV1 {
@@ -29,7 +30,11 @@ pub struct CheckedCounts {
     pub indexes: i64,
 }
 
-fn report_for(exit_code: i64, mut errors: Vec<VerifyErrorEntry>, checked: CheckedCounts) -> (i64, VerifyReportV1) {
+fn report_for(
+    exit_code: i64,
+    mut errors: Vec<VerifyErrorEntry>,
+    checked: CheckedCounts,
+) -> (i64, VerifyReportV1) {
     errors.sort_by(|a, b| a.code.cmp(&b.code).then(a.path.cmp(&b.path)));
     let status = if exit_code == 0 { "ok" } else { "failed" };
     (
@@ -62,7 +67,7 @@ fn manifest_schema() -> Value {
       "$schema": "https://json-schema.org/draft/2020-12/schema",
       "$id": "kc://schemas/export-manifest/v1",
       "type": "object",
-      "required": ["manifest_version", "vault_id", "schema_versions", "encryption", "chunking_config_hash", "db", "objects"],
+      "required": ["manifest_version", "vault_id", "schema_versions", "encryption", "packaging", "chunking_config_hash", "db", "objects"],
       "properties": {
         "manifest_version": { "const": 1 },
         "vault_id": {
@@ -87,6 +92,24 @@ fn manifest_schema() -> Value {
                 "iterations": { "type": "integer", "minimum": 1 },
                 "parallelism": { "type": "integer", "minimum": 1 },
                 "salt_id": { "type": "string" }
+              },
+              "additionalProperties": false
+            }
+          },
+          "additionalProperties": false
+        },
+        "packaging": {
+          "type": "object",
+          "required": ["format", "zip_policy"],
+          "properties": {
+            "format": { "type": "string", "enum": ["folder", "zip"] },
+            "zip_policy": {
+              "type": "object",
+              "required": ["compression", "mtime", "file_mode"],
+              "properties": {
+                "compression": { "type": "string", "const": "stored" },
+                "mtime": { "type": "string", "const": "1980-01-01T00:00:00Z" },
+                "file_mode": { "type": "string", "const": "0644" }
               },
               "additionalProperties": false
             }
@@ -127,7 +150,7 @@ fn manifest_schema() -> Value {
     })
 }
 
-pub fn verify_bundle(bundle_path: &Path) -> AppResult<(i64, VerifyReportV1)> {
+fn verify_folder_bundle(bundle_path: &Path, expected_packaging_format: &str) -> AppResult<(i64, VerifyReportV1)> {
     let manifest_path = bundle_path.join("manifest.json");
     let raw = match fs::read_to_string(&manifest_path) {
         Ok(v) => v,
@@ -140,7 +163,10 @@ pub fn verify_bundle(bundle_path: &Path) -> AppResult<(i64, VerifyReportV1)> {
                     expected: None,
                     actual: Some(e.to_string()),
                 }],
-                CheckedCounts { objects: 0, indexes: 0 },
+                CheckedCounts {
+                    objects: 0,
+                    indexes: 0,
+                },
             ))
         }
     };
@@ -156,7 +182,10 @@ pub fn verify_bundle(bundle_path: &Path) -> AppResult<(i64, VerifyReportV1)> {
                     expected: None,
                     actual: Some(e.to_string()),
                 }],
-                CheckedCounts { objects: 0, indexes: 0 },
+                CheckedCounts {
+                    objects: 0,
+                    indexes: 0,
+                },
             ))
         }
     };
@@ -180,7 +209,35 @@ pub fn verify_bundle(bundle_path: &Path) -> AppResult<(i64, VerifyReportV1)> {
                 expected: Some(first_error.schema_path.to_string()),
                 actual: Some(first_error.to_string()),
             }],
-            CheckedCounts { objects: 0, indexes: 0 },
+            CheckedCounts {
+                objects: 0,
+                indexes: 0,
+            },
+        ));
+    }
+
+    if manifest
+        .get("packaging")
+        .and_then(|x| x.get("format"))
+        .and_then(|x| x.as_str())
+        != Some(expected_packaging_format)
+    {
+        return Ok(report_for(
+            21,
+            vec![VerifyErrorEntry {
+                code: "MANIFEST_SCHEMA_INVALID".to_string(),
+                path: "/packaging/format".to_string(),
+                expected: Some(expected_packaging_format.to_string()),
+                actual: manifest
+                    .get("packaging")
+                    .and_then(|x| x.get("format"))
+                    .and_then(|x| x.as_str())
+                    .map(|x| x.to_string()),
+            }],
+            CheckedCounts {
+                objects: 0,
+                indexes: 0,
+            },
         ));
     }
 
@@ -195,8 +252,14 @@ pub fn verify_bundle(bundle_path: &Path) -> AppResult<(i64, VerifyReportV1)> {
             serde_json::json!({}),
         )
     })?;
-    let db_rel = db.get("relative_path").and_then(|x| x.as_str()).unwrap_or_default();
-    let db_hash_expected = db.get("hash").and_then(|x| x.as_str()).unwrap_or_default();
+    let db_rel = db
+        .get("relative_path")
+        .and_then(|x| x.as_str())
+        .unwrap_or_default();
+    let db_hash_expected = db
+        .get("hash")
+        .and_then(|x| x.as_str())
+        .unwrap_or_default();
     let db_path = bundle_path.join(db_rel);
     match fs::read(&db_path) {
         Ok(bytes) => {
@@ -383,4 +446,236 @@ pub fn verify_bundle(bundle_path: &Path) -> AppResult<(i64, VerifyReportV1)> {
             indexes: vectors.len() as i64,
         },
     ))
+}
+
+fn is_zip_time_normalized(dt: zip::DateTime) -> bool {
+    dt.year() == 1980
+        && dt.month() == 1
+        && dt.day() == 1
+        && dt.hour() == 0
+        && dt.minute() == 0
+        && dt.second() == 0
+}
+
+fn safe_zip_relative_path(name: &str) -> Option<PathBuf> {
+    let mut out = PathBuf::new();
+    for component in Path::new(name).components() {
+        match component {
+            Component::Normal(part) => out.push(part),
+            _ => return None,
+        }
+    }
+    if out.as_os_str().is_empty() {
+        None
+    } else {
+        Some(out)
+    }
+}
+
+fn temporary_extract_root() -> AppResult<PathBuf> {
+    let nonce = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_nanos();
+    let dir = std::env::temp_dir().join(format!("kc_verify_zip_{}_{}", std::process::id(), nonce));
+    fs::create_dir_all(&dir).map_err(|e| {
+        AppError::new(
+            "KC_VERIFY_FAILED",
+            "verify",
+            "failed creating temporary zip verification directory",
+            false,
+            serde_json::json!({ "error": e.to_string(), "path": dir }),
+        )
+    })?;
+    Ok(dir)
+}
+
+fn verify_zip_bundle(bundle_zip: &Path) -> AppResult<(i64, VerifyReportV1)> {
+    let file = match fs::File::open(bundle_zip) {
+        Ok(file) => file,
+        Err(e) => {
+            return Ok(report_for(
+                20,
+                vec![VerifyErrorEntry {
+                    code: "MANIFEST_INVALID_JSON".to_string(),
+                    path: bundle_zip.display().to_string(),
+                    expected: None,
+                    actual: Some(e.to_string()),
+                }],
+                CheckedCounts {
+                    objects: 0,
+                    indexes: 0,
+                },
+            ))
+        }
+    };
+
+    let mut archive = match zip::ZipArchive::new(file) {
+        Ok(archive) => archive,
+        Err(e) => {
+            return Ok(report_for(
+                21,
+                vec![VerifyErrorEntry {
+                    code: "MANIFEST_SCHEMA_INVALID".to_string(),
+                    path: bundle_zip.display().to_string(),
+                    expected: Some("valid deterministic zip archive".to_string()),
+                    actual: Some(e.to_string()),
+                }],
+                CheckedCounts {
+                    objects: 0,
+                    indexes: 0,
+                },
+            ))
+        }
+    };
+
+    let extract_root = temporary_extract_root()?;
+    let mut entry_names = Vec::<String>::new();
+    let mut zip_errors = Vec::<VerifyErrorEntry>::new();
+
+    for idx in 0..archive.len() {
+        let mut entry = match archive.by_index(idx) {
+            Ok(entry) => entry,
+            Err(e) => {
+                return Ok(internal_error(
+                    bundle_zip.display().to_string(),
+                    format!("failed reading zip entry: {}", e),
+                    CheckedCounts {
+                        objects: 0,
+                        indexes: 0,
+                    },
+                ))
+            }
+        };
+
+        let name = entry.name().to_string();
+        if name.ends_with('/') {
+            continue;
+        }
+        entry_names.push(name.clone());
+
+        if entry.compression() != zip::CompressionMethod::Stored {
+            zip_errors.push(VerifyErrorEntry {
+                code: "ZIP_METADATA_INVALID".to_string(),
+                path: name.clone(),
+                expected: Some("compression=stored".to_string()),
+                actual: Some(format!("compression={:?}", entry.compression())),
+            });
+        }
+
+        if !is_zip_time_normalized(entry.last_modified()) {
+            zip_errors.push(VerifyErrorEntry {
+                code: "ZIP_METADATA_INVALID".to_string(),
+                path: name.clone(),
+                expected: Some("mtime=1980-01-01T00:00:00Z".to_string()),
+                actual: Some(format!(
+                    "mtime={:04}-{:02}-{:02}T{:02}:{:02}:{:02}Z",
+                    entry.last_modified().year(),
+                    entry.last_modified().month(),
+                    entry.last_modified().day(),
+                    entry.last_modified().hour(),
+                    entry.last_modified().minute(),
+                    entry.last_modified().second()
+                )),
+            });
+        }
+
+        let mode = entry.unix_mode().unwrap_or(0o644) & 0o777;
+        if mode != 0o644 {
+            zip_errors.push(VerifyErrorEntry {
+                code: "ZIP_METADATA_INVALID".to_string(),
+                path: name.clone(),
+                expected: Some("mode=0644".to_string()),
+                actual: Some(format!("mode={:04o}", mode)),
+            });
+        }
+
+        let rel = match safe_zip_relative_path(&name) {
+            Some(path) => path,
+            None => {
+                zip_errors.push(VerifyErrorEntry {
+                    code: "ZIP_METADATA_INVALID".to_string(),
+                    path: name,
+                    expected: Some("relative path without traversal".to_string()),
+                    actual: Some("invalid path".to_string()),
+                });
+                continue;
+            }
+        };
+
+        let out_path = extract_root.join(rel);
+        if let Some(parent) = out_path.parent() {
+            fs::create_dir_all(parent).map_err(|e| {
+                AppError::new(
+                    "KC_VERIFY_FAILED",
+                    "verify",
+                    "failed creating extraction directory",
+                    false,
+                    serde_json::json!({ "error": e.to_string(), "path": parent }),
+                )
+            })?;
+        }
+
+        let mut bytes = Vec::new();
+        std::io::Read::read_to_end(&mut entry, &mut bytes).map_err(|e| {
+            AppError::new(
+                "KC_VERIFY_FAILED",
+                "verify",
+                "failed reading zip entry bytes",
+                false,
+                serde_json::json!({ "error": e.to_string(), "entry": name }),
+            )
+        })?;
+        fs::write(&out_path, &bytes).map_err(|e| {
+            AppError::new(
+                "KC_VERIFY_FAILED",
+                "verify",
+                "failed writing extracted zip entry",
+                false,
+                serde_json::json!({ "error": e.to_string(), "path": out_path }),
+            )
+        })?;
+    }
+
+    let mut sorted = entry_names.clone();
+    sorted.sort();
+    if entry_names != sorted {
+        zip_errors.push(VerifyErrorEntry {
+            code: "ZIP_METADATA_INVALID".to_string(),
+            path: bundle_zip.display().to_string(),
+            expected: Some("entries sorted lexicographically".to_string()),
+            actual: Some("archive entry order is not deterministic".to_string()),
+        });
+    }
+
+    if !zip_errors.is_empty() {
+        let _ = fs::remove_dir_all(&extract_root);
+        return Ok(report_for(
+            21,
+            zip_errors,
+            CheckedCounts {
+                objects: 0,
+                indexes: 0,
+            },
+        ));
+    }
+
+    let out = verify_folder_bundle(&extract_root, "zip");
+    let _ = fs::remove_dir_all(&extract_root);
+    out
+}
+
+pub fn verify_bundle(bundle_path: &Path) -> AppResult<(i64, VerifyReportV1)> {
+    if bundle_path.is_file() {
+        let is_zip = bundle_path
+            .extension()
+            .and_then(|e| e.to_str())
+            .map(|e| e.eq_ignore_ascii_case("zip"))
+            .unwrap_or(false);
+        if is_zip {
+            return verify_zip_bundle(bundle_path);
+        }
+    }
+
+    verify_folder_bundle(bundle_path, "folder")
 }
