@@ -2,11 +2,18 @@ use apps_desktop_tauri::rpc::{
     ingest_inbox_start_rpc, ingest_inbox_stop_rpc, jobs_list_rpc, vault_encryption_enable_rpc,
     vault_encryption_migrate_rpc, vault_encryption_status_rpc, vault_init_rpc, vault_open_rpc,
     IngestInboxStartReq, IngestInboxStopReq, JobsListReq, RpcResponse, VaultEncryptionEnableReq,
-    VaultEncryptionMigrateReq, VaultEncryptionStatusReq, VaultInitReq, VaultOpenReq, SyncPushReq,
-    SyncStatusReq, sync_push_rpc, sync_status_rpc, LineageQueryReq, lineage_query_rpc,
+    VaultEncryptionMigrateReq, VaultEncryptionStatusReq, VaultInitReq, VaultOpenReq, SyncPullReq,
+    SyncPushReq, SyncStatusReq, sync_pull_rpc, sync_push_rpc, sync_status_rpc, LineageQueryReq,
+    lineage_query_rpc,
 };
 use apps_desktop_tauri::commands;
 use kc_core::app_error::AppError;
+use std::sync::{Mutex, OnceLock};
+
+fn env_lock() -> &'static Mutex<()> {
+    static LOCK: OnceLock<Mutex<()>> = OnceLock::new();
+    LOCK.get_or_init(|| Mutex::new(()))
+}
 
 #[test]
 fn rpc_envelope_success_shape() {
@@ -191,6 +198,92 @@ fn rpc_sync_status_and_push() {
         RpcResponse::Ok { data } => assert!(!data.snapshot_id.is_empty()),
         RpcResponse::Err { error } => panic!("sync push failed: {}", error.code),
     }
+}
+
+#[test]
+fn rpc_sync_supports_s3_uri_targets_via_emulation() {
+    let _guard = env_lock().lock().expect("env lock");
+    let root = tempfile::tempdir().expect("tempdir").keep();
+    let pull_root = tempfile::tempdir().expect("pull tempdir").keep();
+    let emulated_s3 = root.join("emulated-s3");
+    std::env::set_var(
+        "KC_SYNC_S3_EMULATE_ROOT",
+        emulated_s3.to_string_lossy().as_ref(),
+    );
+    std::env::set_var("KC_VAULT_PASSPHRASE", "rpc-sync-passphrase");
+
+    let input = root.join("note-sync-s3.txt");
+    std::fs::write(&input, b"hello sync s3").expect("write input");
+
+    let init = vault_init_rpc(VaultInitReq {
+        vault_path: root.to_string_lossy().to_string(),
+        vault_slug: "demo".to_string(),
+        now_ms: 1,
+    });
+    match init {
+        RpcResponse::Ok { .. } => {}
+        RpcResponse::Err { error } => panic!("vault init failed: {}", error.code),
+    }
+
+    let pull_init = vault_init_rpc(VaultInitReq {
+        vault_path: pull_root.to_string_lossy().to_string(),
+        vault_slug: "pull-demo".to_string(),
+        now_ms: 1,
+    });
+    match pull_init {
+        RpcResponse::Ok { .. } => {}
+        RpcResponse::Err { error } => panic!("pull vault init failed: {}", error.code),
+    }
+
+    let started = ingest_inbox_start_rpc(IngestInboxStartReq {
+        vault_path: root.to_string_lossy().to_string(),
+        file_path: input.to_string_lossy().to_string(),
+        source_kind: "notes".to_string(),
+        now_ms: 2,
+    });
+    match started {
+        RpcResponse::Ok { .. } => {}
+        RpcResponse::Err { error } => panic!("ingest failed: {}", error.code),
+    }
+
+    let target_uri = "s3://demo-bucket/kc";
+    let pushed = sync_push_rpc(SyncPushReq {
+        vault_path: root.to_string_lossy().to_string(),
+        target_path: target_uri.to_string(),
+        now_ms: 3,
+    });
+    let pushed_snapshot_id = match pushed {
+        RpcResponse::Ok { data } => data.snapshot_id,
+        RpcResponse::Err { error } => panic!("sync push failed: {}", error.code),
+    };
+
+    let status = sync_status_rpc(SyncStatusReq {
+        vault_path: root.to_string_lossy().to_string(),
+        target_path: target_uri.to_string(),
+    });
+    match status {
+        RpcResponse::Ok { data } => {
+            assert_eq!(data.target_path, target_uri);
+            assert_eq!(
+                data.remote_head.map(|h| h.snapshot_id),
+                Some(pushed_snapshot_id.clone())
+            );
+        }
+        RpcResponse::Err { error } => panic!("sync status failed: {}", error.code),
+    }
+
+    let pulled = sync_pull_rpc(SyncPullReq {
+        vault_path: pull_root.to_string_lossy().to_string(),
+        target_path: target_uri.to_string(),
+        now_ms: 4,
+    });
+    match pulled {
+        RpcResponse::Ok { data } => assert_eq!(data.snapshot_id, pushed_snapshot_id),
+        RpcResponse::Err { error } => panic!("sync pull failed: {}", error.code),
+    }
+
+    std::env::remove_var("KC_VAULT_PASSPHRASE");
+    std::env::remove_var("KC_SYNC_S3_EMULATE_ROOT");
 }
 
 #[test]

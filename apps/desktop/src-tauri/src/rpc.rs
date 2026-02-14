@@ -611,10 +611,7 @@ fn map_sync_head(head: kc_core::sync::SyncHeadV1) -> SyncHeadRes {
 }
 
 pub fn sync_status_rpc(req: SyncStatusReq) -> RpcResponse<SyncStatusRes> {
-    match rpc_service::sync_status_service(
-        std::path::Path::new(&req.vault_path),
-        std::path::Path::new(&req.target_path),
-    ) {
+    match rpc_service::sync_status_service(std::path::Path::new(&req.vault_path), &req.target_path) {
         Ok(status) => RpcResponse::ok(SyncStatusRes {
             target_path: status.target_path,
             remote_head: status.remote_head.map(map_sync_head),
@@ -628,7 +625,7 @@ pub fn sync_status_rpc(req: SyncStatusReq) -> RpcResponse<SyncStatusRes> {
 pub fn sync_push_rpc(req: SyncPushReq) -> RpcResponse<SyncPushRes> {
     match rpc_service::sync_push_service(
         std::path::Path::new(&req.vault_path),
-        std::path::Path::new(&req.target_path),
+        &req.target_path,
         req.now_ms,
     ) {
         Ok(out) => RpcResponse::ok(SyncPushRes {
@@ -643,7 +640,7 @@ pub fn sync_push_rpc(req: SyncPushReq) -> RpcResponse<SyncPushRes> {
 pub fn sync_pull_rpc(req: SyncPullReq) -> RpcResponse<SyncPullRes> {
     match rpc_service::sync_pull_service(
         std::path::Path::new(&req.vault_path),
-        std::path::Path::new(&req.target_path),
+        &req.target_path,
         req.now_ms,
     ) {
         Ok(out) => RpcResponse::ok(SyncPullRes {

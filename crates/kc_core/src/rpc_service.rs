@@ -356,30 +356,30 @@ pub fn jobs_list_service(_vault_path: &Path) -> AppResult<Vec<String>> {
     Ok(jobs.iter().cloned().collect())
 }
 
-pub fn sync_status_service(vault_path: &Path, target_path: &Path) -> AppResult<crate::sync::SyncStatusV1> {
+pub fn sync_status_service(vault_path: &Path, target_uri: &str) -> AppResult<crate::sync::SyncStatusV1> {
     let vault = vault_open(vault_path)?;
     let conn = open_db(&vault_path.join(vault.db.relative_path))?;
-    crate::sync::sync_status(&conn, target_path)
+    crate::sync::sync_status_target(&conn, target_uri)
 }
 
 pub fn sync_push_service(
     vault_path: &Path,
-    target_path: &Path,
+    target_uri: &str,
     now_ms: i64,
 ) -> AppResult<crate::sync::SyncPushResultV1> {
     let vault = vault_open(vault_path)?;
     let conn = open_db(&vault_path.join(vault.db.relative_path))?;
-    crate::sync::sync_push(&conn, vault_path, target_path, now_ms)
+    crate::sync::sync_push_target(&conn, vault_path, target_uri, now_ms)
 }
 
 pub fn sync_pull_service(
     vault_path: &Path,
-    target_path: &Path,
+    target_uri: &str,
     now_ms: i64,
 ) -> AppResult<crate::sync::SyncPullResultV1> {
     let vault = vault_open(vault_path)?;
     let conn = open_db(&vault_path.join(vault.db.relative_path))?;
-    crate::sync::sync_pull(&conn, vault_path, target_path, now_ms)
+    crate::sync::sync_pull_target(&conn, vault_path, target_uri, now_ms)
 }
 
 pub fn lineage_query_service(

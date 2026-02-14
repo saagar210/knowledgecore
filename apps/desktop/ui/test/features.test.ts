@@ -77,7 +77,7 @@ function mockApi(): DesktopRpcApi {
     jobsList: () => ok({ jobs: ["j1"] }),
     syncStatus: () =>
       ok({
-        target_path: "/tmp/sync",
+        target_path: "s3://demo-bucket/kc",
         remote_head: null,
         seen_remote_snapshot_id: null,
         last_applied_manifest_hash: null
@@ -235,20 +235,20 @@ describe("feature controllers", () => {
     expect(
       await loadSyncStatus(api, {
         vault_path: "/tmp/v",
-        target_path: "/tmp/sync"
+        target_path: "s3://demo-bucket/kc"
       })
     ).toMatchObject({ kind: "data" });
     expect(
       await runSyncPush(api, {
         vault_path: "/tmp/v",
-        target_path: "/tmp/sync",
+        target_path: "s3://demo-bucket/kc",
         now_ms: 7
       })
     ).toMatchObject({ kind: "data" });
     expect(
       await runSyncPull(api, {
         vault_path: "/tmp/v",
-        target_path: "/tmp/sync",
+        target_path: "s3://demo-bucket/kc",
         now_ms: 8
       })
     ).toMatchObject({ kind: "data" });

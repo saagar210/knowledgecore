@@ -75,6 +75,23 @@ fn rpc_schema_sync_rejects_unknown_fields() {
 }
 
 #[test]
+fn rpc_schema_sync_accepts_uri_targets() {
+    let status = serde_json::json!({
+        "vault_path": "/tmp/vault",
+        "target_path": "s3://demo-bucket/kc"
+    });
+    assert!(serde_json::from_value::<SyncStatusReq>(status).is_ok());
+
+    let push = serde_json::json!({
+        "vault_path": "/tmp/vault",
+        "target_path": "s3://demo-bucket/kc",
+        "now_ms": 123
+    });
+    assert!(serde_json::from_value::<SyncPushReq>(push.clone()).is_ok());
+    assert!(serde_json::from_value::<SyncPullReq>(push).is_ok());
+}
+
+#[test]
 fn rpc_schema_requires_now_ms_for_lineage_query() {
     let missing_now = serde_json::json!({
         "vault_path": "/tmp/vault",
