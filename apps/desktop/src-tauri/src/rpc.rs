@@ -115,6 +115,43 @@ pub struct VaultOpenRes {
 
 #[derive(Debug, Deserialize)]
 #[serde(deny_unknown_fields)]
+pub struct VaultLockStatusReq {
+    pub vault_path: String,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct VaultLockStatusRes {
+    pub db_encryption_enabled: bool,
+    pub unlocked: bool,
+    pub mode: String,
+    pub key_reference: Option<String>,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct VaultUnlockReq {
+    pub vault_path: String,
+    pub passphrase: String,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct VaultUnlockRes {
+    pub status: VaultLockStatusRes,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct VaultLockReq {
+    pub vault_path: String,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct VaultLockRes {
+    pub status: VaultLockStatusRes,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct VaultEncryptionStatusReq {
     pub vault_path: String,
 }
@@ -444,9 +481,43 @@ fn map_encryption_status(status: kc_core::rpc_service::VaultEncryptionStatus) ->
     }
 }
 
+fn map_lock_status(status: kc_core::rpc_service::VaultDbLockStatus) -> VaultLockStatusRes {
+    VaultLockStatusRes {
+        db_encryption_enabled: status.db_encryption_enabled,
+        unlocked: status.unlocked,
+        mode: status.mode,
+        key_reference: status.key_reference,
+    }
+}
+
 pub fn vault_encryption_status_rpc(req: VaultEncryptionStatusReq) -> RpcResponse<VaultEncryptionStatusRes> {
     match rpc_service::vault_encryption_status_service(std::path::Path::new(&req.vault_path)) {
         Ok(status) => RpcResponse::ok(map_encryption_status(status)),
+        Err(error) => RpcResponse::err(error),
+    }
+}
+
+pub fn vault_lock_status_rpc(req: VaultLockStatusReq) -> RpcResponse<VaultLockStatusRes> {
+    match rpc_service::vault_lock_status_service(std::path::Path::new(&req.vault_path)) {
+        Ok(status) => RpcResponse::ok(map_lock_status(status)),
+        Err(error) => RpcResponse::err(error),
+    }
+}
+
+pub fn vault_unlock_rpc(req: VaultUnlockReq) -> RpcResponse<VaultUnlockRes> {
+    match rpc_service::vault_unlock_service(std::path::Path::new(&req.vault_path), &req.passphrase) {
+        Ok(status) => RpcResponse::ok(VaultUnlockRes {
+            status: map_lock_status(status),
+        }),
+        Err(error) => RpcResponse::err(error),
+    }
+}
+
+pub fn vault_lock_rpc(req: VaultLockReq) -> RpcResponse<VaultLockRes> {
+    match rpc_service::vault_lock_service(std::path::Path::new(&req.vault_path)) {
+        Ok(status) => RpcResponse::ok(VaultLockRes {
+            status: map_lock_status(status),
+        }),
         Err(error) => RpcResponse::err(error),
     }
 }

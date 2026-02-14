@@ -29,7 +29,7 @@ Authoritative registry of all versioned schemas and contracts. Any schema additi
 | Verifier report | 1 | `spec/13-verifier-and-reporting.md` | kc_cli | UI/automation | 1 | stable exit codes (0/20/21/31/40/41/60); deterministic ordering; schema-validated manifest input; encryption-state mismatches map into code 41 | additive ok | bump on exit/order/schema rule change |
 | AppError | 1 | `spec/14-error-contract-app-error-taxonomy.md` | all | UI/CLI/RPC | 1-adj | UI branches on code only | additive codes ok | bump on struct change |
 | Trace log | 1 | `spec/17-trace-log-schema-and-redaction.md` | kc_ask | UI/automation | 1 | `trace_id`/`vault_id` UUID; deterministic retrieval chunk ordering + locator ordering | additive ok | bump on struct change |
-| RPC envelope | 1 | `spec/19-tauri-rpc-surface.md` | src-tauri | UI | 1-adj | strict one-of envelope; methods include `ingest_inbox_start/stop` and `vault_encryption_status/enable/migrate`; deterministic reqs carry `now_ms` | additive methods ok | bump on breaking change |
+| RPC envelope | 1 | `spec/19-tauri-rpc-surface.md` | src-tauri | UI | 1-adj | strict one-of envelope; methods include lock-session RPC (`vault_lock_status`, `vault_unlock`, `vault_lock`), `ingest_inbox_start/stop`, and `vault_encryption_status/enable/migrate`; deterministic reqs carry `now_ms` | additive methods ok | bump on breaking change |
 
 ## Draft Schemas (Phase L, non-runtime)
 

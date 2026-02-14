@@ -1,6 +1,7 @@
 use apps_desktop_tauri::rpc::{
     AskQuestionReq, SearchQueryReq, VaultEncryptionEnableReq, VaultEncryptionMigrateReq,
     VaultEncryptionStatusReq, VaultInitReq, SyncPushReq, SyncPullReq, SyncStatusReq,
+    VaultLockReq, VaultLockStatusReq, VaultUnlockReq,
     LineageQueryReq,
 };
 
@@ -46,6 +47,19 @@ fn rpc_schema_rejects_unknown_fields() {
         "extra": "nope"
     });
     assert!(serde_json::from_value::<VaultEncryptionEnableReq>(invalid_enable).is_err());
+
+    let invalid_unlock = serde_json::json!({
+        "vault_path": "/tmp/vault",
+        "passphrase": "secret",
+        "extra": "nope"
+    });
+    assert!(serde_json::from_value::<VaultUnlockReq>(invalid_unlock).is_err());
+
+    let invalid_lock = serde_json::json!({
+        "vault_path": "/tmp/vault",
+        "extra": "nope"
+    });
+    assert!(serde_json::from_value::<VaultLockReq>(invalid_lock).is_err());
 }
 
 #[test]
@@ -89,6 +103,20 @@ fn rpc_schema_sync_accepts_uri_targets() {
     });
     assert!(serde_json::from_value::<SyncPushReq>(push.clone()).is_ok());
     assert!(serde_json::from_value::<SyncPullReq>(push).is_ok());
+}
+
+#[test]
+fn rpc_schema_lock_requests_validate_shapes() {
+    let lock_status = serde_json::json!({
+        "vault_path": "/tmp/vault"
+    });
+    assert!(serde_json::from_value::<VaultLockStatusReq>(lock_status).is_ok());
+
+    let unlock = serde_json::json!({
+        "vault_path": "/tmp/vault",
+        "passphrase": "secret"
+    });
+    assert!(serde_json::from_value::<VaultUnlockReq>(unlock).is_ok());
 }
 
 #[test]

@@ -79,6 +79,17 @@ export type VaultInitReqV1 = { vault_path: string; vault_slug: string; now_ms: n
 export type VaultInitRes = { vault_id: string };
 export type VaultOpenReq = { vault_path: string };
 export type VaultOpenRes = { vault_id: string; vault_slug: string };
+export type VaultLockStatusReq = { vault_path: string };
+export type VaultLockStatusRes = {
+  db_encryption_enabled: boolean;
+  unlocked: boolean;
+  mode: string;
+  key_reference: string | null;
+};
+export type VaultUnlockReq = { vault_path: string; passphrase: string };
+export type VaultUnlockRes = { status: VaultLockStatusRes };
+export type VaultLockReq = { vault_path: string };
+export type VaultLockRes = { status: VaultLockStatusRes };
 export type VaultEncryptionStatusReq = { vault_path: string };
 export type VaultEncryptionStatusRes = {
   enabled: boolean;
@@ -210,6 +221,10 @@ export type PreviewCapabilityRes = { capability: string; status: string };
 export const rpcMethods = {
   vaultInit: (req: VaultInitReqV1) => rpc<VaultInitReqV1, VaultInitRes>("vault_init", req),
   vaultOpen: (req: VaultOpenReq) => rpc<VaultOpenReq, VaultOpenRes>("vault_open", req),
+  vaultLockStatus: (req: VaultLockStatusReq) =>
+    rpc<VaultLockStatusReq, VaultLockStatusRes>("vault_lock_status", req),
+  vaultUnlock: (req: VaultUnlockReq) => rpc<VaultUnlockReq, VaultUnlockRes>("vault_unlock", req),
+  vaultLock: (req: VaultLockReq) => rpc<VaultLockReq, VaultLockRes>("vault_lock", req),
   vaultEncryptionStatus: (req: VaultEncryptionStatusReq) =>
     rpc<VaultEncryptionStatusReq, VaultEncryptionStatusRes>("vault_encryption_status", req),
   vaultEncryptionEnable: (req: VaultEncryptionEnableReq) =>

@@ -7,6 +7,9 @@ fn main() {
     let builder = tauri::Builder::default().invoke_handler(tauri::generate_handler![
         commands::vault_init,
         commands::vault_open,
+        commands::vault_lock_status,
+        commands::vault_unlock,
+        commands::vault_lock,
         commands::vault_encryption_status,
         commands::vault_encryption_enable,
         commands::vault_encryption_migrate,
@@ -32,6 +35,9 @@ fn main() {
     let builder = tauri::Builder::default().invoke_handler(tauri::generate_handler![
         commands::vault_init,
         commands::vault_open,
+        commands::vault_lock_status,
+        commands::vault_unlock,
+        commands::vault_lock,
         commands::vault_encryption_status,
         commands::vault_encryption_enable,
         commands::vault_encryption_migrate,

@@ -14,12 +14,15 @@ import { loadRelated } from "../src/features/related";
 import { runSearch } from "../src/features/search";
 import {
   enableVaultEncryption,
+  lockVault,
+  loadVaultLockStatus,
   loadSettingsDependencies,
   loadSyncStatus,
   loadVaultEncryptionStatus,
   migrateVaultEncryption,
   runSyncPull,
-  runSyncPush
+  runSyncPush,
+  unlockVault
 } from "../src/features/settings";
 import { vaultInit, vaultOpen } from "../src/features/vault";
 
@@ -31,6 +34,31 @@ function mockApi(): DesktopRpcApi {
   return {
     vaultInit: () => ok({ vault_id: "v1" }),
     vaultOpen: () => ok({ vault_id: "v1", vault_slug: "demo" }),
+    vaultLockStatus: () =>
+      ok({
+        db_encryption_enabled: true,
+        unlocked: true,
+        mode: "sqlcipher_v4",
+        key_reference: "vaultdb:v1"
+      }),
+    vaultUnlock: () =>
+      ok({
+        status: {
+          db_encryption_enabled: true,
+          unlocked: true,
+          mode: "sqlcipher_v4",
+          key_reference: "vaultdb:v1"
+        }
+      }),
+    vaultLock: () =>
+      ok({
+        status: {
+          db_encryption_enabled: true,
+          unlocked: false,
+          mode: "sqlcipher_v4",
+          key_reference: "vaultdb:v1"
+        }
+      }),
     vaultEncryptionStatus: () =>
       ok({
         enabled: false,
@@ -211,6 +239,22 @@ describe("feature controllers", () => {
     });
     expect(
       await loadSettingsDependencies(api, {
+        vault_path: "/tmp/v"
+      })
+    ).toMatchObject({ kind: "data" });
+    expect(
+      await loadVaultLockStatus(api, {
+        vault_path: "/tmp/v"
+      })
+    ).toMatchObject({ kind: "data" });
+    expect(
+      await unlockVault(api, {
+        vault_path: "/tmp/v",
+        passphrase: "pass"
+      })
+    ).toMatchObject({ kind: "data" });
+    expect(
+      await lockVault(api, {
         vault_path: "/tmp/v"
       })
     ).toMatchObject({ kind: "data" });

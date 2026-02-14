@@ -18,7 +18,7 @@ mod verifier;
 use clap::Parser;
 use cli::{
     BenchCmd, Cli, Command, DepsCmd, FixturesCmd, GcCmd, IndexCmd, IngestCmd, VaultCmd,
-    SyncCmd, VaultEncryptCmd,
+    SyncCmd, VaultDbEncryptCmd, VaultEncryptCmd,
 };
 #[cfg(feature = "phase_l_preview")]
 use cli::PreviewCmd;
@@ -50,6 +50,12 @@ fn main() {
                 opened.map(|_| ())
             }
             VaultCmd::Verify { vault_path } => commands::vault::run_verify(&vault_path),
+            VaultCmd::Unlock {
+                vault_path,
+                passphrase_env,
+            } => commands::vault::run_unlock(&vault_path, &passphrase_env),
+            VaultCmd::Lock { vault_path } => commands::vault::run_lock(&vault_path),
+            VaultCmd::LockStatus { vault_path } => commands::vault::run_lock_status(&vault_path),
             VaultCmd::Encrypt { cmd } => match cmd {
                 VaultEncryptCmd::Status { vault_path } => commands::vault::run_encrypt_status(&vault_path),
                 VaultEncryptCmd::Enable {
@@ -61,6 +67,18 @@ fn main() {
                     passphrase_env,
                     now_ms,
                 } => commands::vault::run_encrypt_migrate(&vault_path, &passphrase_env, now_ms),
+            },
+            VaultCmd::DbEncrypt { cmd } => match cmd {
+                VaultDbEncryptCmd::Status { vault_path } => commands::vault::run_db_encrypt_status(&vault_path),
+                VaultDbEncryptCmd::Enable {
+                    vault_path,
+                    passphrase_env,
+                } => commands::vault::run_db_encrypt_enable(&vault_path, &passphrase_env),
+                VaultDbEncryptCmd::Migrate {
+                    vault_path,
+                    passphrase_env,
+                    now_ms,
+                } => commands::vault::run_db_encrypt_migrate(&vault_path, &passphrase_env, now_ms),
             },
         },
         Command::Ingest { cmd } => match cmd {

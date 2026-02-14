@@ -1,8 +1,9 @@
 use kc_core::app_error::{AppError, AppResult};
 use kc_core::db::open_db;
 use kc_core::rpc_service::{
+    vault_db_encrypt_enable_service, vault_db_encrypt_migrate_service, vault_db_encrypt_status_service,
     vault_encryption_enable_service, vault_encryption_migrate_service,
-    vault_encryption_status_service,
+    vault_encryption_status_service, vault_lock_service, vault_lock_status_service, vault_unlock_service,
 };
 use kc_core::vault::{vault_open, vault_paths};
 use std::path::Path;
@@ -142,12 +143,114 @@ pub fn run_encrypt_migrate(vault_path: &str, passphrase_env: &str, now_ms: i64) 
     Ok(())
 }
 
+pub fn run_db_encrypt_status(vault_path: &str) -> AppResult<()> {
+    let status = vault_db_encrypt_status_service(Path::new(vault_path))?;
+    let lock_status = vault_lock_status_service(Path::new(vault_path))?;
+    println!(
+        "{}",
+        serde_json::to_string_pretty(&serde_json::json!({
+            "status": "ok",
+            "db_encryption": {
+                "enabled": status.enabled,
+                "mode": status.mode,
+                "key_reference": status.key_reference,
+                "unlocked": status.unlocked,
+                "lock_status": {
+                    "db_encryption_enabled": lock_status.db_encryption_enabled,
+                    "unlocked": lock_status.unlocked,
+                }
+            }
+        }))
+        .unwrap_or_else(|_| "{}".to_string())
+    );
+    Ok(())
+}
+
+pub fn run_db_encrypt_enable(vault_path: &str, passphrase_env: &str) -> AppResult<()> {
+    let passphrase = passphrase_from_env(passphrase_env)?;
+    let status = vault_db_encrypt_enable_service(Path::new(vault_path), &passphrase)?;
+    println!(
+        "{}",
+        serde_json::to_string_pretty(&serde_json::json!({
+            "status": "ok",
+            "enabled": status.enabled,
+            "mode": status.mode,
+            "unlocked": status.unlocked,
+        }))
+        .unwrap_or_else(|_| "{}".to_string())
+    );
+    Ok(())
+}
+
+pub fn run_db_encrypt_migrate(vault_path: &str, passphrase_env: &str, now_ms: i64) -> AppResult<()> {
+    let passphrase = passphrase_from_env(passphrase_env)?;
+    let out = vault_db_encrypt_migrate_service(Path::new(vault_path), &passphrase, now_ms)?;
+    println!(
+        "{}",
+        serde_json::to_string_pretty(&serde_json::json!({
+            "status": "ok",
+            "event_id": out.event_id,
+            "outcome": out.outcome,
+            "db_encryption": {
+                "enabled": out.status.enabled,
+                "mode": out.status.mode,
+                "unlocked": out.status.unlocked,
+            }
+        }))
+        .unwrap_or_else(|_| "{}".to_string())
+    );
+    Ok(())
+}
+
+pub fn run_unlock(vault_path: &str, passphrase_env: &str) -> AppResult<()> {
+    let passphrase = passphrase_from_env(passphrase_env)?;
+    let status = vault_unlock_service(Path::new(vault_path), &passphrase)?;
+    println!(
+        "{}",
+        serde_json::to_string_pretty(&serde_json::json!({
+            "status": "ok",
+            "db_encryption_enabled": status.db_encryption_enabled,
+            "unlocked": status.unlocked,
+        }))
+        .unwrap_or_else(|_| "{}".to_string())
+    );
+    Ok(())
+}
+
+pub fn run_lock(vault_path: &str) -> AppResult<()> {
+    let status = vault_lock_service(Path::new(vault_path))?;
+    println!(
+        "{}",
+        serde_json::to_string_pretty(&serde_json::json!({
+            "status": "ok",
+            "db_encryption_enabled": status.db_encryption_enabled,
+            "unlocked": status.unlocked,
+        }))
+        .unwrap_or_else(|_| "{}".to_string())
+    );
+    Ok(())
+}
+
+pub fn run_lock_status(vault_path: &str) -> AppResult<()> {
+    let status = vault_lock_status_service(Path::new(vault_path))?;
+    println!(
+        "{}",
+        serde_json::to_string_pretty(&serde_json::json!({
+            "status": "ok",
+            "db_encryption_enabled": status.db_encryption_enabled,
+            "unlocked": status.unlocked,
+        }))
+        .unwrap_or_else(|_| "{}".to_string())
+    );
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
-    use super::{run_encrypt_enable, run_encrypt_migrate};
+    use super::{run_db_encrypt_enable, run_db_encrypt_migrate, run_db_encrypt_status, run_encrypt_enable, run_encrypt_migrate};
     use kc_core::db::open_db;
     use kc_core::object_store::{is_encrypted_payload, ObjectStore};
-    use kc_core::rpc_service::vault_encryption_status_service;
+    use kc_core::rpc_service::{vault_db_encrypt_status_service, vault_encryption_status_service};
     use kc_core::vault::vault_init;
 
     #[test]
@@ -180,6 +283,33 @@ mod tests {
             .expect("raw bytes");
         assert!(is_encrypted_payload(&raw));
 
+        std::env::remove_var(env_name);
+    }
+
+    #[test]
+    fn db_encrypt_enable_and_migrate_round_trip() {
+        let root = tempfile::tempdir().expect("tempdir").keep();
+        vault_init(&root, "demo", 1).expect("vault init");
+
+        let env_name = format!("KC_TEST_DB_PASSPHRASE_{}", std::process::id());
+        std::env::set_var(&env_name, "test-db-passphrase");
+
+        run_db_encrypt_enable(root.to_string_lossy().as_ref(), &env_name).expect("enable db encryption");
+        let status_enabled = vault_db_encrypt_status_service(&root).expect("db status enabled");
+        assert!(status_enabled.enabled);
+        assert!(status_enabled.unlocked);
+
+        run_db_encrypt_migrate(root.to_string_lossy().as_ref(), &env_name, 2).expect("migrate db encryption");
+        run_db_encrypt_status(root.to_string_lossy().as_ref()).expect("db status command");
+
+        std::env::set_var("KC_VAULT_DB_PASSPHRASE", "test-db-passphrase");
+        let conn = open_db(&root.join("db/knowledge.sqlite")).expect("open migrated encrypted db");
+        let _: i64 = conn
+            .query_row("SELECT COUNT(*) FROM docs", [], |row| row.get(0))
+            .expect("query docs count");
+        drop(conn);
+
+        std::env::remove_var("KC_VAULT_DB_PASSPHRASE");
         std::env::remove_var(env_name);
     }
 }

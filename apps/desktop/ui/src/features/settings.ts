@@ -2,6 +2,12 @@ import type {
   DesktopRpcApi,
   JobsListReq,
   JobsListRes,
+  VaultLockReq,
+  VaultLockRes,
+  VaultLockStatusReq,
+  VaultLockStatusRes,
+  VaultUnlockReq,
+  VaultUnlockRes,
   VaultEncryptionEnableReq,
   VaultEncryptionEnableRes,
   VaultEncryptionMigrateReq,
@@ -29,6 +35,27 @@ export async function loadVaultEncryptionStatus(
   req: VaultEncryptionStatusReq
 ): Promise<ViewState<VaultEncryptionStatusRes>> {
   return nextStateFromRpc(await api.vaultEncryptionStatus(req));
+}
+
+export async function loadVaultLockStatus(
+  api: DesktopRpcApi,
+  req: VaultLockStatusReq
+): Promise<ViewState<VaultLockStatusRes>> {
+  return nextStateFromRpc(await api.vaultLockStatus(req));
+}
+
+export async function unlockVault(
+  api: DesktopRpcApi,
+  req: VaultUnlockReq
+): Promise<ViewState<VaultUnlockRes>> {
+  return nextStateFromRpc(await api.vaultUnlock(req));
+}
+
+export async function lockVault(
+  api: DesktopRpcApi,
+  req: VaultLockReq
+): Promise<ViewState<VaultLockRes>> {
+  return nextStateFromRpc(await api.vaultLock(req));
 }
 
 export async function enableVaultEncryption(

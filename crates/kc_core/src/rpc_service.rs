@@ -1,6 +1,6 @@
 use crate::app_error::{AppError, AppResult};
 use crate::canonical::load_canonical_text;
-use crate::db::open_db;
+use crate::db::{db_is_unlocked, db_lock, db_unlock, migrate_db_to_sqlcipher, open_db, DbMigrationOutcome};
 use crate::events::append_event;
 use crate::hashing::blake3_hex_prefixed;
 use crate::ingest::ingest_bytes;
@@ -56,6 +56,29 @@ pub struct VaultEncryptionMigrateResult {
     pub status: VaultEncryptionStatus,
     pub migrated_objects: i64,
     pub already_encrypted_objects: i64,
+    pub event_id: i64,
+}
+
+#[derive(Debug, Clone)]
+pub struct VaultDbLockStatus {
+    pub db_encryption_enabled: bool,
+    pub unlocked: bool,
+    pub mode: String,
+    pub key_reference: Option<String>,
+}
+
+#[derive(Debug, Clone)]
+pub struct VaultDbEncryptStatus {
+    pub enabled: bool,
+    pub mode: String,
+    pub key_reference: Option<String>,
+    pub unlocked: bool,
+}
+
+#[derive(Debug, Clone)]
+pub struct VaultDbEncryptMigrateResult {
+    pub status: VaultDbEncryptStatus,
+    pub outcome: String,
     pub event_id: i64,
 }
 
@@ -551,6 +574,147 @@ pub fn vault_encryption_migrate_service(
         status,
         migrated_objects: migrated,
         already_encrypted_objects: already_encrypted,
+        event_id: event.event_id,
+    })
+}
+
+fn db_lock_status_for_vault(
+    vault_path: &Path,
+    vault: &crate::vault::VaultJsonV2,
+) -> VaultDbLockStatus {
+    let unlocked = if vault.db_encryption.enabled {
+        db_is_unlocked(vault_path)
+            || std::env::var("KC_VAULT_DB_PASSPHRASE").is_ok()
+            || std::env::var("KC_VAULT_PASSPHRASE").is_ok()
+    } else {
+        true
+    };
+    VaultDbLockStatus {
+        db_encryption_enabled: vault.db_encryption.enabled,
+        unlocked,
+        mode: vault.db_encryption.mode.clone(),
+        key_reference: vault.db_encryption.key_reference.clone(),
+    }
+}
+
+fn db_encrypt_status_for_vault(
+    vault_path: &Path,
+    vault: &crate::vault::VaultJsonV2,
+) -> VaultDbEncryptStatus {
+    VaultDbEncryptStatus {
+        enabled: vault.db_encryption.enabled,
+        mode: vault.db_encryption.mode.clone(),
+        key_reference: vault.db_encryption.key_reference.clone(),
+        unlocked: db_lock_status_for_vault(vault_path, vault).unlocked,
+    }
+}
+
+fn ensure_passphrase_not_empty(passphrase: &str) -> AppResult<()> {
+    if passphrase.is_empty() {
+        return Err(AppError::new(
+            "KC_DB_KEY_INVALID",
+            "db",
+            "db passphrase must not be empty",
+            false,
+            serde_json::json!({}),
+        ));
+    }
+    Ok(())
+}
+
+pub fn vault_lock_status_service(vault_path: &Path) -> AppResult<VaultDbLockStatus> {
+    let vault = vault_open(vault_path)?;
+    Ok(db_lock_status_for_vault(vault_path, &vault))
+}
+
+pub fn vault_unlock_service(vault_path: &Path, passphrase: &str) -> AppResult<VaultDbLockStatus> {
+    ensure_passphrase_not_empty(passphrase)?;
+    let vault = vault_open(vault_path)?;
+    if !vault.db_encryption.enabled {
+        return Ok(db_lock_status_for_vault(vault_path, &vault));
+    }
+    let db_path = vault_path.join(vault.db.relative_path.clone());
+    db_unlock(vault_path, &db_path, passphrase)?;
+    Ok(db_lock_status_for_vault(vault_path, &vault))
+}
+
+pub fn vault_lock_service(vault_path: &Path) -> AppResult<VaultDbLockStatus> {
+    let vault = vault_open(vault_path)?;
+    db_lock(vault_path)?;
+    Ok(db_lock_status_for_vault(vault_path, &vault))
+}
+
+pub fn vault_db_encrypt_status_service(vault_path: &Path) -> AppResult<VaultDbEncryptStatus> {
+    let vault = vault_open(vault_path)?;
+    Ok(db_encrypt_status_for_vault(vault_path, &vault))
+}
+
+pub fn vault_db_encrypt_enable_service(
+    vault_path: &Path,
+    passphrase: &str,
+) -> AppResult<VaultDbEncryptStatus> {
+    ensure_passphrase_not_empty(passphrase)?;
+    let mut vault = vault_open(vault_path)?;
+    if !vault.db_encryption.enabled {
+        vault.db_encryption.enabled = true;
+        if vault.db_encryption.key_reference.is_none() {
+            vault.db_encryption.key_reference = Some(format!("vaultdb:{}", vault.vault_id));
+        }
+        vault_save(vault_path, &vault)?;
+    }
+    let db_path = vault_path.join(vault.db.relative_path.clone());
+    db_unlock(vault_path, &db_path, passphrase)?;
+    Ok(db_encrypt_status_for_vault(vault_path, &vault))
+}
+
+pub fn vault_db_encrypt_migrate_service(
+    vault_path: &Path,
+    passphrase: &str,
+    now_ms: i64,
+) -> AppResult<VaultDbEncryptMigrateResult> {
+    ensure_passphrase_not_empty(passphrase)?;
+    let vault = vault_open(vault_path)?;
+    if !vault.db_encryption.enabled {
+        return Err(AppError::new(
+            "KC_DB_LOCKED",
+            "db",
+            "db encryption must be enabled before migrate",
+            false,
+            serde_json::json!({ "vault_path": vault_path }),
+        ));
+    }
+    let db_path = vault_path.join(vault.db.relative_path.clone());
+    let migration_outcome = migrate_db_to_sqlcipher(&db_path, passphrase)?;
+    db_unlock(vault_path, &db_path, passphrase)?;
+    let conn = open_db(&db_path)?;
+    let event = append_event(
+        &conn,
+        now_ms,
+        "vault.db_encryption.migrate",
+        &serde_json::json!({
+            "outcome": match migration_outcome {
+                DbMigrationOutcome::Migrated => "migrated",
+                DbMigrationOutcome::AlreadyEncrypted => "already_encrypted",
+            },
+            "mode": vault.db_encryption.mode,
+            "kdf_algorithm": vault.db_encryption.kdf.algorithm,
+        }),
+    )
+    .map_err(|e| {
+        AppError::new(
+            "KC_DB_ENCRYPTION_MIGRATION_FAILED",
+            "db",
+            "failed appending db encryption migration event",
+            false,
+            serde_json::json!({ "error": e.code, "message": e.message }),
+        )
+    })?;
+    Ok(VaultDbEncryptMigrateResult {
+        status: db_encrypt_status_for_vault(vault_path, &vault),
+        outcome: match migration_outcome {
+            DbMigrationOutcome::Migrated => "migrated".to_string(),
+            DbMigrationOutcome::AlreadyEncrypted => "already_encrypted".to_string(),
+        },
         event_id: event.event_id,
     })
 }

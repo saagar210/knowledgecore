@@ -11,6 +11,21 @@ pub fn vault_open(req: rpc::VaultOpenReq) -> rpc::RpcResponse<rpc::VaultOpenRes>
 }
 
 #[tauri::command]
+pub fn vault_lock_status(req: rpc::VaultLockStatusReq) -> rpc::RpcResponse<rpc::VaultLockStatusRes> {
+    rpc::vault_lock_status_rpc(req)
+}
+
+#[tauri::command]
+pub fn vault_unlock(req: rpc::VaultUnlockReq) -> rpc::RpcResponse<rpc::VaultUnlockRes> {
+    rpc::vault_unlock_rpc(req)
+}
+
+#[tauri::command]
+pub fn vault_lock(req: rpc::VaultLockReq) -> rpc::RpcResponse<rpc::VaultLockRes> {
+    rpc::vault_lock_rpc(req)
+}
+
+#[tauri::command]
 pub fn vault_encryption_status(
     req: rpc::VaultEncryptionStatusReq,
 ) -> rpc::RpcResponse<rpc::VaultEncryptionStatusRes> {

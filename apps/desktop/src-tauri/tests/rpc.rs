@@ -1,10 +1,11 @@
 use apps_desktop_tauri::rpc::{
     ingest_inbox_start_rpc, ingest_inbox_stop_rpc, jobs_list_rpc, vault_encryption_enable_rpc,
     vault_encryption_migrate_rpc, vault_encryption_status_rpc, vault_init_rpc, vault_open_rpc,
+    vault_lock_rpc, vault_lock_status_rpc, vault_unlock_rpc,
     IngestInboxStartReq, IngestInboxStopReq, JobsListReq, RpcResponse, VaultEncryptionEnableReq,
-    VaultEncryptionMigrateReq, VaultEncryptionStatusReq, VaultInitReq, VaultOpenReq, SyncPullReq,
-    SyncPushReq, SyncStatusReq, sync_pull_rpc, sync_push_rpc, sync_status_rpc, LineageQueryReq,
-    lineage_query_rpc,
+    VaultEncryptionMigrateReq, VaultEncryptionStatusReq, VaultInitReq, VaultLockReq,
+    VaultLockStatusReq, VaultOpenReq, VaultUnlockReq, SyncPullReq, SyncPushReq, SyncStatusReq,
+    sync_pull_rpc, sync_push_rpc, sync_status_rpc, LineageQueryReq, lineage_query_rpc,
 };
 use apps_desktop_tauri::commands;
 use kc_core::app_error::AppError;
@@ -87,6 +88,49 @@ fn rpc_vault_open_and_jobs_list() {
     match jobs {
         RpcResponse::Ok { data } => assert!(data.jobs.is_empty()),
         RpcResponse::Err { error } => panic!("jobs list failed: {}", error.code),
+    }
+}
+
+#[test]
+fn rpc_vault_lock_status_unlock_and_lock_round_trip() {
+    let root = tempfile::tempdir().expect("tempdir").keep();
+
+    let init = vault_init_rpc(VaultInitReq {
+        vault_path: root.to_string_lossy().to_string(),
+        vault_slug: "demo".to_string(),
+        now_ms: 1,
+    });
+    match init {
+        RpcResponse::Ok { .. } => {}
+        RpcResponse::Err { error } => panic!("vault init failed: {}", error.code),
+    }
+
+    let status_before = vault_lock_status_rpc(VaultLockStatusReq {
+        vault_path: root.to_string_lossy().to_string(),
+    });
+    match status_before {
+        RpcResponse::Ok { data } => {
+            assert!(!data.db_encryption_enabled);
+            assert!(data.unlocked);
+        }
+        RpcResponse::Err { error } => panic!("lock status failed: {}", error.code),
+    }
+
+    let unlocked = vault_unlock_rpc(VaultUnlockReq {
+        vault_path: root.to_string_lossy().to_string(),
+        passphrase: "test-passphrase".to_string(),
+    });
+    match unlocked {
+        RpcResponse::Ok { data } => assert!(data.status.unlocked),
+        RpcResponse::Err { error } => panic!("unlock failed: {}", error.code),
+    }
+
+    let locked = vault_lock_rpc(VaultLockReq {
+        vault_path: root.to_string_lossy().to_string(),
+    });
+    match locked {
+        RpcResponse::Ok { data } => assert!(data.status.unlocked),
+        RpcResponse::Err { error } => panic!("lock failed: {}", error.code),
     }
 }
 
