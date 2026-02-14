@@ -26,10 +26,21 @@ Authoritative registry of all versioned schemas and contracts. Any schema additi
 | Trace log | 1 | `spec/17-trace-log-schema-and-redaction.md` | kc_ask | UI/automation | 1 | `trace_id`/`vault_id` UUID; deterministic retrieval chunk ordering + locator ordering | additive ok | bump on struct change |
 | RPC envelope | 1 | `spec/19-tauri-rpc-surface.md` | src-tauri | UI | 1-adj | strict one-of envelope; methods include `ingest_inbox_start/stop`; deterministic reqs carry `now_ms` | additive methods ok | bump on breaking change |
 
+## Draft Schemas (Phase L, non-runtime)
+
+| Schema | Ver | Path | Producer | Consumer | Status | Activation Phase | Invariants | Compat Rules | Bump Rules |
+|---|---:|---|---|---|---|---|---|---|---|
+| Encryption metadata draft | 1 | `spec/22-encryption-at-rest-v1-design-lock.md` | kc_core (feature-gated) | kc_cli/src-tauri/ui preview shells | draft | M | deterministic placeholder metadata; non-runtime | draft-only additive fields allowed with tests | bump on field semantics change before promotion |
+| ZIP packaging metadata draft | 1 | `spec/23-deterministic-zip-packaging-v1-design-lock.md` | kc_core (feature-gated) | kc_cli/src-tauri/ui preview shells | draft | N1 | deterministic ZIP policy descriptors; non-runtime | draft-only additive fields allowed with tests | bump on ordering/timestamp policy change |
+| Sync manifest draft | 1 | `spec/24-cross-device-sync-v1-design-lock.md` | kc_core (feature-gated) | kc_cli/src-tauri/ui preview shells | draft | N2 | deterministic conflict ordering; non-runtime | draft-only additive fields allowed with tests | bump on conflict policy semantics change |
+| Lineage query draft | 1 | `spec/25-advanced-lineage-ui-v1-design-lock.md` | kc_core (feature-gated) | src-tauri/ui preview shells | draft | N3 | deterministic node/edge ordering; non-runtime | draft-only additive fields allowed with tests | bump on query/result semantics change |
+
 ## Schema validation workflow
 - JSON schema validation tests (Rust `jsonschema` crate):
   - `cargo test -p kc_core -- schema_*`
   - `cargo test -p kc_cli -- schema_*`
+- Draft schema validation tests (Phase L scaffolding):
+  - `cargo test -p kc_core -- schema_draft_*`
 - RPC round-trip serialization tests:
   - `cargo test -p apps_desktop_tauri -- rpc_*`
   - Deterministic RPC request schema tests:

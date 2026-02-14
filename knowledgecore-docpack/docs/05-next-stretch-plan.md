@@ -33,6 +33,13 @@ Prepare deferred capabilities for implementation by producing ratified specs, sc
 - Explicit capability gates, fallback/disable behavior, and AppError code maps.
 - Schema draft table with planned version bumps and compatibility notes.
 
+### Phase L spec set (ratified artifacts)
+- `spec/22-encryption-at-rest-v1-design-lock.md`
+- `spec/23-deterministic-zip-packaging-v1-design-lock.md`
+- `spec/24-cross-device-sync-v1-design-lock.md`
+- `spec/25-advanced-lineage-ui-v1-design-lock.md`
+- `spec/26-deferred-capability-schema-drafts.md`
+
 ### API / Schema impact expectations
 - No production API changes in L.
 - Draft-only schema additions may be documented but not activated.
