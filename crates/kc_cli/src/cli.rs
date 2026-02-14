@@ -25,12 +25,29 @@ pub enum Command {
     Verify {
         bundle_path: String,
     },
+    Index {
+        #[command(subcommand)]
+        cmd: IndexCmd,
+    },
+    Gc {
+        #[command(subcommand)]
+        cmd: GcCmd,
+    },
+    Deps {
+        #[command(subcommand)]
+        cmd: DepsCmd,
+    },
+    Bench {
+        #[command(subcommand)]
+        cmd: BenchCmd,
+    },
 }
 
 #[derive(Subcommand)]
 pub enum VaultCmd {
     Init { vault_path: String, vault_slug: String },
     Open { vault_path: String },
+    Verify { vault_path: String },
 }
 
 #[derive(Subcommand)]
@@ -44,5 +61,28 @@ pub enum IngestCmd {
         vault_path: String,
         file_path: String,
         source_kind: String,
+    },
+}
+
+#[derive(Subcommand)]
+pub enum IndexCmd {
+    Rebuild { vault_path: String },
+}
+
+#[derive(Subcommand)]
+pub enum GcCmd {
+    Run { vault_path: String },
+}
+
+#[derive(Subcommand)]
+pub enum DepsCmd {
+    Check,
+}
+
+#[derive(Subcommand)]
+pub enum BenchCmd {
+    Run {
+        #[arg(long)]
+        corpus: String,
     },
 }

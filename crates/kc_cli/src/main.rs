@@ -1,13 +1,18 @@
 mod cli;
 mod commands {
+    pub mod bench;
+    pub mod deps;
     pub mod export;
+    pub mod gc;
     pub mod ingest;
+    pub mod index;
     pub mod verify;
+    pub mod vault;
 }
 mod verifier;
 
 use clap::Parser;
-use cli::{Cli, Command, IngestCmd, VaultCmd};
+use cli::{BenchCmd, Cli, Command, DepsCmd, GcCmd, IndexCmd, IngestCmd, VaultCmd};
 use kc_core::vault::{vault_init, vault_open};
 
 fn now_ms() -> i64 {
@@ -35,6 +40,7 @@ fn main() {
                 }
                 opened.map(|_| ())
             }
+            VaultCmd::Verify { vault_path } => commands::vault::run_verify(&vault_path),
         },
         Command::Ingest { cmd } => match cmd {
             IngestCmd::ScanFolder {
@@ -60,6 +66,18 @@ fn main() {
                 std::process::exit(code as i32);
             }
         }),
+        Command::Index { cmd } => match cmd {
+            IndexCmd::Rebuild { vault_path } => commands::index::run_rebuild(&vault_path),
+        },
+        Command::Gc { cmd } => match cmd {
+            GcCmd::Run { vault_path } => commands::gc::run_gc(&vault_path),
+        },
+        Command::Deps { cmd } => match cmd {
+            DepsCmd::Check => commands::deps::run_check(),
+        },
+        Command::Bench { cmd } => match cmd {
+            BenchCmd::Run { corpus } => commands::bench::run_bench(&corpus),
+        },
     };
 
     if let Err(err) = result {

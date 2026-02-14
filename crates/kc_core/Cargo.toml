@@ -13,4 +13,9 @@ serde_json.workspace = true
 uuid.workspace = true
 
 [dev-dependencies]
+criterion = "0.7"
 tempfile = "3.23"
+
+[[bench]]
+name = "core_bench"
+harness = false
