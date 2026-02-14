@@ -29,3 +29,11 @@ Track baseline and source-of-truth references for Phase L execution.
 - Feature-enabled scaffold checks passed:
   - `cargo test -p kc_cli --features phase_l_preview --test preview_scaffold`
   - `cargo test -p apps_desktop_tauri --features phase_l_preview --test rpc --test rpc_schema`
+
+## Post-Phase-L Handoff (M0)
+- Handoff target phase: `Phase M`.
+- Handoff branch for hygiene normalization: `codex/m0-post-l-hygiene`.
+- Stale merged branch cleanup attempt:
+  - Command: `git branch -d codex/l-phase-l-design-lock`
+  - Result: blocked by execution policy in this environment.
+  - Action: retain branch pointer temporarily; include explicit cleanup instruction in final readiness note.
