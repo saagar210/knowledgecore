@@ -93,6 +93,7 @@ Verifier behavior, stable exit codes, deterministic report ordering.
          - 20 MANIFEST_INVALID_JSON
          - 21 MANIFEST_SCHEMA_INVALID
            (includes deterministic ZIP metadata violations)
+           (includes `RECOVERY_ESCROW_METADATA_MISMATCH`)
          - 31 DB_HASH_MISMATCH
            (also used for DB_ENCRYPTION_MISMATCH)
          - 40 OBJECT_MISSING

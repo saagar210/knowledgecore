@@ -1,6 +1,6 @@
 use crate::app_error::{AppError, AppResult};
-use crate::chunking::{default_chunking_config_v1, hash_chunking_config};
 use crate::canon_json::to_canonical_bytes;
+use crate::chunking::{default_chunking_config_v1, hash_chunking_config};
 use crate::hashing::blake3_hex_prefixed;
 use crate::vault::{vault_open, vault_paths};
 use serde::{Deserialize, Serialize};
@@ -16,8 +16,7 @@ pub struct ExportOptions {
 }
 
 fn zip_fixed_time() -> zip::DateTime {
-    zip::DateTime::from_date_and_time(1980, 1, 1, 0, 0, 0)
-        .expect("valid fixed zip timestamp")
+    zip::DateTime::from_date_and_time(1980, 1, 1, 0, 0, 0).expect("valid fixed zip timestamp")
 }
 
 fn create_deterministic_zip(bundle_dir: &Path, zip_path: &Path) -> AppResult<()> {
@@ -102,7 +101,122 @@ fn rel_for_path(base: &Path, path: &Path) -> AppResult<String> {
         })
 }
 
-pub fn export_bundle(vault_path: &Path, export_dir: &Path, opts: &ExportOptions, now_ms: i64) -> AppResult<PathBuf> {
+fn recovery_escrow_export_block(conn: &rusqlite::Connection) -> AppResult<serde_json::Value> {
+    let mut stmt = conn
+        .prepare(
+            "SELECT provider_id, enabled, descriptor_json, updated_at_ms
+             FROM recovery_escrow_configs
+             ORDER BY updated_at_ms DESC, provider_id DESC
+             LIMIT 1",
+        )
+        .map_err(|e| {
+            AppError::new(
+                "KC_EXPORT_FAILED",
+                "export",
+                "failed preparing recovery escrow export query",
+                false,
+                serde_json::json!({ "error": e.to_string() }),
+            )
+        })?;
+
+    let mut rows = stmt.query([]).map_err(|e| {
+        AppError::new(
+            "KC_EXPORT_FAILED",
+            "export",
+            "failed querying recovery escrow export row",
+            false,
+            serde_json::json!({ "error": e.to_string() }),
+        )
+    })?;
+
+    let Some(row) = rows.next().map_err(|e| {
+        AppError::new(
+            "KC_EXPORT_FAILED",
+            "export",
+            "failed iterating recovery escrow export row",
+            false,
+            serde_json::json!({ "error": e.to_string() }),
+        )
+    })?
+    else {
+        return Ok(serde_json::json!({
+            "enabled": false,
+            "provider": "none",
+            "updated_at_ms": serde_json::Value::Null,
+            "descriptor": serde_json::Value::Null
+        }));
+    };
+
+    let provider_id: String = row.get(0).map_err(|e| {
+        AppError::new(
+            "KC_EXPORT_FAILED",
+            "export",
+            "failed decoding recovery escrow provider id",
+            false,
+            serde_json::json!({ "error": e.to_string() }),
+        )
+    })?;
+    let enabled = row.get::<_, i64>(1).map(|v| v != 0).map_err(|e| {
+        AppError::new(
+            "KC_EXPORT_FAILED",
+            "export",
+            "failed decoding recovery escrow enabled flag",
+            false,
+            serde_json::json!({ "error": e.to_string() }),
+        )
+    })?;
+    let descriptor_json: String = row.get(2).map_err(|e| {
+        AppError::new(
+            "KC_EXPORT_FAILED",
+            "export",
+            "failed decoding recovery escrow descriptor json",
+            false,
+            serde_json::json!({ "error": e.to_string() }),
+        )
+    })?;
+    let updated_at_ms: i64 = row.get(3).map_err(|e| {
+        AppError::new(
+            "KC_EXPORT_FAILED",
+            "export",
+            "failed decoding recovery escrow update timestamp",
+            false,
+            serde_json::json!({ "error": e.to_string() }),
+        )
+    })?;
+
+    let descriptor = serde_json::from_str::<serde_json::Value>(&descriptor_json).map_err(|e| {
+        AppError::new(
+            "KC_EXPORT_FAILED",
+            "export",
+            "failed parsing recovery escrow descriptor json",
+            false,
+            serde_json::json!({ "error": e.to_string() }),
+        )
+    })?;
+    if !descriptor.is_object() {
+        return Err(AppError::new(
+            "KC_EXPORT_FAILED",
+            "export",
+            "recovery escrow descriptor must be a JSON object",
+            false,
+            serde_json::json!({ "provider": provider_id }),
+        ));
+    }
+
+    Ok(serde_json::json!({
+        "enabled": enabled,
+        "provider": provider_id,
+        "updated_at_ms": updated_at_ms,
+        "descriptor": if enabled { descriptor } else { serde_json::Value::Null }
+    }))
+}
+
+pub fn export_bundle(
+    vault_path: &Path,
+    export_dir: &Path,
+    opts: &ExportOptions,
+    now_ms: i64,
+) -> AppResult<PathBuf> {
     let vault = vault_open(vault_path)?;
     let paths = vault_paths(vault_path);
 
@@ -167,7 +281,9 @@ pub fn export_bundle(vault_path: &Path, export_dir: &Path, opts: &ExportOptions,
 
     let mut objects = Vec::new();
     let rows = stmt
-        .query_map([], |row| Ok((row.get::<_, String>(0)?, row.get::<_, i64>(1)?)))
+        .query_map([], |row| {
+            Ok((row.get::<_, String>(0)?, row.get::<_, i64>(1)?))
+        })
         .map_err(|e| {
             AppError::new(
                 "KC_EXPORT_FAILED",
@@ -189,10 +305,15 @@ pub fn export_bundle(vault_path: &Path, export_dir: &Path, opts: &ExportOptions,
             )
         })?;
 
-        let prefix = hash
-            .strip_prefix("blake3:")
-            .ok_or_else(|| AppError::new("KC_EXPORT_FAILED", "export", "invalid object hash", false, serde_json::json!({ "hash": hash })))?
-            [0..2]
+        let prefix = hash.strip_prefix("blake3:").ok_or_else(|| {
+            AppError::new(
+                "KC_EXPORT_FAILED",
+                "export",
+                "invalid object hash",
+                false,
+                serde_json::json!({ "hash": hash }),
+            )
+        })?[0..2]
             .to_string();
 
         let rel = format!("store/objects/{}/{}", prefix, hash);
@@ -251,6 +372,8 @@ pub fn export_bundle(vault_path: &Path, export_dir: &Path, opts: &ExportOptions,
             .unwrap_or_default();
         ah.cmp(bh).then(ap.cmp(bp))
     });
+
+    let recovery_escrow = recovery_escrow_export_block(&conn)?;
 
     let mut vectors = Vec::new();
     if opts.include_vectors && paths.vectors_dir.exists() {
@@ -344,6 +467,7 @@ pub fn export_bundle(vault_path: &Path, export_dir: &Path, opts: &ExportOptions,
                 "algorithm": vault.db_encryption.kdf.algorithm,
             }
         },
+        "recovery_escrow": recovery_escrow,
         "toolchain_registry": {
             "pdfium": vault.toolchain.pdfium.identity,
             "tesseract": vault.toolchain.tesseract.identity,

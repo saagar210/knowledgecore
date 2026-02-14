@@ -21,6 +21,7 @@ Deterministic export folder bundle and manifest schema + ordering rules.
     "schema_versions",
     "encryption",
     "db_encryption",
+    "recovery_escrow",
     "packaging",
     "chunking_config_hash",
     "db",
@@ -81,6 +82,19 @@ Deterministic export folder bundle and manifest schema + ordering rules.
             "salt_id": { "type": "string" }
           },
           "additionalProperties": false
+        }
+      },
+      "additionalProperties": false
+    },
+    "recovery_escrow": {
+      "type": "object",
+      "required": ["enabled", "provider", "updated_at_ms", "descriptor"],
+      "properties": {
+        "enabled": { "type": "boolean" },
+        "provider": { "type": "string", "minLength": 1 },
+        "updated_at_ms": { "type": ["integer", "null"] },
+        "descriptor": {
+          "type": ["object", "null"]
         }
       },
       "additionalProperties": false
@@ -176,6 +190,7 @@ Deterministic export folder bundle and manifest schema + ordering rules.
          - objects: hash asc then relative_path asc
          - object storage_hash/encrypted derived from copied payload bytes
          - vectors: relative_path asc
+         - recovery_escrow invariant: `enabled=false` requires `provider=none`, `updated_at_ms=null`, and `descriptor=null`; `enabled=true` requires provider not `none`, integer `updated_at_ms`, and object `descriptor`
 
          ## Error codes
          - `KC_EXPORT_FAILED`

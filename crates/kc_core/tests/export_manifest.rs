@@ -40,13 +40,21 @@ fn export_manifest_has_deterministic_object_order() {
         .expect("objects array");
 
     for object in objects {
-        assert!(object.get("storage_hash").and_then(|v| v.as_str()).is_some());
+        assert!(object
+            .get("storage_hash")
+            .and_then(|v| v.as_str())
+            .is_some());
         assert!(object.get("encrypted").and_then(|v| v.as_bool()).is_some());
     }
 
     let hashes: Vec<String> = objects
         .iter()
-        .map(|o| o.get("hash").and_then(|v| v.as_str()).unwrap_or_default().to_string())
+        .map(|o| {
+            o.get("hash")
+                .and_then(|v| v.as_str())
+                .unwrap_or_default()
+                .to_string()
+        })
         .collect();
 
     let mut sorted = hashes.clone();
@@ -71,8 +79,8 @@ fn export_manifest_has_deterministic_object_order() {
         .get("chunking_config_hash")
         .and_then(|v| v.as_str())
         .expect("chunking hash");
-    let expected_chunking_hash = hash_chunking_config(&default_chunking_config_v1())
-        .expect("hash default chunking config");
+    let expected_chunking_hash =
+        hash_chunking_config(&default_chunking_config_v1()).expect("hash default chunking config");
     assert_eq!(chunking_hash, expected_chunking_hash.0);
 
     let encryption = manifest.get("encryption").expect("encryption block");
@@ -80,9 +88,7 @@ fn export_manifest_has_deterministic_object_order() {
         encryption.get("enabled").and_then(|v| v.as_bool()),
         Some(false)
     );
-    let db_encryption = manifest
-        .get("db_encryption")
-        .expect("db_encryption block");
+    let db_encryption = manifest.get("db_encryption").expect("db_encryption block");
     assert_eq!(
         db_encryption.get("enabled").and_then(|v| v.as_bool()),
         Some(false)
@@ -91,6 +97,25 @@ fn export_manifest_has_deterministic_object_order() {
         db_encryption.get("mode").and_then(|v| v.as_str()),
         Some("sqlcipher_v4")
     );
+    let recovery_escrow = manifest
+        .get("recovery_escrow")
+        .expect("recovery_escrow block");
+    assert_eq!(
+        recovery_escrow.get("enabled").and_then(|v| v.as_bool()),
+        Some(false)
+    );
+    assert_eq!(
+        recovery_escrow.get("provider").and_then(|v| v.as_str()),
+        Some("none")
+    );
+    assert!(recovery_escrow
+        .get("updated_at_ms")
+        .expect("updated_at_ms")
+        .is_null());
+    assert!(recovery_escrow
+        .get("descriptor")
+        .expect("descriptor")
+        .is_null());
     assert_eq!(
         manifest
             .get("packaging")
@@ -130,9 +155,10 @@ fn export_manifest_includes_vectors_when_enabled() {
     )
     .expect("export");
 
-    let manifest: serde_json::Value =
-        serde_json::from_slice(&std::fs::read(bundle.join("manifest.json")).expect("read manifest"))
-            .expect("parse manifest");
+    let manifest: serde_json::Value = serde_json::from_slice(
+        &std::fs::read(bundle.join("manifest.json")).expect("read manifest"),
+    )
+    .expect("parse manifest");
 
     let vectors = manifest
         .get("indexes")
@@ -160,6 +186,67 @@ fn export_manifest_includes_vectors_when_enabled() {
 }
 
 #[test]
+fn export_manifest_includes_recovery_escrow_descriptor_when_enabled() {
+    let root = tempfile::tempdir().expect("tempdir").keep();
+    let vault_root = root.join("vault");
+    let export_root = root.join("exports");
+
+    vault_init(&vault_root, "demo", 1000).expect("vault init");
+    let conn = open_db(&vault_root.join("db/knowledge.sqlite")).expect("open db");
+    conn.execute(
+        "INSERT INTO recovery_escrow_configs (provider_id, enabled, descriptor_json, updated_at_ms)
+         VALUES (?1, ?2, ?3, ?4)",
+        rusqlite::params![
+            "aws",
+            1,
+            r#"{"provider":"aws","provider_ref":"secret://vault/demo","key_id":"kms://demo","wrapped_at_ms":2000}"#,
+            2000i64
+        ],
+    )
+    .expect("insert escrow config");
+
+    let bundle = export_bundle(
+        &vault_root,
+        &export_root,
+        &ExportOptions {
+            include_vectors: false,
+            as_zip: false,
+        },
+        125,
+    )
+    .expect("export");
+
+    let manifest: serde_json::Value = serde_json::from_slice(
+        &std::fs::read(bundle.join("manifest.json")).expect("read manifest"),
+    )
+    .expect("parse manifest");
+    let recovery_escrow = manifest
+        .get("recovery_escrow")
+        .expect("recovery_escrow block");
+    assert_eq!(
+        recovery_escrow.get("enabled").and_then(|v| v.as_bool()),
+        Some(true)
+    );
+    assert_eq!(
+        recovery_escrow.get("provider").and_then(|v| v.as_str()),
+        Some("aws")
+    );
+    assert_eq!(
+        recovery_escrow
+            .get("updated_at_ms")
+            .and_then(|v| v.as_i64()),
+        Some(2000)
+    );
+    assert_eq!(
+        recovery_escrow
+            .get("descriptor")
+            .and_then(|v| v.get("provider"))
+            .and_then(|v| v.as_str()),
+        Some("aws")
+    );
+}
+
+#[test]
 fn export_zip_is_byte_stable_for_identical_state() {
     let root = tempfile::tempdir().expect("tempdir").keep();
     let vault_root = root.join("vault");
@@ -168,7 +255,9 @@ fn export_zip_is_byte_stable_for_identical_state() {
     vault_init(&vault_root, "demo", 1000).expect("vault init");
     let conn = open_db(&vault_root.join("db/knowledge.sqlite")).expect("open db");
     let store = ObjectStore::new(vault_root.join("store/objects"));
-    store.put_bytes(&conn, b"zip deterministic", 1).expect("store object");
+    store
+        .put_bytes(&conn, b"zip deterministic", 1)
+        .expect("store object");
 
     let zip_a = export_bundle(
         &vault_root,

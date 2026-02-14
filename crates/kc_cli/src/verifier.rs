@@ -67,7 +67,7 @@ fn manifest_schema() -> Value {
       "$schema": "https://json-schema.org/draft/2020-12/schema",
       "$id": "kc://schemas/export-manifest/v1",
       "type": "object",
-      "required": ["manifest_version", "vault_id", "schema_versions", "encryption", "db_encryption", "packaging", "chunking_config_hash", "db", "objects"],
+      "required": ["manifest_version", "vault_id", "schema_versions", "encryption", "db_encryption", "recovery_escrow", "packaging", "chunking_config_hash", "db", "objects"],
       "properties": {
         "manifest_version": { "const": 1 },
         "vault_id": {
@@ -112,6 +112,20 @@ fn manifest_schema() -> Value {
                 "algorithm": { "type": "string" }
               },
               "additionalProperties": false
+            }
+          },
+          "additionalProperties": false
+        },
+        "recovery_escrow": {
+          "type": "object",
+          "required": ["enabled", "provider", "updated_at_ms", "descriptor"],
+          "properties": {
+            "enabled": { "type": "boolean" },
+            "provider": { "type": "string", "minLength": 1 },
+            "updated_at_ms": { "type": ["integer", "null"] },
+            "descriptor": {
+              "type": ["object", "null"],
+              "additionalProperties": true
             }
           },
           "additionalProperties": false
@@ -242,7 +256,83 @@ fn is_plaintext_sqlite_db(bytes: &[u8]) -> bool {
     bytes.starts_with(SQLITE_HEADER)
 }
 
-fn verify_folder_bundle(bundle_path: &Path, expected_packaging_format: &str) -> AppResult<(i64, VerifyReportV1)> {
+fn verify_recovery_escrow_metadata(manifest: &Value) -> Option<VerifyErrorEntry> {
+    let block = manifest.get("recovery_escrow")?;
+    let enabled = block.get("enabled").and_then(|x| x.as_bool())?;
+    let provider = block.get("provider").and_then(|x| x.as_str())?;
+    let updated = block.get("updated_at_ms")?;
+    let descriptor = block.get("descriptor")?;
+
+    let mismatch = |path: &str, expected: &str, actual: String| VerifyErrorEntry {
+        code: "RECOVERY_ESCROW_METADATA_MISMATCH".to_string(),
+        path: path.to_string(),
+        expected: Some(expected.to_string()),
+        actual: Some(actual),
+    };
+
+    if enabled {
+        if provider == "none" || provider.is_empty() {
+            return Some(mismatch(
+                "recovery_escrow/provider",
+                "non-empty provider id when enabled=true",
+                provider.to_string(),
+            ));
+        }
+        if !updated.is_i64() {
+            return Some(mismatch(
+                "recovery_escrow/updated_at_ms",
+                "integer timestamp when enabled=true",
+                updated.to_string(),
+            ));
+        }
+        if !descriptor.is_object() {
+            return Some(mismatch(
+                "recovery_escrow/descriptor",
+                "object when enabled=true",
+                descriptor.to_string(),
+            ));
+        }
+        if let Some(desc_provider) = descriptor.get("provider").and_then(|x| x.as_str()) {
+            if desc_provider != provider {
+                return Some(mismatch(
+                    "recovery_escrow/descriptor/provider",
+                    provider,
+                    desc_provider.to_string(),
+                ));
+            }
+        }
+        return None;
+    }
+
+    if provider != "none" {
+        return Some(mismatch(
+            "recovery_escrow/provider",
+            "none when enabled=false",
+            provider.to_string(),
+        ));
+    }
+    if !updated.is_null() {
+        return Some(mismatch(
+            "recovery_escrow/updated_at_ms",
+            "null when enabled=false",
+            updated.to_string(),
+        ));
+    }
+    if !descriptor.is_null() {
+        return Some(mismatch(
+            "recovery_escrow/descriptor",
+            "null when enabled=false",
+            descriptor.to_string(),
+        ));
+    }
+
+    None
+}
+
+fn verify_folder_bundle(
+    bundle_path: &Path,
+    expected_packaging_format: &str,
+) -> AppResult<(i64, VerifyReportV1)> {
     let manifest_path = bundle_path.join("manifest.json");
     let raw = match fs::read_to_string(&manifest_path) {
         Ok(v) => v,
@@ -333,25 +423,36 @@ fn verify_folder_bundle(bundle_path: &Path, expected_packaging_format: &str) -> 
         ));
     }
 
+    if let Some(mismatch) = verify_recovery_escrow_metadata(&manifest) {
+        return Ok(report_for(
+            21,
+            vec![mismatch],
+            CheckedCounts {
+                objects: 0,
+                indexes: 0,
+            },
+        ));
+    }
+
     let mut errors = Vec::new();
 
-    let db = manifest.get("db").and_then(|x| x.as_object()).ok_or_else(|| {
-        AppError::new(
-            "KC_VERIFY_FAILED",
-            "verify",
-            "manifest db field must be object",
-            false,
-            serde_json::json!({}),
-        )
-    })?;
+    let db = manifest
+        .get("db")
+        .and_then(|x| x.as_object())
+        .ok_or_else(|| {
+            AppError::new(
+                "KC_VERIFY_FAILED",
+                "verify",
+                "manifest db field must be object",
+                false,
+                serde_json::json!({}),
+            )
+        })?;
     let db_rel = db
         .get("relative_path")
         .and_then(|x| x.as_str())
         .unwrap_or_default();
-    let db_hash_expected = db
-        .get("hash")
-        .and_then(|x| x.as_str())
-        .unwrap_or_default();
+    let db_hash_expected = db.get("hash").and_then(|x| x.as_str()).unwrap_or_default();
     let db_encryption_enabled = manifest
         .get("db_encryption")
         .and_then(|x| x.get("enabled"))

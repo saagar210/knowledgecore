@@ -8,7 +8,7 @@ fn export_manifest_schema() -> serde_json::Value {
       "$schema": "https://json-schema.org/draft/2020-12/schema",
       "$id": "kc://schemas/export-manifest/v1",
       "type": "object",
-      "required": ["manifest_version", "vault_id", "schema_versions", "encryption", "db_encryption", "packaging", "chunking_config_hash", "db", "objects"],
+      "required": ["manifest_version", "vault_id", "schema_versions", "encryption", "db_encryption", "recovery_escrow", "packaging", "chunking_config_hash", "db", "objects"],
       "properties": {
         "manifest_version": { "const": 1 },
         "vault_id": {
@@ -53,6 +53,20 @@ fn export_manifest_schema() -> serde_json::Value {
                 "algorithm": { "type": "string" }
               },
               "additionalProperties": false
+            }
+          },
+          "additionalProperties": false
+        },
+        "recovery_escrow": {
+          "type": "object",
+          "required": ["enabled", "provider", "updated_at_ms", "descriptor"],
+          "properties": {
+            "enabled": { "type": "boolean" },
+            "provider": { "type": "string", "minLength": 1 },
+            "updated_at_ms": { "type": ["integer", "null"] },
+            "descriptor": {
+              "type": ["object", "null"],
+              "additionalProperties": true
             }
           },
           "additionalProperties": false
@@ -164,6 +178,12 @@ fn schema_export_manifest_rejects_bad_hash() {
           "algorithm": "pbkdf2_hmac_sha512"
         }
       },
+      "recovery_escrow": {
+        "enabled": false,
+        "provider": "none",
+        "updated_at_ms": null,
+        "descriptor": null
+      },
       "packaging": {
         "format": "folder",
         "zip_policy": {
@@ -206,6 +226,12 @@ fn schema_export_manifest_rejects_non_uuid_vault_id() {
         "kdf": {
           "algorithm": "pbkdf2_hmac_sha512"
         }
+      },
+      "recovery_escrow": {
+        "enabled": false,
+        "provider": "none",
+        "updated_at_ms": null,
+        "descriptor": null
       },
       "packaging": {
         "format": "folder",

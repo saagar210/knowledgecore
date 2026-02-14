@@ -31,6 +31,12 @@ fn base_manifest(db_hash: String) -> serde_json::Value {
                 "algorithm": "pbkdf2_hmac_sha512"
             }
         },
+        "recovery_escrow": {
+            "enabled": false,
+            "provider": "none",
+            "updated_at_ms": serde_json::Value::Null,
+            "descriptor": serde_json::Value::Null
+        },
         "packaging": {
             "format": "folder",
             "zip_policy": {
@@ -69,7 +75,11 @@ fn verifier_ok_bundle() {
 
     let obj_bytes = b"hello";
     let obj_hash = blake3_hex_prefixed(obj_bytes);
-    std::fs::write(bundle.join(format!("store/objects/aa/{}", obj_hash)), obj_bytes).expect("write obj");
+    std::fs::write(
+        bundle.join(format!("store/objects/aa/{}", obj_hash)),
+        obj_bytes,
+    )
+    .expect("write obj");
 
     let mut manifest = base_manifest(blake3_hex_prefixed(db_bytes));
     manifest["objects"] = serde_json::json!([
@@ -156,8 +166,14 @@ fn verifier_errors_are_sorted_by_code_then_path() {
     let mut expected = sorted.clone();
     expected.sort_by(|a, b| a.code.cmp(&b.code).then(a.path.cmp(&b.path)));
     assert_eq!(
-        sorted.iter().map(|e| (&e.code, &e.path)).collect::<Vec<_>>(),
-        expected.iter().map(|e| (&e.code, &e.path)).collect::<Vec<_>>()
+        sorted
+            .iter()
+            .map(|e| (&e.code, &e.path))
+            .collect::<Vec<_>>(),
+        expected
+            .iter()
+            .map(|e| (&e.code, &e.path))
+            .collect::<Vec<_>>()
     );
 }
 
@@ -244,7 +260,10 @@ fn verifier_reports_object_hash_mismatch_code() {
 
     let (code, report) = verify_bundle(&bundle).expect("verify");
     assert_eq!(code, 41);
-    assert!(report.errors.iter().any(|e| e.code == "OBJECT_HASH_MISMATCH"));
+    assert!(report
+        .errors
+        .iter()
+        .any(|e| e.code == "OBJECT_HASH_MISMATCH"));
 }
 
 #[test]
@@ -283,7 +302,11 @@ fn verifier_reports_encryption_mismatch_when_enabled_bundle_has_plain_object() {
 
     let plaintext = b"plaintext-object";
     let obj_hash = blake3_hex_prefixed(plaintext);
-    std::fs::write(bundle.join(format!("store/objects/aa/{}", obj_hash)), plaintext).expect("write obj");
+    std::fs::write(
+        bundle.join(format!("store/objects/aa/{}", obj_hash)),
+        plaintext,
+    )
+    .expect("write obj");
 
     let mut manifest = base_manifest(blake3_hex_prefixed(b"db"));
     manifest["encryption"]["enabled"] = serde_json::json!(true);
@@ -300,12 +323,10 @@ fn verifier_reports_encryption_mismatch_when_enabled_bundle_has_plain_object() {
 
     let (code, report) = verify_bundle(&bundle).expect("verify");
     assert_eq!(code, 41);
-    assert!(
-        report
-            .errors
-            .iter()
-            .any(|e| e.code == "OBJECT_ENCRYPTION_MISMATCH")
-    );
+    assert!(report
+        .errors
+        .iter()
+        .any(|e| e.code == "OBJECT_ENCRYPTION_MISMATCH"));
 }
 
 #[test]
@@ -322,12 +343,33 @@ fn verifier_reports_db_encryption_mismatch_when_plain_db_claims_encrypted() {
 
     let (code, report) = verify_bundle(&bundle).expect("verify");
     assert_eq!(code, 31);
-    assert!(
-        report
-            .errors
-            .iter()
-            .any(|e| e.code == "DB_ENCRYPTION_MISMATCH")
-    );
+    assert!(report
+        .errors
+        .iter()
+        .any(|e| e.code == "DB_ENCRYPTION_MISMATCH"));
+}
+
+#[test]
+fn verifier_reports_recovery_escrow_metadata_mismatch() {
+    let root = tempfile::tempdir().expect("tempdir").keep();
+    let bundle = root.join("bundle_escrow_mismatch");
+    std::fs::create_dir_all(bundle.join("db")).expect("mkdir db");
+    std::fs::write(bundle.join("db/knowledge.sqlite"), b"db").expect("write db");
+
+    let mut manifest = base_manifest(blake3_hex_prefixed(b"db"));
+    manifest["recovery_escrow"] = serde_json::json!({
+        "enabled": false,
+        "provider": "aws",
+        "updated_at_ms": serde_json::Value::Null,
+        "descriptor": serde_json::Value::Null
+    });
+    write_manifest(&bundle, &manifest);
+
+    let (code, report) = verify_bundle(&bundle).expect("verify");
+    assert_eq!(code, 21);
+    assert!(report.errors.iter().any(|e| {
+        e.code == "RECOVERY_ESCROW_METADATA_MISMATCH" && e.path == "recovery_escrow/provider"
+    }));
 }
 
 #[test]
