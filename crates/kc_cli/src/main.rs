@@ -7,6 +7,8 @@ mod commands {
     pub mod gc;
     pub mod ingest;
     pub mod index;
+    #[cfg(feature = "phase_l_preview")]
+    pub mod preview;
     pub mod verify;
     pub mod vault;
 }
@@ -14,6 +16,8 @@ mod verifier;
 
 use clap::Parser;
 use cli::{BenchCmd, Cli, Command, DepsCmd, FixturesCmd, GcCmd, IndexCmd, IngestCmd, VaultCmd};
+#[cfg(feature = "phase_l_preview")]
+use cli::PreviewCmd;
 use kc_core::vault::{vault_init, vault_open};
 
 fn now_ms() -> i64 {
@@ -83,6 +87,11 @@ fn main() {
             FixturesCmd::Generate { corpus } => commands::fixtures::generate_corpus(&corpus).map(|path| {
                 println!("generated fixtures at {}", path.display());
             }),
+        },
+        #[cfg(feature = "phase_l_preview")]
+        Command::Preview { cmd } => match cmd {
+            PreviewCmd::Status => commands::preview::run_status(),
+            PreviewCmd::Capability { name } => commands::preview::run_capability(&name),
         },
     };
 

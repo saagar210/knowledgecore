@@ -30,3 +30,27 @@ fn rpc_schema_rejects_unknown_fields() {
     });
     assert!(serde_json::from_value::<SearchQueryReq>(req).is_err());
 }
+
+#[cfg(not(feature = "phase_l_preview"))]
+#[test]
+fn rpc_phase_l_preview_is_disabled_by_default() {
+    assert!(!apps_desktop_tauri::rpc::phase_l_preview_enabled());
+}
+
+#[cfg(feature = "phase_l_preview")]
+#[test]
+fn rpc_phase_l_preview_is_enabled_with_feature() {
+    assert!(apps_desktop_tauri::rpc::phase_l_preview_enabled());
+}
+
+#[cfg(feature = "phase_l_preview")]
+#[test]
+fn rpc_schema_preview_requests_reject_unknown_fields() {
+    use apps_desktop_tauri::rpc::PreviewCapabilityReq;
+
+    let invalid = serde_json::json!({
+        "name": "sync",
+        "extra": "not-allowed"
+    });
+    assert!(serde_json::from_value::<PreviewCapabilityReq>(invalid).is_err());
+}

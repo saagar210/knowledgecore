@@ -4,6 +4,10 @@ version.workspace = true
 edition.workspace = true
 license.workspace = true
 
+[features]
+default = []
+phase_l_preview = []
+
 [dependencies]
 blake3.workspace = true
 regex = "1.12"

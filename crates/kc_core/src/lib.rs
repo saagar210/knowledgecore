@@ -16,5 +16,7 @@ pub mod snippet;
 pub mod chunking;
 pub mod export;
 pub mod rpc_service;
+#[cfg(feature = "phase_l_preview")]
+pub mod deferred;
 
 pub use app_error::AppError;

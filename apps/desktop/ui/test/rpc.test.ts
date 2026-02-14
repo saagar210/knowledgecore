@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { rpc, rpcMethods } from "../src/api/rpc";
+import { createPreviewRpcApi, previewRpcEnabled, rpc, rpcMethods } from "../src/api/rpc";
 
 describe("rpc client", () => {
   it("returns not wired error outside tauri runtime", async () => {
@@ -25,5 +25,10 @@ describe("rpc client", () => {
       "eventsList",
       "jobsList"
     ]);
+  });
+
+  it("keeps preview rpc disabled by default", () => {
+    expect(previewRpcEnabled()).toBe(false);
+    expect(createPreviewRpcApi()).toBeNull();
   });
 });

@@ -4,6 +4,10 @@ version.workspace = true
 edition.workspace = true
 license.workspace = true
 
+[features]
+default = []
+phase_l_preview = ["kc_core/phase_l_preview"]
+
 [dependencies]
 clap.workspace = true
 kc_ask = { path = "../kc_ask" }

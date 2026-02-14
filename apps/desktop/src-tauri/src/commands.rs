@@ -59,3 +59,15 @@ pub fn events_list(req: rpc::EventsListReq) -> rpc::RpcResponse<rpc::EventsListR
 pub fn jobs_list(req: rpc::JobsListReq) -> rpc::RpcResponse<rpc::JobsListRes> {
     rpc::jobs_list_rpc(req)
 }
+
+#[cfg(feature = "phase_l_preview")]
+#[tauri::command]
+pub fn preview_status(req: rpc::PreviewStatusReq) -> rpc::RpcResponse<rpc::PreviewStatusRes> {
+    rpc::preview_status_rpc(req)
+}
+
+#[cfg(feature = "phase_l_preview")]
+#[tauri::command]
+pub fn preview_capability(req: rpc::PreviewCapabilityReq) -> rpc::RpcResponse<rpc::PreviewCapabilityRes> {
+    rpc::preview_capability_rpc(req)
+}

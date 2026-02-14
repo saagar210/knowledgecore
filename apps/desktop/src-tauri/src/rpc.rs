@@ -1,6 +1,8 @@
 use kc_ask::{AskRequest, AskService, RetrievedOnlyAskService};
 use kc_cli::verifier::verify_bundle;
 use kc_core::app_error::AppError;
+#[cfg(feature = "phase_l_preview")]
+use kc_core::deferred;
 use kc_core::locator::LocatorV1;
 use kc_core::rpc_service;
 use serde::de::Error as DeError;
@@ -255,6 +257,33 @@ pub struct JobsListRes {
     pub jobs: Vec<String>,
 }
 
+#[cfg(feature = "phase_l_preview")]
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct PreviewStatusReq {}
+
+#[cfg(feature = "phase_l_preview")]
+#[derive(Debug, Serialize, Deserialize)]
+pub struct PreviewStatusRes {
+    pub schema_version: i64,
+    pub status: String,
+    pub capabilities: Vec<deferred::DraftCapabilityStatusV1>,
+}
+
+#[cfg(feature = "phase_l_preview")]
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct PreviewCapabilityReq {
+    pub name: String,
+}
+
+#[cfg(feature = "phase_l_preview")]
+#[derive(Debug, Serialize, Deserialize)]
+pub struct PreviewCapabilityRes {
+    pub capability: String,
+    pub status: String,
+}
+
 pub fn vault_init_rpc(req: VaultInitReq) -> RpcResponse<VaultInitRes> {
     match rpc_service::vault_init_service(std::path::Path::new(&req.vault_path), &req.vault_slug, req.now_ms) {
         Ok(vault_id) => RpcResponse::ok(VaultInitRes { vault_id }),
@@ -394,10 +423,28 @@ pub fn jobs_list_rpc(req: JobsListReq) -> RpcResponse<JobsListRes> {
     }
 }
 
+#[cfg(feature = "phase_l_preview")]
+pub fn preview_status_rpc(_req: PreviewStatusReq) -> RpcResponse<PreviewStatusRes> {
+    RpcResponse::ok(PreviewStatusRes {
+        schema_version: 1,
+        status: "draft".to_string(),
+        capabilities: deferred::preview_capability_statuses(),
+    })
+}
+
+#[cfg(feature = "phase_l_preview")]
+pub fn preview_capability_rpc(req: PreviewCapabilityReq) -> RpcResponse<PreviewCapabilityRes> {
+    RpcResponse::err(deferred::scaffold_error_for_capability(&req.name))
+}
+
 #[allow(dead_code)]
 pub fn rpc_health_snapshot(vault_path: &str) -> RpcResponse<serde_json::Value> {
     match rpc_service::rpc_health_snapshot_service(std::path::Path::new(vault_path)) {
         Ok(data) => RpcResponse::ok(data),
         Err(error) => RpcResponse::err(error),
     }
+}
+
+pub fn phase_l_preview_enabled() -> bool {
+    cfg!(feature = "phase_l_preview")
 }

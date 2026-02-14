@@ -12,6 +12,7 @@ export type RpcErr = { ok: false; error: AppError };
 export type RpcResp<T> = RpcOk<T> | RpcErr;
 
 type TauriInvoke = (cmd: string, args?: unknown) => Promise<unknown>;
+type PreviewGlobal = typeof globalThis & { __KC_PHASE_L_PREVIEW__?: boolean };
 
 function notWired(): RpcErr {
   return {
@@ -116,6 +117,22 @@ export type EventItem = { event_id: number; ts_ms: number; event_type: string };
 export type EventsListRes = { events: EventItem[] };
 export type JobsListReq = { vault_path: string };
 export type JobsListRes = { jobs: string[] };
+export type PreviewStatusReq = Record<string, never>;
+export type PreviewCapabilityDraft = {
+  schema_version: number;
+  status: string;
+  capability: string;
+  activation_phase: string;
+  spec_path: string;
+  preview_error_code: string;
+};
+export type PreviewStatusRes = {
+  schema_version: number;
+  status: string;
+  capabilities: PreviewCapabilityDraft[];
+};
+export type PreviewCapabilityReq = { name: string };
+export type PreviewCapabilityRes = { capability: string; status: string };
 
 export const rpcMethods = {
   vaultInit: (req: VaultInitReqV1) => rpc<VaultInitReqV1, VaultInitRes>("vault_init", req),
@@ -131,6 +148,26 @@ export const rpcMethods = {
   eventsList: (req: EventsListReq) => rpc<EventsListReq, EventsListRes>("events_list", req),
   jobsList: (req: JobsListReq) => rpc<JobsListReq, JobsListRes>("jobs_list", req)
 };
+
+export function previewRpcEnabled(): boolean {
+  return (globalThis as PreviewGlobal).__KC_PHASE_L_PREVIEW__ === true;
+}
+
+export function createPreviewRpcApi():
+  | {
+      previewStatus: (req: PreviewStatusReq) => Promise<RpcResp<PreviewStatusRes>>;
+      previewCapability: (req: PreviewCapabilityReq) => Promise<RpcResp<PreviewCapabilityRes>>;
+    }
+  | null {
+  if (!previewRpcEnabled()) {
+    return null;
+  }
+  return {
+    previewStatus: (req: PreviewStatusReq) => rpc<PreviewStatusReq, PreviewStatusRes>("preview_status", req),
+    previewCapability: (req: PreviewCapabilityReq) =>
+      rpc<PreviewCapabilityReq, PreviewCapabilityRes>("preview_capability", req)
+  };
+}
 
 export type DesktopRpcApi = typeof rpcMethods;
 

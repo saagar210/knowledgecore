@@ -45,6 +45,11 @@ pub enum Command {
         #[command(subcommand)]
         cmd: FixturesCmd,
     },
+    #[cfg(feature = "phase_l_preview")]
+    Preview {
+        #[command(subcommand)]
+        cmd: PreviewCmd,
+    },
 }
 
 #[derive(Subcommand)]
@@ -96,5 +101,15 @@ pub enum FixturesCmd {
     Generate {
         #[arg(long)]
         corpus: String,
+    },
+}
+
+#[cfg(feature = "phase_l_preview")]
+#[derive(Subcommand)]
+pub enum PreviewCmd {
+    Status,
+    Capability {
+        #[arg(long)]
+        name: String,
     },
 }

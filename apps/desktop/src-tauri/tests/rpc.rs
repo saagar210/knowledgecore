@@ -143,3 +143,43 @@ fn tauri_command_wrappers_use_rpc_envelope_contract() {
     );
     assert!(command_json.get("data").is_some());
 }
+
+#[cfg(not(feature = "phase_l_preview"))]
+#[test]
+fn rpc_preview_is_disabled_by_default() {
+    assert!(!apps_desktop_tauri::rpc::phase_l_preview_enabled());
+}
+
+#[cfg(feature = "phase_l_preview")]
+#[test]
+fn rpc_preview_is_enabled_with_feature() {
+    assert!(apps_desktop_tauri::rpc::phase_l_preview_enabled());
+}
+
+#[cfg(feature = "phase_l_preview")]
+#[test]
+fn rpc_preview_status_returns_draft_capabilities() {
+    use apps_desktop_tauri::rpc::{preview_status_rpc, PreviewStatusReq};
+    let response = preview_status_rpc(PreviewStatusReq {});
+    match response {
+        RpcResponse::Ok { data } => {
+            assert_eq!(data.status, "draft");
+            let ordered: Vec<String> = data.capabilities.into_iter().map(|c| c.capability).collect();
+            assert_eq!(ordered, vec!["encryption", "lineage", "sync", "zip_packaging"]);
+        }
+        RpcResponse::Err { error } => panic!("preview status failed: {}", error.code),
+    }
+}
+
+#[cfg(feature = "phase_l_preview")]
+#[test]
+fn rpc_preview_capability_returns_placeholder_error() {
+    use apps_desktop_tauri::rpc::{preview_capability_rpc, PreviewCapabilityReq};
+    let response = preview_capability_rpc(PreviewCapabilityReq {
+        name: "sync".to_string(),
+    });
+    match response {
+        RpcResponse::Err { error } => assert_eq!(error.code, "KC_DRAFT_SYNC_NOT_IMPLEMENTED"),
+        RpcResponse::Ok { .. } => panic!("expected draft error response"),
+    }
+}
