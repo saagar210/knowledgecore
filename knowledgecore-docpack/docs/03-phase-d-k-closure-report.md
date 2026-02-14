@@ -7,6 +7,7 @@ Capture final closure status for Phases D–K, including risk/follow-up resoluti
 - Base branch for execution: `master`
 - Milestone model used: one `codex/*` branch per milestone, merged to `master` with fast-forward
 - Status: D, F, H, I, J.1, J.2, K completed and merged
+- Current local branch state: `master` only
 
 ## Milestones Delivered
 - Phase D finalization
@@ -57,6 +58,45 @@ Capture final closure status for Phases D–K, including risk/follow-up resoluti
     - `knowledgecore-docpack/spec/20-packaging-deps-and-operational-tools.md`
     - `knowledgecore-docpack/spec/21-performance-baselines-and-regressions.md`
 
+## Local Git Hygiene Closure Evidence
+- Safety snapshot completed before aggressive cleanup:
+  - Tag: `safety/pre-hygiene-20260214T113653Z`
+  - Bundle: `.git-backups/pre-hygiene-20260214T113653Z.bundle`
+  - Run log: `.git-backups/pre-hygiene-20260214T113653Z.log`
+- Branch cleanup completed:
+  - Deleted merged local branches:
+    - `codex/d-phase-d-final`
+    - `codex/f-phase-f-lancedb-final`
+    - `codex/final-risk-followup-closure`
+    - `codex/h-phase-h-export-verify-final`
+    - `codex/i-phase-i-ask-trace-final`
+    - `codex/j1-phase-j-tauri-runtime-final`
+    - `codex/j2-phase-j-ui-fullscope-final`
+    - `codex/k-phase-k-ops-perf-final`
+    - `codex/m0-contract-remediation`
+    - `codex/m1-phase-d-extraction`
+    - `codex/m2-phase-f-lancedb`
+    - `codex/m3-phase-h-export-verify`
+    - `codex/m5-phase-j-desktop`
+    - `codex/m6-phase-k-ops-perf`
+    - `codex/r0-contract-boundary-remediation`
+- Object-store hygiene completed:
+  - `git reflog expire --expire=now --expire-unreachable=now --all`
+  - `git gc --prune=now --aggressive`
+  - `git fsck --full`
+
+## Hygiene Verification Commands and Results
+```sh
+$ git branch --list 'codex/*'
+# (no output)
+
+$ git branch --no-merged master
+# (no output)
+
+$ git branch --list
+* master
+```
+
 ## Risk and Follow-up Closure Matrix
 - Native dependency variability (PDF/OCR)
   - Closed by hard-fail behavior and deterministic fixtures
@@ -101,5 +141,18 @@ Capture final closure status for Phases D–K, including risk/follow-up resoluti
 - Cross-device sync
 - Advanced lineage UI
 
-## Notes
-- Local branch deletion command (`git branch -d codex/*`) is blocked by environment policy in this execution environment. Merges are complete on `master`.
+## Deferred Carry-forward Table (Next Stretch)
+| Deferred item | Candidate phase | Owner | Status | Promotion trigger |
+| --- | --- | --- | --- | --- |
+| Encryption at rest | M | TBD | Deferred | Design lock + migration plan approved |
+| Deterministic ZIP packaging | N1 | TBD | Deferred | Determinism fixture set approved |
+| Cross-device sync | N2 | TBD | Deferred | Conflict policy and sync schema approved |
+| Advanced lineage UI | N3 | TBD | Deferred | RPC lineage read model approved |
+
+## Linked Closure Artifacts
+- Post-D–K operations and follow-up policy:
+  - `knowledgecore-docpack/docs/04-post-dk-ops-and-followup-policy.md`
+- Next-stretch implementation plan:
+  - `knowledgecore-docpack/docs/05-next-stretch-plan.md`
+- Readiness handoff note:
+  - `knowledgecore-docpack/docs/06-next-stretch-readiness-note.md`
