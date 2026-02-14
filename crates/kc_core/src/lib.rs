@@ -12,6 +12,7 @@ pub mod canonical;
 pub mod index_traits;
 pub mod retrieval;
 pub mod locator;
+pub mod snippet;
 pub mod chunking;
 pub mod export;
 
