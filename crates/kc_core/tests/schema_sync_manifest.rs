@@ -20,6 +20,15 @@ fn sync_head_schema() -> serde_json::Value {
             "updated_at_ms": { "type": "integer" }
           },
           "additionalProperties": false
+        },
+        "author_device_id": { "type": ["string", "null"] },
+        "author_fingerprint": {
+          "type": ["string", "null"],
+          "pattern": "^[0-9a-f]{8}(:[0-9a-f]{8}){7}$"
+        },
+        "author_signature": {
+          "type": ["string", "null"],
+          "pattern": "^[0-9a-f]{128}$"
         }
       },
       "allOf": [
@@ -76,7 +85,10 @@ fn schema_sync_head_accepts_valid_payload() {
         "model": "passphrase_v1",
         "fingerprint": "blake3:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
         "updated_at_ms": 100
-      }
+      },
+      "author_device_id": "f7ca3e7b-e380-4896-bde1-b2de37789b22",
+      "author_fingerprint": "aaaaaaaa:bbbbbbbb:cccccccc:dddddddd:eeeeeeee:ffffffff:11111111:22222222",
+      "author_signature": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
     });
     assert!(schema.is_valid(&payload));
 }
@@ -95,7 +107,8 @@ fn schema_sync_head_v2_rejects_missing_trust() {
 
 #[test]
 fn schema_sync_conflict_rejects_missing_kind() {
-    let schema = JSONSchema::compile(&sync_conflict_schema()).expect("compile sync conflict schema");
+    let schema =
+        JSONSchema::compile(&sync_conflict_schema()).expect("compile sync conflict schema");
     let invalid = serde_json::json!({
       "schema_version": 1,
       "vault_id": "vault-id",

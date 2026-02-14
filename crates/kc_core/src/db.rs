@@ -6,7 +6,7 @@ use std::fs;
 use std::path::{Path, PathBuf};
 use std::sync::{Mutex, OnceLock};
 
-const LATEST_SCHEMA_VERSION: i64 = 3;
+const LATEST_SCHEMA_VERSION: i64 = 4;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum DbMigrationOutcome {
@@ -117,16 +117,18 @@ fn validate_key_on_connection(conn: &Connection, passphrase: &str) -> AppResult<
         )
     })?;
 
-    conn.query_row("SELECT count(*) FROM sqlite_master", [], |row| row.get::<_, i64>(0))
-        .map_err(|e| {
-            AppError::new(
-                "KC_DB_KEY_INVALID",
-                "db",
-                "provided db passphrase is invalid",
-                false,
-                serde_json::json!({ "error": e.to_string() }),
-            )
-        })?;
+    conn.query_row("SELECT count(*) FROM sqlite_master", [], |row| {
+        row.get::<_, i64>(0)
+    })
+    .map_err(|e| {
+        AppError::new(
+            "KC_DB_KEY_INVALID",
+            "db",
+            "provided db passphrase is invalid",
+            false,
+            serde_json::json!({ "error": e.to_string() }),
+        )
+    })?;
     Ok(())
 }
 
@@ -195,7 +197,9 @@ pub fn migrate_db_to_sqlcipher(db_path: &Path, passphrase: &str) -> AppResult<Db
 
     // If the source no longer opens as plaintext, treat as already encrypted only when the key validates.
     if source_conn
-        .query_row("SELECT count(*) FROM sqlite_master", [], |row| row.get::<_, i64>(0))
+        .query_row("SELECT count(*) FROM sqlite_master", [], |row| {
+            row.get::<_, i64>(0)
+        })
         .is_err()
     {
         verify_db_passphrase(db_path, passphrase)?;
@@ -404,16 +408,15 @@ pub fn apply_migrations(conn: &Connection) -> AppResult<()> {
                 )
             })?;
 
-        tx.pragma_update(None, "user_version", 1i64)
-            .map_err(|e| {
-                AppError::new(
-                    "KC_DB_MIGRATION_FAILED",
-                    "db",
-                    "failed to set schema user_version",
-                    false,
-                    serde_json::json!({ "error": e.to_string() }),
-                )
-            })?;
+        tx.pragma_update(None, "user_version", 1i64).map_err(|e| {
+            AppError::new(
+                "KC_DB_MIGRATION_FAILED",
+                "db",
+                "failed to set schema user_version",
+                false,
+                serde_json::json!({ "error": e.to_string() }),
+            )
+        })?;
 
         tx.commit().map_err(|e| {
             AppError::new(
@@ -449,16 +452,15 @@ pub fn apply_migrations(conn: &Connection) -> AppResult<()> {
                 )
             })?;
 
-        tx.pragma_update(None, "user_version", 2i64)
-            .map_err(|e| {
-                AppError::new(
-                    "KC_DB_MIGRATION_FAILED",
-                    "db",
-                    "failed to set schema user_version",
-                    false,
-                    serde_json::json!({ "error": e.to_string() }),
-                )
-            })?;
+        tx.pragma_update(None, "user_version", 2i64).map_err(|e| {
+            AppError::new(
+                "KC_DB_MIGRATION_FAILED",
+                "db",
+                "failed to set schema user_version",
+                false,
+                serde_json::json!({ "error": e.to_string() }),
+            )
+        })?;
 
         tx.commit().map_err(|e| {
             AppError::new(
@@ -489,6 +491,50 @@ pub fn apply_migrations(conn: &Connection) -> AppResult<()> {
                     "KC_DB_MIGRATION_FAILED",
                     "db",
                     "failed to apply migration 0003",
+                    false,
+                    serde_json::json!({ "error": e.to_string() }),
+                )
+            })?;
+
+        tx.pragma_update(None, "user_version", 3i64).map_err(|e| {
+            AppError::new(
+                "KC_DB_MIGRATION_FAILED",
+                "db",
+                "failed to set schema user_version",
+                false,
+                serde_json::json!({ "error": e.to_string() }),
+            )
+        })?;
+
+        tx.commit().map_err(|e| {
+            AppError::new(
+                "KC_DB_MIGRATION_FAILED",
+                "db",
+                "failed to commit migration transaction",
+                false,
+                serde_json::json!({ "error": e.to_string() }),
+            )
+        })?;
+    }
+
+    let current_after_v3 = schema_version(conn)?;
+    if current_after_v3 < 4 {
+        let tx = conn.unchecked_transaction().map_err(|e| {
+            AppError::new(
+                "KC_DB_MIGRATION_FAILED",
+                "db",
+                "failed to begin migration transaction",
+                false,
+                serde_json::json!({ "error": e.to_string() }),
+            )
+        })?;
+
+        tx.execute_batch(include_str!("../migrations/0004_device_trust.sql"))
+            .map_err(|e| {
+                AppError::new(
+                    "KC_DB_MIGRATION_FAILED",
+                    "db",
+                    "failed to apply migration 0004",
                     false,
                     serde_json::json!({ "error": e.to_string() }),
                 )

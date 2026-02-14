@@ -31,6 +31,12 @@ pub struct SyncHeadV1 {
     pub created_at_ms: i64,
     #[serde(default)]
     pub trust: Option<SyncTrustV1>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub author_device_id: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub author_fingerprint: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub author_signature: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -352,11 +358,8 @@ fn compute_manifest_hash(bundle_dir: &Path) -> AppResult<String> {
 }
 
 fn build_local_snapshot(vault_path: &Path, now_ms: i64) -> AppResult<(PathBuf, String)> {
-    let staging_root = std::env::temp_dir().join(format!(
-        "kc_sync_export_{}_{}",
-        std::process::id(),
-        now_ms
-    ));
+    let staging_root =
+        std::env::temp_dir().join(format!("kc_sync_export_{}_{}", std::process::id(), now_ms));
     fs::create_dir_all(&staging_root).map_err(|e| {
         sync_error(
             "KC_SYNC_STATE_FAILED",
@@ -378,7 +381,10 @@ fn build_local_snapshot(vault_path: &Path, now_ms: i64) -> AppResult<(PathBuf, S
     Ok((bundle, manifest_hash))
 }
 
-fn build_local_snapshot_zip(vault_path: &Path, now_ms: i64) -> AppResult<(PathBuf, PathBuf, String)> {
+fn build_local_snapshot_zip(
+    vault_path: &Path,
+    now_ms: i64,
+) -> AppResult<(PathBuf, PathBuf, String)> {
     let staging_root = std::env::temp_dir().join(format!(
         "kc_sync_export_zip_{}_{}",
         std::process::id(),
@@ -847,6 +853,9 @@ pub fn sync_push(
         manifest_hash: local_manifest_hash.clone(),
         created_at_ms: now_ms,
         trust: None,
+        author_device_id: None,
+        author_fingerprint: None,
+        author_signature: None,
     };
     write_head(target_path, &head)?;
 
@@ -887,7 +896,8 @@ fn sync_push_s3_target(
     let seen_remote = read_state(conn, "sync_remote_head_seen")?;
     let last_applied_manifest = read_state(conn, "sync_last_applied_manifest_hash")?;
 
-    let (zip_path, _bundle_dir, local_manifest_hash) = build_local_snapshot_zip(vault_path, now_ms)?;
+    let (zip_path, _bundle_dir, local_manifest_hash) =
+        build_local_snapshot_zip(vault_path, now_ms)?;
     let remote_head = transport.read_head()?;
     ensure_remote_trust_matches(remote_head.as_ref(), &local_trust)?;
 
@@ -956,6 +966,9 @@ fn sync_push_s3_target(
             manifest_hash: local_manifest_hash.clone(),
             created_at_ms: now_ms,
             trust: Some(local_trust.clone()),
+            author_device_id: None,
+            author_fingerprint: None,
+            author_signature: None,
         };
         transport.write_head(&head)?;
 
@@ -992,9 +1005,12 @@ pub fn sync_push_target(
 ) -> AppResult<SyncPushResultV1> {
     match SyncTargetUri::parse(target_uri)? {
         SyncTargetUri::FilePath { path } => sync_push(conn, vault_path, Path::new(&path), now_ms),
-        SyncTargetUri::S3 { bucket, prefix } => {
-            sync_push_s3_target(conn, vault_path, S3SyncTransport::new(bucket, prefix), now_ms)
-        }
+        SyncTargetUri::S3 { bucket, prefix } => sync_push_s3_target(
+            conn,
+            vault_path,
+            S3SyncTransport::new(bucket, prefix),
+            now_ms,
+        ),
     }
 }
 
@@ -1244,8 +1260,11 @@ pub fn sync_pull_target(
 ) -> AppResult<SyncPullResultV1> {
     match SyncTargetUri::parse(target_uri)? {
         SyncTargetUri::FilePath { path } => sync_pull(conn, vault_path, Path::new(&path), now_ms),
-        SyncTargetUri::S3 { bucket, prefix } => {
-            sync_pull_s3_target(conn, vault_path, S3SyncTransport::new(bucket, prefix), now_ms)
-        }
+        SyncTargetUri::S3 { bucket, prefix } => sync_pull_s3_target(
+            conn,
+            vault_path,
+            S3SyncTransport::new(bucket, prefix),
+            now_ms,
+        ),
     }
 }

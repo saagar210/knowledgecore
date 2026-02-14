@@ -85,6 +85,12 @@ AppError schema v1 and stable error taxonomy; UI branches on code only.
   - `KC_SYNC_AUTH_FAILED`
   - `KC_SYNC_NETWORK_FAILED`
   - `KC_SYNC_LOCKED`
+- Trust:
+  - `KC_TRUST_DEVICE_UNVERIFIED`
+  - `KC_TRUST_FINGERPRINT_MISMATCH`
+  - `KC_TRUST_READ_FAILED`
+  - `KC_TRUST_WRITE_FAILED`
+  - `KC_TRUST_EVENT_WRITE_FAILED`
 - Lineage:
   - `KC_LINEAGE_INVALID_DEPTH`
   - `KC_LINEAGE_DOC_NOT_FOUND`

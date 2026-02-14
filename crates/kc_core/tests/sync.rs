@@ -34,10 +34,16 @@ fn sync_push_writes_head_and_status() {
 
     let pushed = sync_push(&conn, &vault_root, &target_root, 100).expect("sync push");
     assert!(target_root.join("head.json").exists());
-    assert!(target_root.join("snapshots").join(&pushed.snapshot_id).exists());
+    assert!(target_root
+        .join("snapshots")
+        .join(&pushed.snapshot_id)
+        .exists());
 
     let status = sync_status(&conn, &target_root).expect("sync status");
-    assert_eq!(status.seen_remote_snapshot_id, Some(pushed.snapshot_id.clone()));
+    assert_eq!(
+        status.seen_remote_snapshot_id,
+        Some(pushed.snapshot_id.clone())
+    );
     assert_eq!(
         status.last_applied_manifest_hash,
         Some(pushed.manifest_hash.clone())
@@ -86,10 +92,13 @@ fn sync_push_conflict_emits_artifact() {
     let remote_head = SyncHeadV1 {
         schema_version: 1,
         snapshot_id: format!("{}-remote", first.snapshot_id),
-        manifest_hash:
-            "blake3:ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff".to_string(),
+        manifest_hash: "blake3:ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"
+            .to_string(),
         created_at_ms: 200,
         trust: None,
+        author_device_id: None,
+        author_fingerprint: None,
+        author_signature: None,
     };
     std::fs::write(
         target_root.join("head.json"),
@@ -123,7 +132,10 @@ fn sync_target_wrappers_support_file_uri() {
     assert!(!pushed.snapshot_id.is_empty());
 
     let status = sync_status_target(&conn, &target_uri).expect("sync status target");
-    assert_eq!(status.seen_remote_snapshot_id, Some(pushed.snapshot_id.clone()));
+    assert_eq!(
+        status.seen_remote_snapshot_id,
+        Some(pushed.snapshot_id.clone())
+    );
 
     let pulled = sync_pull_target(&conn, &vault_root, &target_uri, 101).expect("sync pull target");
     assert_eq!(pulled.snapshot_id, pushed.snapshot_id);
@@ -152,14 +164,18 @@ fn sync_target_wrappers_support_s3_uri_with_emulation() {
     let target_uri = "s3://demo-bucket/kc";
     let pushed = sync_push_target(&conn, &vault_root, target_uri, 100).expect("s3 push");
     assert!(emulated_s3.join("demo-bucket/kc/head.json").exists());
-    assert!(
-        emulated_s3
-            .join(format!("demo-bucket/kc/snapshots/{}.zip", pushed.snapshot_id))
-            .exists()
-    );
+    assert!(emulated_s3
+        .join(format!(
+            "demo-bucket/kc/snapshots/{}.zip",
+            pushed.snapshot_id
+        ))
+        .exists());
 
     let status = sync_status_target(&conn, target_uri).expect("s3 status");
-    assert_eq!(status.seen_remote_snapshot_id, Some(pushed.snapshot_id.clone()));
+    assert_eq!(
+        status.seen_remote_snapshot_id,
+        Some(pushed.snapshot_id.clone())
+    );
 
     let pulled = sync_pull_target(&conn_pull, &pull_vault_root, target_uri, 101).expect("s3 pull");
     assert_eq!(pulled.snapshot_id, pushed.snapshot_id);
