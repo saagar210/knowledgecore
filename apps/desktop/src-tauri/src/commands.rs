@@ -11,6 +11,27 @@ pub fn vault_open(req: rpc::VaultOpenReq) -> rpc::RpcResponse<rpc::VaultOpenRes>
 }
 
 #[tauri::command]
+pub fn vault_encryption_status(
+    req: rpc::VaultEncryptionStatusReq,
+) -> rpc::RpcResponse<rpc::VaultEncryptionStatusRes> {
+    rpc::vault_encryption_status_rpc(req)
+}
+
+#[tauri::command]
+pub fn vault_encryption_enable(
+    req: rpc::VaultEncryptionEnableReq,
+) -> rpc::RpcResponse<rpc::VaultEncryptionEnableRes> {
+    rpc::vault_encryption_enable_rpc(req)
+}
+
+#[tauri::command]
+pub fn vault_encryption_migrate(
+    req: rpc::VaultEncryptionMigrateReq,
+) -> rpc::RpcResponse<rpc::VaultEncryptionMigrateRes> {
+    rpc::vault_encryption_migrate_rpc(req)
+}
+
+#[tauri::command]
 pub fn ingest_scan_folder(req: rpc::IngestScanFolderReq) -> rpc::RpcResponse<rpc::IngestScanFolderRes> {
     rpc::ingest_scan_folder_rpc(req)
 }

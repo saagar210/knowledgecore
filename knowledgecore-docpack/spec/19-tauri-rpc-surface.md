@@ -80,6 +80,7 @@ Versioned RPC surface v1, envelope schema, and determinism notes.
 
          ## Methods (v1)
          - vault_init, vault_open
+         - vault_encryption_status, vault_encryption_enable, vault_encryption_migrate
          - ingest_scan_folder, ingest_inbox_start/stop
          - search_query (includes now_ms param for deterministic tests)
          - locator_resolve

@@ -1,6 +1,8 @@
 use apps_desktop_tauri::rpc::{
-    ingest_inbox_start_rpc, ingest_inbox_stop_rpc, jobs_list_rpc, vault_init_rpc, vault_open_rpc,
-    IngestInboxStartReq, IngestInboxStopReq, JobsListReq, RpcResponse, VaultInitReq, VaultOpenReq,
+    ingest_inbox_start_rpc, ingest_inbox_stop_rpc, jobs_list_rpc, vault_encryption_enable_rpc,
+    vault_encryption_migrate_rpc, vault_encryption_status_rpc, vault_init_rpc, vault_open_rpc,
+    IngestInboxStartReq, IngestInboxStopReq, JobsListReq, RpcResponse, VaultEncryptionEnableReq,
+    VaultEncryptionMigrateReq, VaultEncryptionStatusReq, VaultInitReq, VaultOpenReq,
 };
 use apps_desktop_tauri::commands;
 use kc_core::app_error::AppError;
@@ -77,6 +79,68 @@ fn rpc_vault_open_and_jobs_list() {
     match jobs {
         RpcResponse::Ok { data } => assert!(data.jobs.is_empty()),
         RpcResponse::Err { error } => panic!("jobs list failed: {}", error.code),
+    }
+}
+
+#[test]
+fn rpc_vault_encryption_status_enable_and_migrate() {
+    let root = tempfile::tempdir().expect("tempdir").keep();
+    let input = root.join("note.txt");
+    std::fs::write(&input, b"hello").expect("write input");
+
+    let init = vault_init_rpc(VaultInitReq {
+        vault_path: root.to_string_lossy().to_string(),
+        vault_slug: "demo".to_string(),
+        now_ms: 1,
+    });
+    match init {
+        RpcResponse::Ok { .. } => {}
+        RpcResponse::Err { error } => panic!("vault init failed: {}", error.code),
+    }
+
+    let started = ingest_inbox_start_rpc(IngestInboxStartReq {
+        vault_path: root.to_string_lossy().to_string(),
+        file_path: input.to_string_lossy().to_string(),
+        source_kind: "notes".to_string(),
+        now_ms: 2,
+    });
+    match started {
+        RpcResponse::Ok { .. } => {}
+        RpcResponse::Err { error } => panic!("inbox start failed: {}", error.code),
+    }
+
+    let status_before = vault_encryption_status_rpc(VaultEncryptionStatusReq {
+        vault_path: root.to_string_lossy().to_string(),
+    });
+    match status_before {
+        RpcResponse::Ok { data } => {
+            assert!(!data.enabled);
+            assert_eq!(data.objects_total, 1);
+            assert_eq!(data.objects_encrypted, 0);
+        }
+        RpcResponse::Err { error } => panic!("status failed: {}", error.code),
+    }
+
+    let enabled = vault_encryption_enable_rpc(VaultEncryptionEnableReq {
+        vault_path: root.to_string_lossy().to_string(),
+        passphrase: "test-passphrase".to_string(),
+    });
+    match enabled {
+        RpcResponse::Ok { data } => assert!(data.status.enabled),
+        RpcResponse::Err { error } => panic!("enable failed: {}", error.code),
+    }
+
+    let migrated = vault_encryption_migrate_rpc(VaultEncryptionMigrateReq {
+        vault_path: root.to_string_lossy().to_string(),
+        passphrase: "test-passphrase".to_string(),
+        now_ms: 3,
+    });
+    match migrated {
+        RpcResponse::Ok { data } => {
+            assert_eq!(data.migrated_objects, 1);
+            assert_eq!(data.status.objects_encrypted, 1);
+        }
+        RpcResponse::Err { error } => panic!("migrate failed: {}", error.code),
     }
 }
 

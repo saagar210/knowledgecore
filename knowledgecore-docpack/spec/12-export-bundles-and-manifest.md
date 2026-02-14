@@ -19,6 +19,7 @@ Deterministic export folder bundle and manifest schema + ordering rules.
     "manifest_version",
     "vault_id",
     "schema_versions",
+    "encryption",
     "chunking_config_hash",
     "db",
     "objects"
@@ -33,6 +34,32 @@ Deterministic export folder bundle and manifest schema + ordering rules.
     },
     "schema_versions": {
       "type": "object"
+    },
+    "encryption": {
+      "type": "object",
+      "required": [
+        "enabled",
+        "mode",
+        "kdf"
+      ],
+      "properties": {
+        "enabled": { "type": "boolean" },
+        "mode": { "type": "string" },
+        "key_reference": { "type": ["string", "null"] },
+        "kdf": {
+          "type": "object",
+          "required": ["algorithm", "memory_kib", "iterations", "parallelism", "salt_id"],
+          "properties": {
+            "algorithm": { "type": "string" },
+            "memory_kib": { "type": "integer", "minimum": 1 },
+            "iterations": { "type": "integer", "minimum": 1 },
+            "parallelism": { "type": "integer", "minimum": 1 },
+            "salt_id": { "type": "string" }
+          },
+          "additionalProperties": false
+        }
+      },
+      "additionalProperties": false
     },
     "toolchain_registry": {
       "type": "object"
@@ -68,6 +95,8 @@ Deterministic export folder bundle and manifest schema + ordering rules.
         "required": [
           "relative_path",
           "hash",
+          "storage_hash",
+          "encrypted",
           "bytes"
         ],
         "properties": {
@@ -77,6 +106,13 @@ Deterministic export folder bundle and manifest schema + ordering rules.
           "hash": {
             "type": "string",
             "pattern": "^blake3:[0-9a-f]{64}$"
+          },
+          "storage_hash": {
+            "type": "string",
+            "pattern": "^blake3:[0-9a-f]{64}$"
+          },
+          "encrypted": {
+            "type": "boolean"
           },
           "bytes": {
             "type": "integer",
@@ -96,6 +132,7 @@ Deterministic export folder bundle and manifest schema + ordering rules.
 
          ## Ordering (Tier 1)
          - objects: hash asc then relative_path asc
+         - object storage_hash/encrypted derived from copied payload bytes
          - vectors: relative_path asc
 
          ## Error codes

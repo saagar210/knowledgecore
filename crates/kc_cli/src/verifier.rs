@@ -62,7 +62,7 @@ fn manifest_schema() -> Value {
       "$schema": "https://json-schema.org/draft/2020-12/schema",
       "$id": "kc://schemas/export-manifest/v1",
       "type": "object",
-      "required": ["manifest_version", "vault_id", "schema_versions", "chunking_config_hash", "db", "objects"],
+      "required": ["manifest_version", "vault_id", "schema_versions", "encryption", "chunking_config_hash", "db", "objects"],
       "properties": {
         "manifest_version": { "const": 1 },
         "vault_id": {
@@ -71,6 +71,28 @@ fn manifest_schema() -> Value {
           "pattern": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-5][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$"
         },
         "schema_versions": { "type": "object" },
+        "encryption": {
+          "type": "object",
+          "required": ["enabled", "mode", "kdf"],
+          "properties": {
+            "enabled": { "type": "boolean" },
+            "mode": { "type": "string" },
+            "key_reference": { "type": ["string", "null"] },
+            "kdf": {
+              "type": "object",
+              "required": ["algorithm", "memory_kib", "iterations", "parallelism", "salt_id"],
+              "properties": {
+                "algorithm": { "type": "string" },
+                "memory_kib": { "type": "integer", "minimum": 1 },
+                "iterations": { "type": "integer", "minimum": 1 },
+                "parallelism": { "type": "integer", "minimum": 1 },
+                "salt_id": { "type": "string" }
+              },
+              "additionalProperties": false
+            }
+          },
+          "additionalProperties": false
+        },
         "toolchain_registry": { "type": "object" },
         "chunking_config_id": { "type": "string" },
         "chunking_config_hash": { "type": "string", "pattern": "^blake3:[0-9a-f]{64}$" },
@@ -88,10 +110,12 @@ fn manifest_schema() -> Value {
           "type": "array",
           "items": {
             "type": "object",
-            "required": ["relative_path", "hash", "bytes"],
+            "required": ["relative_path", "hash", "storage_hash", "encrypted", "bytes"],
             "properties": {
               "relative_path": { "type": "string" },
               "hash": { "type": "string", "pattern": "^blake3:[0-9a-f]{64}$" },
+              "storage_hash": { "type": "string", "pattern": "^blake3:[0-9a-f]{64}$" },
+              "encrypted": { "type": "boolean" },
               "bytes": { "type": "integer", "minimum": 0 }
             },
             "additionalProperties": false
@@ -194,6 +218,12 @@ pub fn verify_bundle(bundle_path: &Path) -> AppResult<(i64, VerifyReportV1)> {
         }),
     }
 
+    let encryption_enabled = manifest
+        .get("encryption")
+        .and_then(|x| x.get("enabled"))
+        .and_then(|x| x.as_bool())
+        .unwrap_or(false);
+
     let objects = manifest
         .get("objects")
         .and_then(|x| x.as_array())
@@ -212,18 +242,22 @@ pub fn verify_bundle(bundle_path: &Path) -> AppResult<(i64, VerifyReportV1)> {
             .and_then(|x| x.as_str())
             .unwrap_or_default()
             .to_string();
-        let expected_hash = obj
-            .get("hash")
+        let expected_storage_hash = obj
+            .get("storage_hash")
             .and_then(|x| x.as_str())
             .unwrap_or_default()
             .to_string();
+        let expected_encrypted = obj
+            .get("encrypted")
+            .and_then(|x| x.as_bool())
+            .unwrap_or(false);
 
         let abs = bundle_path.join(&path);
         if !abs.exists() {
             errors.push(VerifyErrorEntry {
                 code: "OBJECT_MISSING".to_string(),
-                path,
-                expected: Some(expected_hash),
+                path: path.clone(),
+                expected: Some(expected_storage_hash),
                 actual: None,
             });
             continue;
@@ -233,7 +267,7 @@ pub fn verify_bundle(bundle_path: &Path) -> AppResult<(i64, VerifyReportV1)> {
             Ok(bytes) => bytes,
             Err(e) => {
                 return Ok(internal_error(
-                    path,
+                    path.clone(),
                     format!("failed to read object during verification: {}", e),
                     CheckedCounts {
                         objects: objects.len() as i64,
@@ -243,13 +277,37 @@ pub fn verify_bundle(bundle_path: &Path) -> AppResult<(i64, VerifyReportV1)> {
             }
         };
         let actual_hash = blake3_hex_prefixed(&bytes);
+        let actual_encrypted = kc_core::object_store::is_encrypted_payload(&bytes);
 
-        if actual_hash != expected_hash {
+        if actual_hash != expected_storage_hash {
             errors.push(VerifyErrorEntry {
                 code: "OBJECT_HASH_MISMATCH".to_string(),
-                path,
-                expected: Some(expected_hash),
+                path: path.clone(),
+                expected: Some(expected_storage_hash),
                 actual: Some(actual_hash),
+            });
+        }
+        if actual_encrypted != expected_encrypted {
+            errors.push(VerifyErrorEntry {
+                code: "OBJECT_ENCRYPTION_MISMATCH".to_string(),
+                path: path.clone(),
+                expected: Some(expected_encrypted.to_string()),
+                actual: Some(actual_encrypted.to_string()),
+            });
+        }
+        if encryption_enabled && !expected_encrypted {
+            errors.push(VerifyErrorEntry {
+                code: "OBJECT_ENCRYPTION_MISMATCH".to_string(),
+                path: path.clone(),
+                expected: Some("true".to_string()),
+                actual: Some("false".to_string()),
+            });
+        } else if !encryption_enabled && expected_encrypted {
+            errors.push(VerifyErrorEntry {
+                code: "OBJECT_ENCRYPTION_MISMATCH".to_string(),
+                path: path.clone(),
+                expected: Some("false".to_string()),
+                actual: Some("true".to_string()),
             });
         }
     }
@@ -308,7 +366,10 @@ pub fn verify_bundle(bundle_path: &Path) -> AppResult<(i64, VerifyReportV1)> {
         31
     } else if errors.iter().any(|e| e.code == "OBJECT_MISSING") {
         40
-    } else if errors.iter().any(|e| e.code == "OBJECT_HASH_MISMATCH") {
+    } else if errors
+        .iter()
+        .any(|e| e.code == "OBJECT_HASH_MISMATCH" || e.code == "OBJECT_ENCRYPTION_MISMATCH")
+    {
         41
     } else {
         60

@@ -1,4 +1,7 @@
-use apps_desktop_tauri::rpc::{AskQuestionReq, SearchQueryReq, VaultInitReq};
+use apps_desktop_tauri::rpc::{
+    AskQuestionReq, SearchQueryReq, VaultEncryptionEnableReq, VaultEncryptionMigrateReq,
+    VaultEncryptionStatusReq, VaultInitReq,
+};
 
 #[test]
 fn rpc_schema_requires_now_ms_on_deterministic_requests() {
@@ -29,6 +32,28 @@ fn rpc_schema_rejects_unknown_fields() {
         "extra": "nope"
     });
     assert!(serde_json::from_value::<SearchQueryReq>(req).is_err());
+
+    let invalid_status = serde_json::json!({
+        "vault_path": "/tmp/vault",
+        "extra": "nope"
+    });
+    assert!(serde_json::from_value::<VaultEncryptionStatusReq>(invalid_status).is_err());
+
+    let invalid_enable = serde_json::json!({
+        "vault_path": "/tmp/vault",
+        "passphrase": "secret",
+        "extra": "nope"
+    });
+    assert!(serde_json::from_value::<VaultEncryptionEnableReq>(invalid_enable).is_err());
+}
+
+#[test]
+fn rpc_schema_requires_now_ms_for_encryption_migrate() {
+    let missing_now = serde_json::json!({
+        "vault_path": "/tmp/vault",
+        "passphrase": "secret"
+    });
+    assert!(serde_json::from_value::<VaultEncryptionMigrateReq>(missing_now).is_err());
 }
 
 #[cfg(not(feature = "phase_l_preview"))]

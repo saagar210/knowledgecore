@@ -257,7 +257,13 @@ pub fn vault_init(vault_path: &Path, vault_slug: &str, now_ms: i64) -> AppResult
         encryption: VaultEncryptionConfigV2::default(),
     };
 
-    let bytes = serde_json::to_vec_pretty(&vault).map_err(|e| {
+    vault_save(vault_path, &vault)?;
+
+    Ok(vault)
+}
+
+pub fn vault_save(vault_path: &Path, vault: &VaultJsonV2) -> AppResult<()> {
+    let bytes = serde_json::to_vec_pretty(vault).map_err(|e| {
         AppError::new(
             "KC_VAULT_INIT_FAILED",
             "vault",
@@ -276,8 +282,7 @@ pub fn vault_init(vault_path: &Path, vault_slug: &str, now_ms: i64) -> AppResult
             serde_json::json!({ "error": e.to_string() }),
         )
     })?;
-
-    Ok(vault)
+    Ok(())
 }
 
 pub fn vault_open(vault_path: &Path) -> AppResult<VaultJsonV2> {

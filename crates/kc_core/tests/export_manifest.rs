@@ -38,6 +38,11 @@ fn export_manifest_has_deterministic_object_order() {
         .and_then(|v| v.as_array())
         .expect("objects array");
 
+    for object in objects {
+        assert!(object.get("storage_hash").and_then(|v| v.as_str()).is_some());
+        assert!(object.get("encrypted").and_then(|v| v.as_bool()).is_some());
+    }
+
     let hashes: Vec<String> = objects
         .iter()
         .map(|o| o.get("hash").and_then(|v| v.as_str()).unwrap_or_default().to_string())
@@ -68,6 +73,19 @@ fn export_manifest_has_deterministic_object_order() {
     let expected_chunking_hash = hash_chunking_config(&default_chunking_config_v1())
         .expect("hash default chunking config");
     assert_eq!(chunking_hash, expected_chunking_hash.0);
+
+    let encryption = manifest.get("encryption").expect("encryption block");
+    assert_eq!(
+        encryption.get("enabled").and_then(|v| v.as_bool()),
+        Some(false)
+    );
+    assert_eq!(
+        manifest
+            .get("schema_versions")
+            .and_then(|v| v.get("vault"))
+            .and_then(|v| v.as_i64()),
+        Some(2)
+    );
 }
 
 #[test]

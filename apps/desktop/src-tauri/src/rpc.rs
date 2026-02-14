@@ -115,6 +115,50 @@ pub struct VaultOpenRes {
 
 #[derive(Debug, Deserialize)]
 #[serde(deny_unknown_fields)]
+pub struct VaultEncryptionStatusReq {
+    pub vault_path: String,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct VaultEncryptionStatusRes {
+    pub enabled: bool,
+    pub mode: String,
+    pub key_reference: Option<String>,
+    pub kdf_algorithm: String,
+    pub objects_total: i64,
+    pub objects_encrypted: i64,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct VaultEncryptionEnableReq {
+    pub vault_path: String,
+    pub passphrase: String,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct VaultEncryptionEnableRes {
+    pub status: VaultEncryptionStatusRes,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct VaultEncryptionMigrateReq {
+    pub vault_path: String,
+    pub passphrase: String,
+    pub now_ms: i64,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct VaultEncryptionMigrateRes {
+    pub status: VaultEncryptionStatusRes,
+    pub migrated_objects: i64,
+    pub already_encrypted_objects: i64,
+    pub event_id: i64,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct IngestScanFolderReq {
     pub vault_path: String,
     pub scan_root: String,
@@ -296,6 +340,52 @@ pub fn vault_open_rpc(req: VaultOpenReq) -> RpcResponse<VaultOpenRes> {
         Ok(vault) => RpcResponse::ok(VaultOpenRes {
             vault_id: vault.vault_id,
             vault_slug: vault.vault_slug,
+        }),
+        Err(error) => RpcResponse::err(error),
+    }
+}
+
+fn map_encryption_status(status: kc_core::rpc_service::VaultEncryptionStatus) -> VaultEncryptionStatusRes {
+    VaultEncryptionStatusRes {
+        enabled: status.enabled,
+        mode: status.mode,
+        key_reference: status.key_reference,
+        kdf_algorithm: status.kdf_algorithm,
+        objects_total: status.objects_total,
+        objects_encrypted: status.objects_encrypted,
+    }
+}
+
+pub fn vault_encryption_status_rpc(req: VaultEncryptionStatusReq) -> RpcResponse<VaultEncryptionStatusRes> {
+    match rpc_service::vault_encryption_status_service(std::path::Path::new(&req.vault_path)) {
+        Ok(status) => RpcResponse::ok(map_encryption_status(status)),
+        Err(error) => RpcResponse::err(error),
+    }
+}
+
+pub fn vault_encryption_enable_rpc(req: VaultEncryptionEnableReq) -> RpcResponse<VaultEncryptionEnableRes> {
+    match rpc_service::vault_encryption_enable_service(
+        std::path::Path::new(&req.vault_path),
+        &req.passphrase,
+    ) {
+        Ok(status) => RpcResponse::ok(VaultEncryptionEnableRes {
+            status: map_encryption_status(status),
+        }),
+        Err(error) => RpcResponse::err(error),
+    }
+}
+
+pub fn vault_encryption_migrate_rpc(req: VaultEncryptionMigrateReq) -> RpcResponse<VaultEncryptionMigrateRes> {
+    match rpc_service::vault_encryption_migrate_service(
+        std::path::Path::new(&req.vault_path),
+        &req.passphrase,
+        req.now_ms,
+    ) {
+        Ok(out) => RpcResponse::ok(VaultEncryptionMigrateRes {
+            status: map_encryption_status(out.status),
+            migrated_objects: out.migrated_objects,
+            already_encrypted_objects: out.already_encrypted_objects,
+            event_id: out.event_id,
         }),
         Err(error) => RpcResponse::err(error),
     }

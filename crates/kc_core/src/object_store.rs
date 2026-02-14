@@ -8,7 +8,7 @@ use rusqlite::{params, Connection};
 use std::fs;
 use std::path::PathBuf;
 
-const ENCRYPTED_MAGIC: &[u8; 4] = b"KCE1";
+pub const ENCRYPTED_MAGIC: &[u8; 4] = b"KCE1";
 
 #[derive(Debug, Clone)]
 pub struct ObjectStoreEncryptionContext {
@@ -242,7 +242,67 @@ impl ObjectStore {
         self.maybe_decrypt_bytes(object_hash, &raw)
     }
 
+    pub fn raw_bytes(&self, object_hash: &ObjectHash) -> AppResult<Vec<u8>> {
+        let path = self.file_path_for_hash(object_hash)?;
+        fs::read(&path).map_err(|e| {
+            AppError::new(
+                "KC_INGEST_READ_FAILED",
+                "object_store",
+                "failed to read object bytes",
+                false,
+                serde_json::json!({ "error": e.to_string(), "path": path }),
+            )
+        })
+    }
+
+    pub fn rewrite_plaintext_for_hash(
+        &self,
+        object_hash: &ObjectHash,
+        plaintext: &[u8],
+    ) -> AppResult<()> {
+        let expected = blake3_hex_prefixed(plaintext);
+        if expected != object_hash.0 {
+            return Err(AppError::new(
+                "KC_HASH_INVALID_FORMAT",
+                "object_store",
+                "plaintext bytes do not match object hash",
+                false,
+                serde_json::json!({
+                    "expected": object_hash.0,
+                    "actual": expected
+                }),
+            ));
+        }
+        let path = self.file_path_for_hash(object_hash)?;
+        if let Some(parent) = path.parent() {
+            fs::create_dir_all(parent).map_err(|e| {
+                AppError::new(
+                    "KC_INGEST_READ_FAILED",
+                    "object_store",
+                    "failed to create object hash prefix directory",
+                    false,
+                    serde_json::json!({ "error": e.to_string(), "path": parent }),
+                )
+            })?;
+        }
+        let stored = self.maybe_encrypt_bytes(object_hash, plaintext)?;
+        fs::write(&path, &stored).map_err(|e| {
+            AppError::new(
+                "KC_INGEST_READ_FAILED",
+                "object_store",
+                "failed writing rewritten object bytes",
+                false,
+                serde_json::json!({ "error": e.to_string(), "path": path }),
+            )
+        })?;
+        Ok(())
+    }
+
     pub fn exists(&self, object_hash: &ObjectHash) -> AppResult<bool> {
         Ok(self.file_path_for_hash(object_hash)?.exists())
     }
+}
+
+pub fn is_encrypted_payload(bytes: &[u8]) -> bool {
+    bytes.starts_with(ENCRYPTED_MAGIC)
 }

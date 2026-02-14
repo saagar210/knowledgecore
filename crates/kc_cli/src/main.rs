@@ -15,7 +15,10 @@ mod commands {
 mod verifier;
 
 use clap::Parser;
-use cli::{BenchCmd, Cli, Command, DepsCmd, FixturesCmd, GcCmd, IndexCmd, IngestCmd, VaultCmd};
+use cli::{
+    BenchCmd, Cli, Command, DepsCmd, FixturesCmd, GcCmd, IndexCmd, IngestCmd, VaultCmd,
+    VaultEncryptCmd,
+};
 #[cfg(feature = "phase_l_preview")]
 use cli::PreviewCmd;
 use kc_core::vault::{vault_init, vault_open};
@@ -46,6 +49,18 @@ fn main() {
                 opened.map(|_| ())
             }
             VaultCmd::Verify { vault_path } => commands::vault::run_verify(&vault_path),
+            VaultCmd::Encrypt { cmd } => match cmd {
+                VaultEncryptCmd::Status { vault_path } => commands::vault::run_encrypt_status(&vault_path),
+                VaultEncryptCmd::Enable {
+                    vault_path,
+                    passphrase_env,
+                } => commands::vault::run_encrypt_enable(&vault_path, &passphrase_env),
+                VaultEncryptCmd::Migrate {
+                    vault_path,
+                    passphrase_env,
+                    now_ms,
+                } => commands::vault::run_encrypt_migrate(&vault_path, &passphrase_env, now_ms),
+            },
         },
         Command::Ingest { cmd } => match cmd {
             IngestCmd::ScanFolder {

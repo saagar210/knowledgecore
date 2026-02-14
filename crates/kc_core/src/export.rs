@@ -133,7 +133,17 @@ pub fn export_bundle(vault_path: &Path, export_dir: &Path, opts: &ExportOptions,
                 )
             })?;
         }
-        fs::copy(&src, &dst).map_err(|e| {
+        let stored_bytes = fs::read(&src).map_err(|e| {
+            AppError::new(
+                "KC_EXPORT_FAILED",
+                "export",
+                "failed reading source object file",
+                false,
+                serde_json::json!({ "error": e.to_string(), "path": src }),
+            )
+        })?;
+
+        fs::write(&dst, &stored_bytes).map_err(|e| {
             AppError::new(
                 "KC_EXPORT_FAILED",
                 "export",
@@ -146,6 +156,8 @@ pub fn export_bundle(vault_path: &Path, export_dir: &Path, opts: &ExportOptions,
         objects.push(serde_json::json!({
             "relative_path": rel,
             "hash": hash,
+            "storage_hash": blake3_hex_prefixed(&stored_bytes),
+            "encrypted": crate::object_store::is_encrypted_payload(&stored_bytes),
             "bytes": bytes
         }));
     }
@@ -231,10 +243,22 @@ pub fn export_bundle(vault_path: &Path, export_dir: &Path, opts: &ExportOptions,
         "manifest_version": 1,
         "vault_id": vault.vault_id,
         "schema_versions": {
-            "vault": 1,
+            "vault": 2,
             "locator": 1,
             "app_error": 1,
             "rpc": 1
+        },
+        "encryption": {
+            "enabled": vault.encryption.enabled,
+            "mode": vault.encryption.mode,
+            "key_reference": vault.encryption.key_reference,
+            "kdf": {
+                "algorithm": vault.encryption.kdf.algorithm,
+                "memory_kib": vault.encryption.kdf.memory_kib,
+                "iterations": vault.encryption.kdf.iterations,
+                "parallelism": vault.encryption.kdf.parallelism,
+                "salt_id": vault.encryption.kdf.salt_id,
+            }
         },
         "toolchain_registry": {
             "pdfium": vault.toolchain.pdfium.identity,

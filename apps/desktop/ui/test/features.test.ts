@@ -11,7 +11,12 @@ import {
 } from "../src/features/ingest";
 import { loadRelated } from "../src/features/related";
 import { runSearch } from "../src/features/search";
-import { loadSettingsDependencies } from "../src/features/settings";
+import {
+  enableVaultEncryption,
+  loadSettingsDependencies,
+  loadVaultEncryptionStatus,
+  migrateVaultEncryption
+} from "../src/features/settings";
 import { vaultInit, vaultOpen } from "../src/features/vault";
 
 function ok<T>(data: T): Promise<RpcResp<T>> {
@@ -22,6 +27,40 @@ function mockApi(): DesktopRpcApi {
   return {
     vaultInit: () => ok({ vault_id: "v1" }),
     vaultOpen: () => ok({ vault_id: "v1", vault_slug: "demo" }),
+    vaultEncryptionStatus: () =>
+      ok({
+        enabled: false,
+        mode: "object_store_xchacha20poly1305",
+        key_reference: null,
+        kdf_algorithm: "argon2id",
+        objects_total: 1,
+        objects_encrypted: 0
+      }),
+    vaultEncryptionEnable: () =>
+      ok({
+        status: {
+          enabled: true,
+          mode: "object_store_xchacha20poly1305",
+          key_reference: "vault:v1",
+          kdf_algorithm: "argon2id",
+          objects_total: 1,
+          objects_encrypted: 0
+        }
+      }),
+    vaultEncryptionMigrate: () =>
+      ok({
+        status: {
+          enabled: true,
+          mode: "object_store_xchacha20poly1305",
+          key_reference: "vault:v1",
+          kdf_algorithm: "argon2id",
+          objects_total: 1,
+          objects_encrypted: 1
+        },
+        migrated_objects: 1,
+        already_encrypted_objects: 0,
+        event_id: 42
+      }),
     ingestScanFolder: () => ok({ ingested: 2 }),
     ingestInboxStart: () => ok({ job_id: "j1", doc_id: "d1" }),
     ingestInboxStop: () => ok({ stopped: true }),
@@ -119,6 +158,24 @@ describe("feature controllers", () => {
     expect(
       await loadSettingsDependencies(api, {
         vault_path: "/tmp/v"
+      })
+    ).toMatchObject({ kind: "data" });
+    expect(
+      await loadVaultEncryptionStatus(api, {
+        vault_path: "/tmp/v"
+      })
+    ).toMatchObject({ kind: "data" });
+    expect(
+      await enableVaultEncryption(api, {
+        vault_path: "/tmp/v",
+        passphrase: "pass"
+      })
+    ).toMatchObject({ kind: "data" });
+    expect(
+      await migrateVaultEncryption(api, {
+        vault_path: "/tmp/v",
+        passphrase: "pass",
+        now_ms: 6
       })
     ).toMatchObject({ kind: "data" });
   });

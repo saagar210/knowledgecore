@@ -95,6 +95,7 @@ Verifier behavior, stable exit codes, deterministic report ordering.
          - 31 DB_HASH_MISMATCH
          - 40 OBJECT_MISSING
          - 41 OBJECT_HASH_MISMATCH
+           (also used for OBJECT_ENCRYPTION_MISMATCH)
          - 60 INTERNAL_ERROR
          (Full list in this spec's narrative in earlier plan; must match implementation.)
 

@@ -8,7 +8,7 @@ fn export_manifest_schema() -> serde_json::Value {
       "$schema": "https://json-schema.org/draft/2020-12/schema",
       "$id": "kc://schemas/export-manifest/v1",
       "type": "object",
-      "required": ["manifest_version", "vault_id", "schema_versions", "chunking_config_hash", "db", "objects"],
+      "required": ["manifest_version", "vault_id", "schema_versions", "encryption", "chunking_config_hash", "db", "objects"],
       "properties": {
         "manifest_version": { "const": 1 },
         "vault_id": {
@@ -17,6 +17,28 @@ fn export_manifest_schema() -> serde_json::Value {
           "pattern": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-5][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$"
         },
         "schema_versions": { "type": "object" },
+        "encryption": {
+          "type": "object",
+          "required": ["enabled", "mode", "kdf"],
+          "properties": {
+            "enabled": { "type": "boolean" },
+            "mode": { "type": "string" },
+            "key_reference": { "type": ["string", "null"] },
+            "kdf": {
+              "type": "object",
+              "required": ["algorithm", "memory_kib", "iterations", "parallelism", "salt_id"],
+              "properties": {
+                "algorithm": { "type": "string" },
+                "memory_kib": { "type": "integer", "minimum": 1 },
+                "iterations": { "type": "integer", "minimum": 1 },
+                "parallelism": { "type": "integer", "minimum": 1 },
+                "salt_id": { "type": "string" }
+              },
+              "additionalProperties": false
+            }
+          },
+          "additionalProperties": false
+        },
         "toolchain_registry": { "type": "object" },
         "chunking_config_id": { "type": "string" },
         "chunking_config_hash": { "type": "string", "pattern": "^blake3:[0-9a-f]{64}$" },
@@ -34,10 +56,12 @@ fn export_manifest_schema() -> serde_json::Value {
           "type": "array",
           "items": {
             "type": "object",
-            "required": ["relative_path", "hash", "bytes"],
+            "required": ["relative_path", "hash", "storage_hash", "encrypted", "bytes"],
             "properties": {
               "relative_path": { "type": "string" },
               "hash": { "type": "string", "pattern": "^blake3:[0-9a-f]{64}$" },
+              "storage_hash": { "type": "string", "pattern": "^blake3:[0-9a-f]{64}$" },
+              "encrypted": { "type": "boolean" },
               "bytes": { "type": "integer", "minimum": 0 }
             },
             "additionalProperties": false
