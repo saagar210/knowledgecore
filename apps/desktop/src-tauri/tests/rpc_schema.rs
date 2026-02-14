@@ -210,6 +210,14 @@ fn rpc_schema_sync_accepts_uri_targets() {
         "now_ms": 124
     });
     assert!(serde_json::from_value::<SyncPullReq>(pull_with_merge).is_ok());
+
+    let pull_with_merge_v2 = serde_json::json!({
+        "vault_path": "/tmp/vault",
+        "target_path": "s3://demo-bucket/kc",
+        "auto_merge": "conservative_plus_v2",
+        "now_ms": 125
+    });
+    assert!(serde_json::from_value::<SyncPullReq>(pull_with_merge_v2).is_ok());
 }
 
 #[test]
@@ -223,6 +231,7 @@ fn rpc_schema_sync_merge_preview_requires_now_ms() {
     let valid = serde_json::json!({
         "vault_path": "/tmp/vault",
         "target_path": "s3://demo-bucket/kc",
+        "policy": "conservative_plus_v2",
         "now_ms": 123
     });
     assert!(serde_json::from_value::<SyncMergePreviewReq>(valid).is_ok());

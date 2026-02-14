@@ -576,12 +576,19 @@ fn rpc_sync_supports_s3_uri_targets_via_emulation() {
     let preview = sync_merge_preview_rpc(SyncMergePreviewReq {
         vault_path: root.to_string_lossy().to_string(),
         target_path: target_uri.to_string(),
+        policy: Some("conservative_plus_v2".to_string()),
         now_ms: 5,
     });
     match preview {
         RpcResponse::Ok { data } => {
             assert_eq!(data.target_path, target_uri);
-            assert_eq!(data.report.merge_policy, "conservative_v1");
+            assert_eq!(data.report.merge_policy, "conservative_plus_v2");
+            assert_eq!(data.report.schema_version, 2);
+            assert!(data
+                .report
+                .decision_trace
+                .as_ref()
+                .is_some_and(|trace| !trace.is_empty()));
         }
         RpcResponse::Err { error } => panic!("sync merge preview failed: {}", error.code),
     }

@@ -743,11 +743,14 @@ pub fn sync_pull_service(
 pub fn sync_merge_preview_service(
     vault_path: &Path,
     target_uri: &str,
+    policy: Option<&str>,
     now_ms: i64,
 ) -> AppResult<crate::sync::SyncMergePreviewResultV1> {
     let vault = vault_open(vault_path)?;
     let conn = open_db(&vault_path.join(vault.db.relative_path))?;
-    crate::sync::sync_merge_preview_target(&conn, vault_path, target_uri, now_ms)
+    crate::sync::sync_merge_preview_target_with_policy(
+        &conn, vault_path, target_uri, policy, now_ms,
+    )
 }
 
 pub fn trust_identity_start_service(

@@ -208,8 +208,14 @@ fn main() {
             SyncCmd::MergePreview {
                 vault_path,
                 target_path,
+                policy,
                 now_ms,
-            } => commands::sync::run_merge_preview(&vault_path, &target_path, now_ms),
+            } => commands::sync::run_merge_preview(
+                &vault_path,
+                &target_path,
+                policy.as_deref(),
+                now_ms,
+            ),
         },
         Command::Lineage { cmd } => match cmd {
             LineageCmd::Overlay { cmd } => match cmd {

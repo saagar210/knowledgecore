@@ -307,6 +307,7 @@ export type SyncPullRes = {
 export type SyncMergePreviewReq = {
   vault_path: string;
   target_path: string;
+  policy?: string | null;
   now_ms: number;
 };
 export type SyncMergeChangeSet = {
@@ -322,6 +323,7 @@ export type SyncMergePreviewReport = {
   remote: SyncMergeChangeSet;
   overlap: SyncMergeChangeSet;
   reasons: string[];
+  decision_trace?: string[] | null;
 };
 export type SyncMergePreviewRes = {
   target_path: string;

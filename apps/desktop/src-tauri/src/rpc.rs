@@ -595,6 +595,8 @@ pub struct SyncPullRes {
 pub struct SyncMergePreviewReq {
     pub vault_path: String,
     pub target_path: String,
+    #[serde(default)]
+    pub policy: Option<String>,
     pub now_ms: i64,
 }
 
@@ -614,6 +616,8 @@ pub struct SyncMergePreviewReportRes {
     pub remote: SyncMergeChangeSetRes,
     pub overlap: SyncMergeChangeSetRes,
     pub reasons: Vec<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub decision_trace: Option<Vec<String>>,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -1282,6 +1286,7 @@ fn map_sync_merge_preview_report(
         remote: map_sync_merge_change_set(report.remote),
         overlap: map_sync_merge_change_set(report.overlap),
         reasons: report.reasons,
+        decision_trace: report.decision_trace,
     }
 }
 
@@ -1333,6 +1338,7 @@ pub fn sync_merge_preview_rpc(req: SyncMergePreviewReq) -> RpcResponse<SyncMerge
     match rpc_service::sync_merge_preview_service(
         std::path::Path::new(&req.vault_path),
         &req.target_path,
+        req.policy.as_deref(),
         req.now_ms,
     ) {
         Ok(out) => RpcResponse::ok(SyncMergePreviewRes {

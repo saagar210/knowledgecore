@@ -300,8 +300,8 @@ function mockApi(): DesktopRpcApi {
         seen_remote_snapshot_id: "snap-0",
         remote_snapshot_id: "snap-1",
         report: {
-          schema_version: 1,
-          merge_policy: "conservative_v1",
+          schema_version: 2,
+          merge_policy: "conservative_plus_v2",
           safe: true,
           generated_at_ms: 8,
           local: {
@@ -318,7 +318,8 @@ function mockApi(): DesktopRpcApi {
             object_hashes: [],
             lineage_overlay_ids: []
           },
-          reasons: []
+          reasons: [],
+          decision_trace: ["policy=conservative_plus_v2"]
         }
       }),
     lineageQuery: () =>
@@ -635,7 +636,7 @@ describe("feature controllers", () => {
       await runSyncPull(api, {
         vault_path: "/tmp/v",
         target_path: "s3://demo-bucket/kc",
-        auto_merge: "conservative",
+        auto_merge: "conservative_plus_v2",
         now_ms: 8
       })
     ).toMatchObject({ kind: "data" });
@@ -643,6 +644,7 @@ describe("feature controllers", () => {
       await loadSyncMergePreview(api, {
         vault_path: "/tmp/v",
         target_path: "s3://demo-bucket/kc",
+        policy: "conservative_plus_v2",
         now_ms: 8
       })
     ).toMatchObject({ kind: "data" });

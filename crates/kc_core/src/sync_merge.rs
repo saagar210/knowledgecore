@@ -24,6 +24,8 @@ pub struct SyncMergePreviewReportV1 {
     pub remote: SyncMergeChangeSetV1,
     pub overlap: SyncMergeChangeSetV1,
     pub reasons: Vec<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub decision_trace: Option<Vec<String>>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Default)]
@@ -89,6 +91,7 @@ pub fn merge_preview_conservative(
             lineage_overlay_ids: overlap_overlays,
         },
         reasons,
+        decision_trace: None,
     })
 }
 
@@ -242,6 +245,22 @@ pub fn ensure_conservative_plus_v2_merge_safe(report: &SyncMergePreviewReportV2)
             "decision_trace": report.decision_trace,
         }),
     ))
+}
+
+impl From<SyncMergePreviewReportV2> for SyncMergePreviewReportV1 {
+    fn from(report: SyncMergePreviewReportV2) -> Self {
+        Self {
+            schema_version: report.schema_version,
+            merge_policy: report.merge_policy,
+            safe: report.safe,
+            generated_at_ms: report.generated_at_ms,
+            local: report.local,
+            remote: report.remote,
+            overlap: report.overlap,
+            reasons: report.reasons,
+            decision_trace: Some(report.decision_trace),
+        }
+    }
 }
 
 fn normalize_change_set(

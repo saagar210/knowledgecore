@@ -204,6 +204,8 @@ fn cli_sync_merge_preview_and_conservative_pull_work() {
             "merge-preview",
             vault_a.to_string_lossy().as_ref(),
             sync_target.to_string_lossy().as_ref(),
+            "--policy",
+            "conservative_plus_v2",
             "--now-ms",
             "300",
         ])
@@ -216,6 +218,7 @@ fn cli_sync_merge_preview_and_conservative_pull_work() {
     );
     let preview_stdout = String::from_utf8(merge_preview.stdout).expect("preview utf8");
     assert!(preview_stdout.contains("\"safe\": true"));
+    assert!(preview_stdout.contains("\"merge_policy\": \"conservative_plus_v2\""));
 
     let conflict_pull = Command::new(bin)
         .args([
@@ -240,12 +243,12 @@ fn cli_sync_merge_preview_and_conservative_pull_work() {
             vault_a.to_string_lossy().as_ref(),
             sync_target.to_string_lossy().as_ref(),
             "--auto-merge",
-            "conservative",
+            "conservative_plus_v2",
             "--now-ms",
             "302",
         ])
         .output()
-        .expect("run pull with conservative auto merge");
+        .expect("run pull with conservative_plus_v2 auto merge");
     assert!(
         merged_pull.status.success(),
         "merged pull stderr: {}",

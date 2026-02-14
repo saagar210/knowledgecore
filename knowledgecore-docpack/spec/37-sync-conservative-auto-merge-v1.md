@@ -32,10 +32,10 @@ Define deterministic conservative auto-merge contracts for sync pull flows. Auto
   - `merge_preview_with_policy_v2(local, remote, ctx, policy, now_ms) -> SyncMergePreviewReportV2`
   - `ensure_conservative_plus_v2_merge_safe(report) -> Result<(), AppError>`
 - CLI surface:
-  - `kc_cli sync merge-preview <vault_path> <target_uri> --now-ms <ms>`
-  - `kc_cli sync pull <vault_path> <target_uri> --auto-merge conservative --now-ms <ms>`
+  - `kc_cli sync merge-preview <vault_path> <target_uri> --policy <conservative|conservative_plus_v2> --now-ms <ms>`
+  - `kc_cli sync pull <vault_path> <target_uri> --auto-merge <conservative|conservative_plus_v2> --now-ms <ms>`
 - RPC surface:
-  - `sync_merge_preview`
+  - `sync_merge_preview` with optional `policy`
 
 ## Determinism and version-boundary rules
 - Change-set normalization rules:

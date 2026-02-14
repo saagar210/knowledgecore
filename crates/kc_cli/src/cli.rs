@@ -312,6 +312,8 @@ pub enum SyncCmd {
     MergePreview {
         vault_path: String,
         target_path: String,
+        #[arg(long = "policy")]
+        policy: Option<String>,
         #[arg(long = "now-ms")]
         now_ms: i64,
     },

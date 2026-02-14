@@ -1160,6 +1160,7 @@ fn sync_merge_preview_file_target(
     conn: &Connection,
     vault_path: &Path,
     target_path: &Path,
+    policy: Option<&str>,
     now_ms: i64,
 ) -> AppResult<SyncMergePreviewResultV1> {
     ensure_sync_tables(conn)?;
@@ -1208,7 +1209,7 @@ fn sync_merge_preview_file_target(
 
     let local_delta = delta_change_set(&local_current, &base);
     let remote_delta = delta_change_set(&remote_current, &base);
-    let report = merge_preview_conservative(&local_delta, &remote_delta, now_ms)?;
+    let report = merge_preview_report_for_policy(&local_delta, &remote_delta, policy, now_ms)?;
 
     Ok(SyncMergePreviewResultV1 {
         target_path: target_path.display().to_string(),
@@ -1222,6 +1223,7 @@ fn sync_merge_preview_s3_target(
     conn: &Connection,
     vault_path: &Path,
     transport: S3SyncTransport,
+    policy: Option<&str>,
     now_ms: i64,
 ) -> AppResult<SyncMergePreviewResultV1> {
     ensure_sync_tables(conn)?;
@@ -1250,7 +1252,7 @@ fn sync_merge_preview_s3_target(
 
     let local_delta = delta_change_set(&local_current, &base);
     let remote_delta = delta_change_set(&remote_current, &base);
-    let report = merge_preview_conservative(&local_delta, &remote_delta, now_ms)?;
+    let report = merge_preview_report_for_policy(&local_delta, &remote_delta, policy, now_ms)?;
 
     Ok(SyncMergePreviewResultV1 {
         target_path: transport.target().display(),
@@ -1260,23 +1262,65 @@ fn sync_merge_preview_s3_target(
     })
 }
 
+fn merge_preview_report_for_policy(
+    local_delta: &SyncMergeChangeSetV1,
+    remote_delta: &SyncMergeChangeSetV1,
+    policy: Option<&str>,
+    now_ms: i64,
+) -> AppResult<SyncMergePreviewReportV1> {
+    match policy {
+        None | Some("conservative") => {
+            merge_preview_conservative(local_delta, remote_delta, now_ms)
+        }
+        Some("conservative_plus_v2") => {
+            let report = merge_preview_with_policy_v2(
+                local_delta,
+                remote_delta,
+                &SyncMergeContextV2::default(),
+                "conservative_plus_v2",
+                now_ms,
+            )?;
+            Ok(report.into())
+        }
+        Some(other) => Err(sync_error(
+            "KC_SYNC_MERGE_POLICY_UNSUPPORTED",
+            "unsupported sync merge preview policy",
+            serde_json::json!({
+                "policy": other,
+                "supported": ["conservative", "conservative_plus_v2"]
+            }),
+        )),
+    }
+}
+
+pub fn sync_merge_preview_target_with_policy(
+    conn: &Connection,
+    vault_path: &Path,
+    target_uri: &str,
+    policy: Option<&str>,
+    now_ms: i64,
+) -> AppResult<SyncMergePreviewResultV1> {
+    match SyncTargetUri::parse(target_uri)? {
+        SyncTargetUri::FilePath { path } => {
+            sync_merge_preview_file_target(conn, vault_path, Path::new(&path), policy, now_ms)
+        }
+        SyncTargetUri::S3 { bucket, prefix } => sync_merge_preview_s3_target(
+            conn,
+            vault_path,
+            S3SyncTransport::new(bucket, prefix),
+            policy,
+            now_ms,
+        ),
+    }
+}
+
 pub fn sync_merge_preview_target(
     conn: &Connection,
     vault_path: &Path,
     target_uri: &str,
     now_ms: i64,
 ) -> AppResult<SyncMergePreviewResultV1> {
-    match SyncTargetUri::parse(target_uri)? {
-        SyncTargetUri::FilePath { path } => {
-            sync_merge_preview_file_target(conn, vault_path, Path::new(&path), now_ms)
-        }
-        SyncTargetUri::S3 { bucket, prefix } => sync_merge_preview_s3_target(
-            conn,
-            vault_path,
-            S3SyncTransport::new(bucket, prefix),
-            now_ms,
-        ),
-    }
+    sync_merge_preview_target_with_policy(conn, vault_path, target_uri, None, now_ms)
 }
 
 pub fn sync_push(
@@ -1549,12 +1593,12 @@ fn sync_pull_with_mode(
         match auto_merge_mode {
             Some(SyncAutoMergeMode::Conservative) => {
                 let preview =
-                    sync_merge_preview_file_target(conn, vault_path, target_path, now_ms)?;
+                    sync_merge_preview_file_target(conn, vault_path, target_path, None, now_ms)?;
                 ensure_conservative_merge_safe(&preview.report)?;
             }
             Some(SyncAutoMergeMode::ConservativePlusV2) => {
                 let preview =
-                    sync_merge_preview_file_target(conn, vault_path, target_path, now_ms)?;
+                    sync_merge_preview_file_target(conn, vault_path, target_path, None, now_ms)?;
                 let report_v2 = merge_preview_with_policy_v2(
                     &preview.report.local,
                     &preview.report.remote,
@@ -1675,13 +1719,23 @@ fn sync_pull_s3_target(
     ) {
         match auto_merge_mode {
             Some(SyncAutoMergeMode::Conservative) => {
-                let preview =
-                    sync_merge_preview_s3_target(conn, vault_path, transport.clone(), now_ms)?;
+                let preview = sync_merge_preview_s3_target(
+                    conn,
+                    vault_path,
+                    transport.clone(),
+                    None,
+                    now_ms,
+                )?;
                 ensure_conservative_merge_safe(&preview.report)?;
             }
             Some(SyncAutoMergeMode::ConservativePlusV2) => {
-                let preview =
-                    sync_merge_preview_s3_target(conn, vault_path, transport.clone(), now_ms)?;
+                let preview = sync_merge_preview_s3_target(
+                    conn,
+                    vault_path,
+                    transport.clone(),
+                    None,
+                    now_ms,
+                )?;
                 let report_v2 = merge_preview_with_policy_v2(
                     &preview.report.local,
                     &preview.report.remote,
@@ -1728,13 +1782,23 @@ fn sync_pull_s3_target(
         ) {
             match auto_merge_mode {
                 Some(SyncAutoMergeMode::Conservative) => {
-                    let preview =
-                        sync_merge_preview_s3_target(conn, vault_path, transport.clone(), now_ms)?;
+                    let preview = sync_merge_preview_s3_target(
+                        conn,
+                        vault_path,
+                        transport.clone(),
+                        None,
+                        now_ms,
+                    )?;
                     ensure_conservative_merge_safe(&preview.report)?;
                 }
                 Some(SyncAutoMergeMode::ConservativePlusV2) => {
-                    let preview =
-                        sync_merge_preview_s3_target(conn, vault_path, transport.clone(), now_ms)?;
+                    let preview = sync_merge_preview_s3_target(
+                        conn,
+                        vault_path,
+                        transport.clone(),
+                        None,
+                        now_ms,
+                    )?;
                     let report_v2 = merge_preview_with_policy_v2(
                         &preview.report.local,
                         &preview.report.remote,
