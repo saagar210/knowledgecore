@@ -4,8 +4,9 @@ use crate::db::open_db;
 use crate::export::{export_bundle, ExportOptions};
 use crate::hashing::blake3_hex_prefixed;
 use crate::sync_merge::{
-    ensure_conservative_merge_safe, merge_preview_conservative, SyncMergeChangeSetV1,
-    SyncMergePreviewReportV1,
+    ensure_conservative_merge_safe, ensure_conservative_plus_v2_merge_safe,
+    merge_preview_conservative, merge_preview_with_policy_v2, SyncMergeChangeSetV1,
+    SyncMergeContextV2, SyncMergePreviewReportV1,
 };
 use crate::sync_s3::S3SyncTransport;
 use crate::sync_transport::{FsSyncTransport, SyncTargetUri, SyncTransport};
@@ -82,6 +83,7 @@ pub struct SyncMergePreviewResultV1 {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum SyncAutoMergeMode {
     Conservative,
+    ConservativePlusV2,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -121,12 +123,13 @@ fn parse_auto_merge_mode(mode: Option<&str>) -> AppResult<Option<SyncAutoMergeMo
         None => Ok(None),
         Some(raw) => match raw {
             "conservative" => Ok(Some(SyncAutoMergeMode::Conservative)),
+            "conservative_plus_v2" => Ok(Some(SyncAutoMergeMode::ConservativePlusV2)),
             other => Err(sync_error(
-                "KC_SYNC_MERGE_PRECONDITION_FAILED",
+                "KC_SYNC_MERGE_POLICY_UNSUPPORTED",
                 "unsupported sync auto-merge mode",
                 serde_json::json!({
                     "auto_merge": other,
-                    "supported": ["conservative"]
+                    "supported": ["conservative", "conservative_plus_v2"]
                 }),
             )),
         },
@@ -1549,6 +1552,18 @@ fn sync_pull_with_mode(
                     sync_merge_preview_file_target(conn, vault_path, target_path, now_ms)?;
                 ensure_conservative_merge_safe(&preview.report)?;
             }
+            Some(SyncAutoMergeMode::ConservativePlusV2) => {
+                let preview =
+                    sync_merge_preview_file_target(conn, vault_path, target_path, now_ms)?;
+                let report_v2 = merge_preview_with_policy_v2(
+                    &preview.report.local,
+                    &preview.report.remote,
+                    &SyncMergeContextV2::default(),
+                    "conservative_plus_v2",
+                    now_ms,
+                )?;
+                ensure_conservative_plus_v2_merge_safe(&report_v2)?;
+            }
             None => {
                 let conflict_path = create_conflict_artifact(
                     target_path,
@@ -1664,6 +1679,18 @@ fn sync_pull_s3_target(
                     sync_merge_preview_s3_target(conn, vault_path, transport.clone(), now_ms)?;
                 ensure_conservative_merge_safe(&preview.report)?;
             }
+            Some(SyncAutoMergeMode::ConservativePlusV2) => {
+                let preview =
+                    sync_merge_preview_s3_target(conn, vault_path, transport.clone(), now_ms)?;
+                let report_v2 = merge_preview_with_policy_v2(
+                    &preview.report.local,
+                    &preview.report.remote,
+                    &SyncMergeContextV2::default(),
+                    "conservative_plus_v2",
+                    now_ms,
+                )?;
+                ensure_conservative_plus_v2_merge_safe(&report_v2)?;
+            }
             None => {
                 let conflict_key = create_conflict_artifact_s3(
                     &transport,
@@ -1704,6 +1731,18 @@ fn sync_pull_s3_target(
                     let preview =
                         sync_merge_preview_s3_target(conn, vault_path, transport.clone(), now_ms)?;
                     ensure_conservative_merge_safe(&preview.report)?;
+                }
+                Some(SyncAutoMergeMode::ConservativePlusV2) => {
+                    let preview =
+                        sync_merge_preview_s3_target(conn, vault_path, transport.clone(), now_ms)?;
+                    let report_v2 = merge_preview_with_policy_v2(
+                        &preview.report.local,
+                        &preview.report.remote,
+                        &SyncMergeContextV2::default(),
+                        "conservative_plus_v2",
+                        now_ms,
+                    )?;
+                    ensure_conservative_plus_v2_merge_safe(&report_v2)?;
                 }
                 None => {
                     let conflict_key = create_conflict_artifact_s3(

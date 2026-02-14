@@ -1,4 +1,4 @@
-# Sync Conservative Auto-Merge v1
+# Sync Conservative Auto-Merge v2
 
 ## Purpose
 Define deterministic conservative auto-merge contracts for sync pull flows. Auto-merge is opt-in and only permitted when local and remote changes are provably disjoint.
@@ -9,6 +9,9 @@ Define deterministic conservative auto-merge contracts for sync pull flows. Auto
 - Conservative auto-merge is allowed only when:
   - object change sets have no overlapping `object_hash` values, and
   - lineage overlay change sets have no overlapping `overlay_id` values.
+- `conservative_plus_v2` extends conservative checks with:
+  - no trust-chain mismatch, and
+  - no active lineage lock conflict.
 - Overlap must hard-fail with deterministic `AppError.code`.
 - Merge preview reports are deterministic in ordering and schema.
 
@@ -21,9 +24,13 @@ Define deterministic conservative auto-merge contracts for sync pull flows. Auto
 - Core types:
   - `SyncMergeChangeSetV1`
   - `SyncMergePreviewReportV1`
+  - `SyncMergeContextV2`
+  - `SyncMergePreviewReportV2`
 - Core functions:
   - `merge_preview_conservative(local, remote, now_ms) -> SyncMergePreviewReportV1`
   - `ensure_conservative_merge_safe(report) -> Result<(), AppError>`
+  - `merge_preview_with_policy_v2(local, remote, ctx, policy, now_ms) -> SyncMergePreviewReportV2`
+  - `ensure_conservative_plus_v2_merge_safe(report) -> Result<(), AppError>`
 - CLI surface:
   - `kc_cli sync merge-preview <vault_path> <target_uri> --now-ms <ms>`
   - `kc_cli sync pull <vault_path> <target_uri> --auto-merge conservative --now-ms <ms>`
@@ -35,12 +42,16 @@ Define deterministic conservative auto-merge contracts for sync pull flows. Auto
   - hash arrays are validated, deduplicated, and lexicographically sorted
   - overlay id arrays are deduplicated and lexicographically sorted
 - Overlap arrays and `reasons` are sorted lexicographically.
+- `decision_trace` entries are deterministic, fixed-order strings for equivalent inputs.
 - `generated_at_ms` is caller-supplied and required to keep replayability deterministic.
 - Any change to overlap semantics, normalization, or report ordering requires version-boundary review.
 
 ## Failure modes and AppError mapping
 - `KC_SYNC_MERGE_NOT_SAFE`: conservative merge rejected because overlap exists.
 - `KC_SYNC_MERGE_PRECONDITION_FAILED`: invalid merge preview input (invalid object hash or invalid overlay id).
+- `KC_SYNC_MERGE_POLICY_UNSUPPORTED`: requested policy is unknown/unsupported.
+- `KC_SYNC_MERGE_TRUST_CONFLICT`: policy rejected due to trust chain mismatch.
+- `KC_SYNC_MERGE_LOCK_CONFLICT`: policy rejected due to active lineage lock conflict.
 - Existing sync conflict/lock/auth codes remain authoritative for transport-level failures.
 
 ## Acceptance tests
