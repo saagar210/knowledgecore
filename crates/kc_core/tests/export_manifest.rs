@@ -296,6 +296,132 @@ fn export_manifest_includes_recovery_escrow_descriptor_when_enabled() {
 }
 
 #[test]
+fn export_manifest_orders_expanded_recovery_escrow_providers() {
+    let root = tempfile::tempdir().expect("tempdir").keep();
+    let vault_root = root.join("vault");
+    let export_root = root.join("exports");
+
+    vault_init(&vault_root, "demo", 1000).expect("vault init");
+    let conn = open_db(&vault_root.join("db/knowledge.sqlite")).expect("open db");
+
+    let rows = [
+        (
+            "private_kms",
+            r#"{"provider":"private_kms","provider_ref":"secret://vault/private","key_id":"private-kms://demo","wrapped_at_ms":2600}"#,
+            2600i64,
+        ),
+        (
+            "local",
+            r#"{"provider":"local","provider_ref":"secret://vault/local","key_id":"local://demo","wrapped_at_ms":2500}"#,
+            2500i64,
+        ),
+        (
+            "hsm",
+            r#"{"provider":"hsm","provider_ref":"secret://vault/hsm","key_id":"hsm://demo","wrapped_at_ms":2400}"#,
+            2400i64,
+        ),
+        (
+            "azure",
+            r#"{"provider":"azure","provider_ref":"secret://vault/azure","key_id":"azure-kv://demo","wrapped_at_ms":2300}"#,
+            2300i64,
+        ),
+        (
+            "gcp",
+            r#"{"provider":"gcp","provider_ref":"secret://vault/gcp","key_id":"gcp-kms://demo","wrapped_at_ms":2200}"#,
+            2200i64,
+        ),
+        (
+            "aws",
+            r#"{"provider":"aws","provider_ref":"secret://vault/aws","key_id":"kms://demo","wrapped_at_ms":2100}"#,
+            2100i64,
+        ),
+    ];
+    for (provider_id, descriptor_json, updated_at_ms) in rows {
+        conn.execute(
+            "INSERT INTO recovery_escrow_configs (provider_id, enabled, descriptor_json, updated_at_ms)
+             VALUES (?1, ?2, ?3, ?4)",
+            rusqlite::params![provider_id, 1, descriptor_json, updated_at_ms],
+        )
+        .expect("insert escrow config");
+    }
+
+    let bundle = export_bundle(
+        &vault_root,
+        &export_root,
+        &ExportOptions {
+            include_vectors: false,
+            as_zip: false,
+        },
+        126,
+    )
+    .expect("export");
+
+    let manifest: serde_json::Value = serde_json::from_slice(
+        &std::fs::read(bundle.join("manifest.json")).expect("read manifest"),
+    )
+    .expect("parse manifest");
+    let recovery_escrow = manifest
+        .get("recovery_escrow")
+        .expect("recovery_escrow block");
+    assert_eq!(
+        recovery_escrow.get("provider").and_then(|v| v.as_str()),
+        Some("multi")
+    );
+    assert_eq!(
+        recovery_escrow
+            .get("updated_at_ms")
+            .and_then(|v| v.as_i64()),
+        Some(2600)
+    );
+    assert_eq!(
+        recovery_escrow
+            .get("providers")
+            .and_then(|v| v.as_array())
+            .map(|items| items
+                .iter()
+                .filter_map(|x| x.as_str())
+                .map(str::to_string)
+                .collect::<Vec<_>>()),
+        Some(vec![
+            "aws".to_string(),
+            "gcp".to_string(),
+            "azure".to_string(),
+            "hsm".to_string(),
+            "local".to_string(),
+            "private_kms".to_string(),
+        ])
+    );
+    assert_eq!(
+        recovery_escrow
+            .get("descriptor")
+            .and_then(|v| v.get("provider"))
+            .and_then(|v| v.as_str()),
+        Some("aws")
+    );
+
+    let descriptor_providers: Vec<String> = recovery_escrow
+        .get("escrow_descriptors")
+        .and_then(|v| v.as_array())
+        .expect("escrow_descriptors array")
+        .iter()
+        .filter_map(|entry| entry.get("provider"))
+        .filter_map(|value| value.as_str())
+        .map(str::to_string)
+        .collect();
+    assert_eq!(
+        descriptor_providers,
+        vec![
+            "aws".to_string(),
+            "gcp".to_string(),
+            "azure".to_string(),
+            "hsm".to_string(),
+            "local".to_string(),
+            "private_kms".to_string(),
+        ]
+    );
+}
+
+#[test]
 fn export_zip_is_byte_stable_for_identical_state() {
     let root = tempfile::tempdir().expect("tempdir").keep();
     let vault_root = root.join("vault");

@@ -1,6 +1,7 @@
 use jsonschema::JSONSchema;
 use kc_core::app_error::{AppError, AppResult};
 use kc_core::hashing::blake3_hex_prefixed;
+use kc_core::recovery_escrow::{provider_priority, supported_provider_ids};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::fs;
@@ -290,13 +291,6 @@ fn verify_recovery_escrow_metadata(manifest: &Value) -> Option<VerifyErrorEntry>
         actual: Some(actual),
     };
 
-    let provider_priority = |value: &str| match value {
-        "aws" => 0,
-        "gcp" => 1,
-        "azure" => 2,
-        _ => 9,
-    };
-
     if enabled {
         if provider.is_empty() {
             return Some(mismatch(
@@ -339,6 +333,17 @@ fn verify_recovery_escrow_metadata(manifest: &Value) -> Option<VerifyErrorEntry>
                 "recovery_escrow/providers",
                 "non-empty providers array when enabled=true",
                 "[]".to_string(),
+            ));
+        }
+        let supported_ids = supported_provider_ids();
+        if let Some(unsupported) = normalized_providers
+            .iter()
+            .find(|candidate| !supported_ids.contains(&candidate.as_str()))
+        {
+            return Some(mismatch(
+                "recovery_escrow/providers",
+                "providers use supported escrow ids",
+                unsupported.to_string(),
             ));
         }
         let mut expected_provider_order = normalized_providers.clone();

@@ -191,6 +191,7 @@ Deterministic export folder bundle and manifest schema + ordering rules.
          - object storage_hash/encrypted derived from copied payload bytes
          - vectors: relative_path asc
          - recovery_escrow invariant: `enabled=false` requires `provider=none`, `updated_at_ms=null`, and `descriptor=null`; `enabled=true` requires provider not `none`, integer `updated_at_ms`, and object `descriptor`
+         - when present, `providers[]` and `escrow_descriptors[]` are ordered by provider priority (`aws`,`gcp`,`azure`,`hsm`,`local`,`private_kms`) with lexical tie-breaks, and provider ids must come from this supported set
 
          ## Error codes
          - `KC_EXPORT_FAILED`

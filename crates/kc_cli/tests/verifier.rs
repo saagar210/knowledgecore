@@ -421,6 +421,117 @@ fn verifier_reports_recovery_escrow_descriptor_order_mismatch() {
 }
 
 #[test]
+fn verifier_accepts_expanded_recovery_escrow_provider_order() {
+    let root = tempfile::tempdir().expect("tempdir").keep();
+    let bundle = root.join("bundle_escrow_expanded_order");
+    std::fs::create_dir_all(bundle.join("db")).expect("mkdir db");
+    std::fs::write(bundle.join("db/knowledge.sqlite"), b"db").expect("write db");
+
+    let mut manifest = base_manifest(blake3_hex_prefixed(b"db"));
+    manifest["recovery_escrow"] = serde_json::json!({
+        "enabled": true,
+        "provider": "multi",
+        "providers": ["aws", "gcp", "azure", "hsm", "local", "private_kms"],
+        "updated_at_ms": 2600,
+        "descriptor": {
+            "provider": "aws",
+            "provider_ref": "aws://a",
+            "key_id": "aws-kms",
+            "wrapped_at_ms": 2100
+        },
+        "escrow_descriptors": [
+            {
+                "provider": "aws",
+                "provider_ref": "aws://a",
+                "key_id": "aws-kms",
+                "wrapped_at_ms": 2100
+            },
+            {
+                "provider": "gcp",
+                "provider_ref": "gcp://b",
+                "key_id": "gcp-kms",
+                "wrapped_at_ms": 2200
+            },
+            {
+                "provider": "azure",
+                "provider_ref": "azure://c",
+                "key_id": "azure-kv",
+                "wrapped_at_ms": 2300
+            },
+            {
+                "provider": "hsm",
+                "provider_ref": "hsm://d",
+                "key_id": "hsm-slot",
+                "wrapped_at_ms": 2400
+            },
+            {
+                "provider": "local",
+                "provider_ref": "local://e",
+                "key_id": "local-ref",
+                "wrapped_at_ms": 2500
+            },
+            {
+                "provider": "private_kms",
+                "provider_ref": "privatekms://f",
+                "key_id": "private-kms",
+                "wrapped_at_ms": 2600
+            }
+        ]
+    });
+    write_manifest(&bundle, &manifest);
+
+    let (code, report) = verify_bundle(&bundle).expect("verify");
+    assert_eq!(code, 0);
+    assert!(report
+        .errors
+        .iter()
+        .all(|e| e.code != "RECOVERY_ESCROW_METADATA_MISMATCH"));
+}
+
+#[test]
+fn verifier_rejects_unsupported_recovery_escrow_provider() {
+    let root = tempfile::tempdir().expect("tempdir").keep();
+    let bundle = root.join("bundle_escrow_unsupported");
+    std::fs::create_dir_all(bundle.join("db")).expect("mkdir db");
+    std::fs::write(bundle.join("db/knowledge.sqlite"), b"db").expect("write db");
+
+    let mut manifest = base_manifest(blake3_hex_prefixed(b"db"));
+    manifest["recovery_escrow"] = serde_json::json!({
+        "enabled": true,
+        "provider": "multi",
+        "providers": ["aws", "customkms"],
+        "updated_at_ms": 2600,
+        "descriptor": {
+            "provider": "aws",
+            "provider_ref": "aws://a",
+            "key_id": "aws-kms",
+            "wrapped_at_ms": 2100
+        },
+        "escrow_descriptors": [
+            {
+                "provider": "aws",
+                "provider_ref": "aws://a",
+                "key_id": "aws-kms",
+                "wrapped_at_ms": 2100
+            },
+            {
+                "provider": "customkms",
+                "provider_ref": "custom://b",
+                "key_id": "custom-kms",
+                "wrapped_at_ms": 2200
+            }
+        ]
+    });
+    write_manifest(&bundle, &manifest);
+
+    let (code, report) = verify_bundle(&bundle).expect("verify");
+    assert_eq!(code, 21);
+    assert!(report.errors.iter().any(|e| {
+        e.code == "RECOVERY_ESCROW_METADATA_MISMATCH" && e.path == "recovery_escrow/providers"
+    }));
+}
+
+#[test]
 fn verifier_accepts_deterministic_zip_bundle() {
     let root = tempfile::tempdir().expect("tempdir").keep();
     let folder = root.join("bundle11");
