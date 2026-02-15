@@ -15,6 +15,8 @@ pub mod object_store;
 pub mod recovery;
 pub mod recovery_escrow;
 pub mod recovery_escrow_aws;
+pub mod recovery_escrow_azure;
+pub mod recovery_escrow_gcp;
 pub mod recovery_escrow_local;
 pub mod retrieval;
 pub mod rpc_service;

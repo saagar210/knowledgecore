@@ -20,6 +20,8 @@ use crate::recovery_escrow::{
     RecoveryEscrowProvider, RecoveryEscrowReadRequest, RecoveryEscrowWriteRequest,
 };
 use crate::recovery_escrow_aws::{AwsRecoveryEscrowConfig, AwsRecoveryEscrowProvider};
+use crate::recovery_escrow_azure::{AzureRecoveryEscrowConfig, AzureRecoveryEscrowProvider};
+use crate::recovery_escrow_gcp::{GcpRecoveryEscrowConfig, GcpRecoveryEscrowProvider};
 use crate::recovery_escrow_local::LocalRecoveryEscrowProvider;
 use crate::trust::{
     trust_device_init, trust_device_list, trust_device_verify, TrustedDeviceRecord,
@@ -376,17 +378,69 @@ fn resolve_recovery_escrow_provider(
                 },
             )))
         }
+        "gcp" => {
+            let project_id = std::env::var("KC_RECOVERY_ESCROW_GCP_PROJECT_ID")
+                .ok()
+                .filter(|v| !v.trim().is_empty())
+                .unwrap_or_else(|| "kc-local".to_string());
+            let location = std::env::var("KC_RECOVERY_ESCROW_GCP_LOCATION")
+                .ok()
+                .filter(|v| !v.trim().is_empty())
+                .unwrap_or_else(|| "global".to_string());
+            let key_ring = std::env::var("KC_RECOVERY_ESCROW_GCP_KEY_RING")
+                .ok()
+                .filter(|v| !v.trim().is_empty())
+                .unwrap_or_else(|| "knowledgecore".to_string());
+            let key_name = std::env::var("KC_RECOVERY_ESCROW_GCP_KEY_NAME")
+                .ok()
+                .filter(|v| !v.trim().is_empty())
+                .unwrap_or_else(|| "recovery".to_string());
+            let secret_prefix = std::env::var("KC_RECOVERY_ESCROW_GCP_SECRET_PREFIX")
+                .ok()
+                .filter(|v| !v.trim().is_empty())
+                .unwrap_or_else(|| format!("kc/recovery/{vault_id}"));
+            Ok(Box::new(GcpRecoveryEscrowProvider::new(
+                GcpRecoveryEscrowConfig {
+                    project_id,
+                    location,
+                    key_ring,
+                    key_name,
+                    secret_prefix,
+                },
+            )))
+        }
+        "azure" => {
+            let key_vault_url = std::env::var("KC_RECOVERY_ESCROW_AZURE_KEY_VAULT_URL")
+                .ok()
+                .filter(|v| !v.trim().is_empty())
+                .unwrap_or_else(|| "https://knowledgecore-local.vault.azure.net".to_string());
+            let key_name = std::env::var("KC_RECOVERY_ESCROW_AZURE_KEY_NAME")
+                .ok()
+                .filter(|v| !v.trim().is_empty())
+                .unwrap_or_else(|| "recovery".to_string());
+            let secret_prefix = std::env::var("KC_RECOVERY_ESCROW_AZURE_SECRET_PREFIX")
+                .ok()
+                .filter(|v| !v.trim().is_empty())
+                .unwrap_or_else(|| format!("kc/recovery/{vault_id}"));
+            Ok(Box::new(AzureRecoveryEscrowProvider::new(
+                AzureRecoveryEscrowConfig {
+                    key_vault_url,
+                    key_name,
+                    secret_prefix,
+                },
+            )))
+        }
         "local" => Ok(Box::new(LocalRecoveryEscrowProvider::new(
             vault_path.join("recovery-escrow-local"),
         ))),
         other => Err(AppError::new(
-            "KC_RECOVERY_ESCROW_UNAVAILABLE",
+            "KC_RECOVERY_ESCROW_PROVIDER_UNSUPPORTED",
             "recovery",
             "unsupported recovery escrow provider",
             false,
             serde_json::json!({
                 "provider": other,
-                "supported": ["aws", "local"]
+                "supported": ["aws", "gcp", "azure", "local"]
             }),
         )),
     }

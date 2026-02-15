@@ -1,9 +1,12 @@
 use kc_core::hashing::blake3_hex_prefixed;
 use kc_core::recovery_escrow::{
-    canonical_descriptor_hash, RecoveryEscrowProvider, RecoveryEscrowReadRequest,
-    RecoveryEscrowWriteRequest,
+    canonical_descriptor_hash, normalize_escrow_descriptors, normalize_provider_configs,
+    provider_priority, RecoveryEscrowDescriptorV2, RecoveryEscrowProvider,
+    RecoveryEscrowProviderConfigV3, RecoveryEscrowReadRequest, RecoveryEscrowWriteRequest,
 };
 use kc_core::recovery_escrow_aws::{AwsRecoveryEscrowConfig, AwsRecoveryEscrowProvider};
+use kc_core::recovery_escrow_azure::{AzureRecoveryEscrowConfig, AzureRecoveryEscrowProvider};
+use kc_core::recovery_escrow_gcp::{GcpRecoveryEscrowConfig, GcpRecoveryEscrowProvider};
 use kc_core::recovery_escrow_local::LocalRecoveryEscrowProvider;
 
 #[test]
@@ -67,4 +70,100 @@ fn recovery_escrow_aws_returns_unavailable_without_emulation() {
         })
         .expect_err("write must fail when unavailable");
     assert_eq!(err.code, "KC_RECOVERY_ESCROW_UNAVAILABLE");
+}
+
+#[test]
+fn recovery_escrow_gcp_and_azure_report_unavailable_without_emulation() {
+    std::env::remove_var("KC_RECOVERY_ESCROW_GCP_EMULATE_DIR");
+    std::env::remove_var("KC_RECOVERY_ESCROW_AZURE_EMULATE_DIR");
+
+    let gcp = GcpRecoveryEscrowProvider::new(GcpRecoveryEscrowConfig {
+        project_id: "kc-local".to_string(),
+        location: "global".to_string(),
+        key_ring: "knowledgecore".to_string(),
+        key_name: "recovery".to_string(),
+        secret_prefix: "kc/recovery".to_string(),
+    });
+    let azure = AzureRecoveryEscrowProvider::new(AzureRecoveryEscrowConfig {
+        key_vault_url: "https://knowledgecore-local.vault.azure.net".to_string(),
+        key_name: "recovery".to_string(),
+        secret_prefix: "kc/recovery".to_string(),
+    });
+
+    assert!(!gcp.status().expect("gcp status").available);
+    assert!(!azure.status().expect("azure status").available);
+
+    let gcp_err = gcp
+        .write(RecoveryEscrowWriteRequest {
+            vault_id: "vault-1",
+            payload_hash: "blake3:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            key_blob: b"blob",
+            now_ms: 1,
+        })
+        .expect_err("gcp write must fail when unavailable");
+    assert_eq!(gcp_err.code, "KC_RECOVERY_ESCROW_UNAVAILABLE");
+
+    let azure_err = azure
+        .write(RecoveryEscrowWriteRequest {
+            vault_id: "vault-1",
+            payload_hash: "blake3:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            key_blob: b"blob",
+            now_ms: 1,
+        })
+        .expect_err("azure write must fail when unavailable");
+    assert_eq!(azure_err.code, "KC_RECOVERY_ESCROW_UNAVAILABLE");
+}
+
+#[test]
+fn recovery_escrow_provider_priority_and_ordering_are_deterministic() {
+    assert!(provider_priority("aws") < provider_priority("gcp"));
+    assert!(provider_priority("gcp") < provider_priority("azure"));
+
+    let mut providers = vec![
+        RecoveryEscrowProviderConfigV3 {
+            provider_id: "azure".to_string(),
+            config_ref: "z".to_string(),
+            enabled: true,
+            updated_at_ms: 3,
+        },
+        RecoveryEscrowProviderConfigV3 {
+            provider_id: "aws".to_string(),
+            config_ref: "a".to_string(),
+            enabled: true,
+            updated_at_ms: 1,
+        },
+        RecoveryEscrowProviderConfigV3 {
+            provider_id: "gcp".to_string(),
+            config_ref: "m".to_string(),
+            enabled: true,
+            updated_at_ms: 2,
+        },
+    ];
+    normalize_provider_configs(&mut providers);
+    let provider_ids: Vec<String> = providers.into_iter().map(|p| p.provider_id).collect();
+    assert_eq!(provider_ids, vec!["aws", "gcp", "azure"]);
+
+    let mut descs = vec![
+        RecoveryEscrowDescriptorV2 {
+            provider: "azure".to_string(),
+            provider_ref: "c".to_string(),
+            key_id: "k3".to_string(),
+            wrapped_at_ms: 3,
+        },
+        RecoveryEscrowDescriptorV2 {
+            provider: "aws".to_string(),
+            provider_ref: "b".to_string(),
+            key_id: "k1".to_string(),
+            wrapped_at_ms: 1,
+        },
+        RecoveryEscrowDescriptorV2 {
+            provider: "gcp".to_string(),
+            provider_ref: "a".to_string(),
+            key_id: "k2".to_string(),
+            wrapped_at_ms: 2,
+        },
+    ];
+    normalize_escrow_descriptors(&mut descs);
+    let ordered: Vec<String> = descs.into_iter().map(|d| d.provider).collect();
+    assert_eq!(ordered, vec!["aws", "gcp", "azure"]);
 }

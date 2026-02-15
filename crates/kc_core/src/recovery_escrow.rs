@@ -3,12 +3,22 @@ use crate::canon_json::to_canonical_bytes;
 use crate::hashing::blake3_hex_prefixed;
 use serde::{Deserialize, Serialize};
 
+pub const ESCROW_PROVIDER_PRIORITY: [&str; 3] = ["aws", "gcp", "azure"];
+
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct RecoveryEscrowDescriptorV2 {
     pub provider: String,
     pub provider_ref: String,
     pub key_id: String,
     pub wrapped_at_ms: i64,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct RecoveryEscrowProviderConfigV3 {
+    pub provider_id: String,
+    pub config_ref: String,
+    pub enabled: bool,
+    pub updated_at_ms: i64,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
@@ -38,6 +48,35 @@ pub trait RecoveryEscrowProvider: Send + Sync {
     fn status(&self) -> AppResult<RecoveryEscrowProviderStatus>;
     fn write(&self, req: RecoveryEscrowWriteRequest<'_>) -> AppResult<RecoveryEscrowDescriptorV2>;
     fn read(&self, req: RecoveryEscrowReadRequest<'_>) -> AppResult<Vec<u8>>;
+}
+
+pub fn provider_priority(provider_id: &str) -> i64 {
+    match provider_id {
+        "aws" => 0,
+        "gcp" => 1,
+        "azure" => 2,
+        _ => 9,
+    }
+}
+
+pub fn normalize_provider_configs(configs: &mut [RecoveryEscrowProviderConfigV3]) {
+    configs.sort_by(|a, b| {
+        provider_priority(&a.provider_id)
+            .cmp(&provider_priority(&b.provider_id))
+            .then_with(|| a.provider_id.cmp(&b.provider_id))
+            .then_with(|| a.config_ref.cmp(&b.config_ref))
+    });
+}
+
+pub fn normalize_escrow_descriptors(descs: &mut [RecoveryEscrowDescriptorV2]) {
+    descs.sort_by(|a, b| {
+        provider_priority(&a.provider)
+            .cmp(&provider_priority(&b.provider))
+            .then_with(|| a.provider.cmp(&b.provider))
+            .then_with(|| a.provider_ref.cmp(&b.provider_ref))
+            .then_with(|| a.key_id.cmp(&b.key_id))
+            .then_with(|| a.wrapped_at_ms.cmp(&b.wrapped_at_ms))
+    });
 }
 
 pub fn validate_escrow_descriptor(desc: &RecoveryEscrowDescriptorV2) -> AppResult<()> {
