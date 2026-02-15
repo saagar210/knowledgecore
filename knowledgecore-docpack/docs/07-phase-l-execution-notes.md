@@ -1,7 +1,7 @@
-# Phase L–AD Execution Notes
+# Phase L–AJ Execution Notes
 
 ## Purpose
-Track baseline, milestone progression, gate evidence, and risk/follow-up closure across Phases L through AD.
+Track baseline, milestone progression, gate evidence, and risk/follow-up closure across Phases L through AJ.
 
 ## Baseline
 - Baseline branch: `master`
@@ -86,7 +86,7 @@ Track baseline, milestone progression, gate evidence, and risk/follow-up closure
 - Lineage governance RBAC v2 contract: `knowledgecore-docpack/spec/41-lineage-governance-rbac-v2.md`
 - Trust provider governance contract: `knowledgecore-docpack/spec/42-trust-provider-governance-v1.md`
 - Identity session policy v2 contract: `knowledgecore-docpack/spec/43-identity-session-policy-v2.md`
-- Lineage governance conditions v3 contract: `knowledgecore-docpack/spec/45-lineage-governance-conditions-v3.md`
+- Lineage governance conditions v4 contract: `knowledgecore-docpack/spec/45-lineage-governance-conditions-v3.md`
 
 ## Verification Summary
 - Canonical Rust gate passed on completed milestones:
@@ -98,6 +98,8 @@ Track baseline, milestone progression, gate evidence, and risk/follow-up closure
   - `cargo test -p kc_cli -- schema_`
   - `cargo test -p apps_desktop_tauri -- rpc_`
   - `cargo test -p apps_desktop_tauri -- rpc_schema`
+- Final consolidation bench gate (AJ1):
+  - `cargo run -p kc_cli -- bench run --corpus v1` (twice; stable checksum `7311227353339408228`)
 
 ## Risk Closure Mapping
 | Risk | Closure Evidence |
@@ -112,6 +114,7 @@ Track baseline, milestone progression, gate evidence, and risk/follow-up closure
 | Escrow provider dependency drift | provider abstraction with deterministic unavailable/auth failure paths |
 | Merge policy regression risk | `conservative_plus_v2` + `conservative_plus_v3` safety matrix and replay-stability tests |
 | Governance policy drift | deterministic role-rank + deny-override condition policy tests with canonical audit evidence |
+| Post-AD carry-forward drift | AF–AJ milestone closure with full gate reruns + bench x2 and readiness ledger updates |
 | UI/Tauri business-logic leakage | core-only merge/lineage lock logic + RPC/UI thin-surface tests |
 | Schema drift across Rust/UI | schema registry updates plus schema and RPC request/response tests per milestone |
 
@@ -122,24 +125,24 @@ Track baseline, milestone progression, gate evidence, and risk/follow-up closure
   - `git update-ref -d refs/heads/<branch>`
 - `master` was kept as the only active local branch between milestones.
 
-## Next Horizon (AF–AJ) Initialization
-- This document remains the historical ledger for L–AD completion and now anchors post-AD execution.
+## AF–AJ Closure
+- This document remains the historical ledger for L–AJ completion and post-AD execution closure.
 - AF–AJ milestones follow the same merge-as-we-go discipline:
   - one active `codex/*` branch at a time,
   - ff-only merge to `master`,
   - immediate local branch deletion (fallback: `git update-ref -d refs/heads/<branch>`).
 
-## AF–AJ Planned Milestone Ledger
+## AF–AJ Milestone Ledger (Completed)
 | Milestone | Branch | Merge Mode | Status | Notes |
 |---|---|---|---|---|
-| AF0 | `codex/af0-post-ad-baseline-hygiene` | ff-only | In progress | docpack and baseline hygiene alignment |
-| AF1 | `codex/af1-trust-discovery-core` | ff-only | Planned | deterministic provider discovery + template core |
-| AF2 | `codex/af2-trust-discovery-surface-schema` | ff-only | Planned | trust discovery/template CLI/RPC/UI + schema closure |
-| AG1 | `codex/ag1-escrow-provider-catalog-core` | ff-only | Planned | catalog-driven escrow provider resolution |
-| AG2 | `codex/ag2-escrow-hsm-private-kms-adapters` | ff-only | Planned | additional escrow adapters (HSM/private KMS variants) |
-| AG3 | `codex/ag3-escrow-export-verifier-closure` | ff-only | Planned | manifest/verifier deterministic closure for expanded providers |
-| AH1 | `codex/ah1-sync-merge-policy-v4-core` | ff-only | Planned | `conservative_plus_v4` core policy and replay rules |
-| AH2 | `codex/ah2-sync-merge-policy-v4-surface-schema` | ff-only | Planned | policy v4 surface + rpc/schema closure |
-| AI1 | `codex/ai1-lineage-condition-dsl-v4-core` | ff-only | Planned | condition DSL expansion with deterministic precedence |
-| AI2 | `codex/ai2-lineage-condition-dsl-v4-surface-schema` | ff-only | Planned | lineage DSL v4 surface + schema closure |
-| AJ1 | `codex/aj1-post-ad-final-consolidation` | ff-only | Planned | full gates + bench x2 + final hygiene closure |
+| AF0 | `codex/af0-post-ad-baseline-hygiene` | ff-only | Complete | docpack and baseline hygiene alignment (`e7e3a39`) |
+| AF1 | `codex/af1-trust-discovery-core` | ff-only | Complete | deterministic provider discovery + template core (`4f30255`) |
+| AF2 | `codex/af2-trust-discovery-surface-schema` | ff-only | Complete | trust discovery/template CLI/RPC/UI + schema closure (`44f4449`) |
+| AG1 | `codex/ag1-escrow-provider-catalog-core` | ff-only | Complete | catalog-driven escrow provider resolution (`76eaca5`) |
+| AG2 | `codex/ag2-escrow-hsm-private-kms-adapters` | ff-only | Complete | additional escrow adapters (HSM/private KMS variants) (`9633808`) |
+| AG3 | `codex/ag3-escrow-export-verifier-closure` | ff-only | Complete | manifest/verifier deterministic closure for expanded providers (`e9d8766`) |
+| AH1 | `codex/ah1-sync-merge-policy-v4-core` | ff-only | Complete | `conservative_plus_v4` core policy and replay rules (`007a5d7`) |
+| AH2 | `codex/ah2-sync-merge-policy-v4-surface-schema` | ff-only | Complete | policy v4 surface + rpc/schema closure (`814be01`) |
+| AI1 | `codex/ai1-lineage-condition-dsl-v4-core` | ff-only | Complete | condition DSL expansion with deterministic precedence (`d1cbefe`) |
+| AI2 | `codex/ai2-lineage-condition-dsl-v4-surface-schema` | ff-only | Complete | lineage DSL v4 surface + schema closure (`225ba9d`) |
+| AJ1 | `codex/aj1-post-ad-final-consolidation` | ff-only | Complete | full gates + bench x2 + final hygiene closure (this milestone) |

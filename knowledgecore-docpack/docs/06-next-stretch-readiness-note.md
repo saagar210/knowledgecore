@@ -1,7 +1,7 @@
 # Next Stretch Readiness Note
 
 ## Purpose
-Record execution status after completing the post-N3 roadmap through Phases O, P, Q, R, S, T, U, V, W, X, Y, Z, AA, AB, AC, and AD.
+Record execution status after completing the post-N3 roadmap through Phases O, P, Q, R, S, T, U, V, W, X, Y, Z, AA, AB, AC, AD, AF, AG, AH, AI, and AJ.
 
 ## Current Readiness Status
 - D–K is complete on `master`.
@@ -26,6 +26,11 @@ Record execution status after completing the post-N3 roadmap through Phases O, P
 - Phase AB is complete (escrow provider expansion and rotate-all orchestration).
 - Phase AC is complete (merge policy `conservative_plus_v3` + replay-stable safety matrix).
 - Phase AD is complete (lineage governance conditions and deterministic audit policy layering).
+- Phase AF is complete (deterministic trust provider discovery and tenant template surfaces).
+- Phase AG is complete (escrow provider catalog expansion including HSM/private KMS adapters and verifier closure).
+- Phase AH is complete (merge policy `conservative_plus_v4` core + surface rollout).
+- Phase AI is complete (lineage condition DSL v4 expansion and surface/schema closure).
+- Phase AJ is complete (final consolidation with full gates, bench x2, and git-hygiene closure).
 
 ## Required Reference Set
 - `knowledgecore-docpack/docs/03-phase-d-k-closure-report.md`
@@ -34,7 +39,7 @@ Record execution status after completing the post-N3 roadmap through Phases O, P
 - `knowledgecore-docpack/docs/07-phase-l-execution-notes.md`
 - `knowledgecore-docpack/SCHEMA_REGISTRY.md`
 
-## Completion Evidence (S→AD)
+## Completion Evidence (S→AJ)
 | Milestone | Branch | Merge Commit | Notes |
 |---|---|---|---|
 | S0 | `codex/s0-security-contract-activation` | `915242c` | activated specs `35` and `36`, registry alignment |
@@ -71,6 +76,17 @@ Record execution status after completing the post-N3 roadmap through Phases O, P
 | AD1 | `codex/ad1-lineage-policy-core` | `5dd11c9` | condition policy core + deterministic audit enforcement |
 | AD2 | `codex/ad2-lineage-policy-surface` | `1ea3efe` | lineage policy add/bind/list surfaces across CLI/RPC/UI |
 | AD3 | `codex/ad3-lineage-policy-audit` | `367713b` | governance v3 schema/registry/spec closure |
+| AF0 | `codex/af0-post-ad-baseline-hygiene` | `e7e3a39` | AF–AJ horizon initialization and baseline hygiene alignment |
+| AF1 | `codex/af1-trust-discovery-core` | `4f30255` | issuer-based deterministic provider discovery core |
+| AF2 | `codex/af2-trust-discovery-surface-schema` | `44f4449` | trust discovery + tenant template surfaces and schema closure |
+| AG1 | `codex/ag1-escrow-provider-catalog-core` | `76eaca5` | centralized deterministic escrow provider catalog/priority |
+| AG2 | `codex/ag2-escrow-hsm-private-kms-adapters` | `9633808` | HSM/private-KMS provider adapters with deterministic availability paths |
+| AG3 | `codex/ag3-escrow-export-verifier-closure` | `e9d8766` | export/verifier closure for expanded escrow provider set |
+| AH1 | `codex/ah1-sync-merge-policy-v4-core` | `007a5d7` | `conservative_plus_v4` deterministic core policy and reasons |
+| AH2 | `codex/ah2-sync-merge-policy-v4-surface-schema` | `814be01` | v4 policy surfaced across CLI/RPC/UI with schema closure |
+| AI1 | `codex/ai1-lineage-condition-dsl-v4-core` | `d1cbefe` | lineage condition DSL v4 core keys (`doc_id_suffix`,`subject_id_prefix`) |
+| AI2 | `codex/ai2-lineage-condition-dsl-v4-surface-schema` | `225ba9d` | lineage v4 surface/schema closure across CLI/RPC/docpack |
+| AJ1 | `codex/aj1-post-ad-final-consolidation` | current | reran canonical gates + bench x2 and finalized readiness packaging |
 
 ## Gate Evidence (Source: `knowledgecore-docpack/AGENTS.md`)
 - Rust gate:
@@ -82,16 +98,16 @@ Record execution status after completing the post-N3 roadmap through Phases O, P
   - `cargo test -p apps_desktop_tauri -- rpc_schema`
   - `cargo test -p kc_core -- schema_`
   - `cargo test -p kc_cli -- schema_`
-- Final bench gate (V1 target):
-  - `cargo run -p kc_cli -- bench run --corpus v1` (twice)
+- Final bench gate (AJ1 target):
+  - `cargo run -p kc_cli -- bench run --corpus v1` (twice; stable checksum `7311227353339408228`)
 
 ## Carry-Forward Deferred Table (Post-AD)
 | Item | Status | Carry-Forward Target | Notes |
 |---|---|---|---|
-| OIDC provider auto-discovery and tenant bootstrap templates | Planned | AF | Deterministic discovery + template canonicalization required |
-| Escrow adapters beyond `aws`/`gcp`/`azure` | Planned | AG | Expanded provider catalog requires deterministic ordering + verifier closure |
-| Merge policies beyond `conservative_plus_v3` | Planned | AH | New policy remains explicit opt-in with replay-stability requirements |
-| Extended lineage condition DSL (beyond `action` + `doc_id_prefix`) | Planned | AI | Condition expansion must preserve deny-default and deterministic audit rules |
+| OIDC provider auto-discovery and tenant bootstrap templates | Complete | AF | Deterministic discovery + template canonicalization delivered in AF1/AF2 |
+| Escrow adapters beyond `aws`/`gcp`/`azure` | Complete | AG | Catalog + adapters + verifier closure delivered in AG1/AG2/AG3 |
+| Merge policies beyond `conservative_plus_v3` | Complete | AH | `conservative_plus_v4` delivered as explicit opt-in policy |
+| Extended lineage condition DSL (beyond `action` + `doc_id_prefix`) | Complete | AI | Condition DSL v4 (`doc_id_suffix`,`subject_id_prefix`) delivered with schema closure |
 
 ## Next Horizon Mapping (Post-AD)
 - AF: trust provider auto-discovery and tenant policy template promotion.
@@ -110,14 +126,14 @@ Record execution status after completing the post-N3 roadmap through Phases O, P
 ## AF–AJ Milestone Plan Status
 | Milestone | Branch | Status | Notes |
 |---|---|---|---|
-| AF0 | `codex/af0-post-ad-baseline-hygiene` | In progress | baseline hygiene + docpack realignment |
-| AF1 | `codex/af1-trust-discovery-core` | Planned | deterministic discovery/template core |
-| AF2 | `codex/af2-trust-discovery-surface-schema` | Planned | CLI/RPC/UI surfaces + schema closure |
-| AG1 | `codex/ag1-escrow-provider-catalog-core` | Planned | catalog-driven provider resolution |
-| AG2 | `codex/ag2-escrow-hsm-private-kms-adapters` | Planned | additional provider adapters |
-| AG3 | `codex/ag3-escrow-export-verifier-closure` | Planned | manifest/verifier deterministic closure |
-| AH1 | `codex/ah1-sync-merge-policy-v4-core` | Planned | new opt-in v4 merge policy |
-| AH2 | `codex/ah2-sync-merge-policy-v4-surface-schema` | Planned | policy surfacing + rpc/schema tests |
-| AI1 | `codex/ai1-lineage-condition-dsl-v4-core` | Planned | deterministic DSL expansion |
-| AI2 | `codex/ai2-lineage-condition-dsl-v4-surface-schema` | Planned | CLI/RPC/UI schema closure |
-| AJ1 | `codex/aj1-post-ad-final-consolidation` | Planned | all gates + bench x2 + hygiene closure |
+| AF0 | `codex/af0-post-ad-baseline-hygiene` | Complete | baseline hygiene + docpack realignment (`e7e3a39`) |
+| AF1 | `codex/af1-trust-discovery-core` | Complete | deterministic discovery/template core (`4f30255`) |
+| AF2 | `codex/af2-trust-discovery-surface-schema` | Complete | CLI/RPC/UI surfaces + schema closure (`44f4449`) |
+| AG1 | `codex/ag1-escrow-provider-catalog-core` | Complete | catalog-driven provider resolution (`76eaca5`) |
+| AG2 | `codex/ag2-escrow-hsm-private-kms-adapters` | Complete | additional provider adapters (`9633808`) |
+| AG3 | `codex/ag3-escrow-export-verifier-closure` | Complete | manifest/verifier deterministic closure (`e9d8766`) |
+| AH1 | `codex/ah1-sync-merge-policy-v4-core` | Complete | new opt-in v4 merge policy (`007a5d7`) |
+| AH2 | `codex/ah2-sync-merge-policy-v4-surface-schema` | Complete | policy surfacing + rpc/schema tests (`814be01`) |
+| AI1 | `codex/ai1-lineage-condition-dsl-v4-core` | Complete | deterministic DSL expansion (`d1cbefe`) |
+| AI2 | `codex/ai2-lineage-condition-dsl-v4-surface-schema` | Complete | CLI/RPC/UI schema closure (`225ba9d`) |
+| AJ1 | `codex/aj1-post-ad-final-consolidation` | Complete | all gates + bench x2 + hygiene closure (this milestone) |
