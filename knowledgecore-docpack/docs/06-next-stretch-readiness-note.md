@@ -1,7 +1,7 @@
 # Next Stretch Readiness Note
 
 ## Purpose
-Record execution status after completing the post-N3 roadmap through Phases O, P, Q, R, S, T, U, V, W, X, Y, and Z.
+Record execution status after completing the post-N3 roadmap through Phases O, P, Q, R, S, T, U, V, W, X, Y, Z, AA, AB, AC, and AD.
 
 ## Current Readiness Status
 - D–K is complete on `master`.
@@ -19,9 +19,13 @@ Record execution status after completing the post-N3 roadmap through Phases O, P
 - Phase U is complete (turn-based lineage edit lock model and desktop workflows).
 - Phase V is complete (final consolidation for this horizon).
 - Phase W is complete (managed identity trust v2 + sync head v3 signature chain).
-- Phase X is complete (recovery escrow v2 abstraction, AWS-first integration, export/verifier alignment).
-- Phase Y is complete (conservative plus merge policy v2 and safety matrix coverage).
+- Phase X is complete (recovery escrow provider abstraction + multi-provider rollout with export/verifier alignment).
+- Phase Y is complete (conservative plus merge policy v2 baseline and safety matrix coverage).
 - Phase Z is complete (lineage governance RBAC + scoped lock surface + final consolidation).
+- Phase AA is complete (trust provider governance automation and identity session policy v2).
+- Phase AB is complete (escrow provider expansion and rotate-all orchestration).
+- Phase AC is complete (merge policy `conservative_plus_v3` + replay-stable safety matrix).
+- Phase AD is complete (lineage governance conditions and deterministic audit policy layering).
 
 ## Required Reference Set
 - `knowledgecore-docpack/docs/03-phase-d-k-closure-report.md`
@@ -30,7 +34,7 @@ Record execution status after completing the post-N3 roadmap through Phases O, P
 - `knowledgecore-docpack/docs/07-phase-l-execution-notes.md`
 - `knowledgecore-docpack/SCHEMA_REGISTRY.md`
 
-## Completion Evidence (S→Z)
+## Completion Evidence (S→AD)
 | Milestone | Branch | Merge Commit | Notes |
 |---|---|---|---|
 | S0 | `codex/s0-security-contract-activation` | `915242c` | activated specs `35` and `36`, registry alignment |
@@ -53,7 +57,20 @@ Record execution status after completing the post-N3 roadmap through Phases O, P
 | Y3 | `codex/y3-sync-merge-policy-v2-tests` | `dc099ca` | deterministic safety matrix and replay-stability tests |
 | Z1 | `codex/z1-lineage-rbac-core` | `4bac68c` | RBAC + scoped lock governance core and schema v8 |
 | Z2 | `codex/z2-lineage-rbac-surface` | `b2e15e1` | lineage governance surfaces in CLI/RPC/UI |
-| Z3 | `codex/z3-final-consolidation` | `(this commit)` | final W–Z readiness closure and gate rerun |
+| Z3 | `codex/z3-final-consolidation` | `e6776bb` | final W–Z readiness closure and gate rerun |
+| AA0 | `codex/aa0-trust-governance-contract` | `3946847` | activated trust governance/identity session contracts |
+| AA1 | `codex/aa1-trust-governance-core` | `303f654` | trust provider governance tables + deterministic revocation precedence |
+| AA2 | `codex/aa2-trust-governance-surface` | `f4f2fcb` | trust provider governance surfaces across CLI/RPC/UI |
+| AA3 | `codex/aa3-trust-governance-schema` | `16372bb` | trust schema/RPC determinism hardening |
+| AB1 | `codex/ab1-escrow-provider-core` | `4090a07` | provider expansion core scaffolding (`aws`,`gcp`,`azure`) |
+| AB2 | `codex/ab2-escrow-provider-surface` | `545f391` | provider add/list/rotate-all surfaces across CLI/RPC/UI |
+| AB3 | `codex/ab3-escrow-verifier-schema` | `79fb2d8` | export/verifier deterministic escrow descriptor ordering |
+| AC1 | `codex/ac1-merge-policy-v3-core` | `2ef3ed0` | `conservative_plus_v3` merge policy core |
+| AC2 | `codex/ac2-merge-policy-v3-surface` | `b81f741` | merge policy v3 surfaces across CLI/RPC/UI |
+| AC3 | `codex/ac3-merge-policy-v3-tests` | `0a55b01` | deterministic v3 merge safety matrix and replay tests |
+| AD1 | `codex/ad1-lineage-policy-core` | `5dd11c9` | condition policy core + deterministic audit enforcement |
+| AD2 | `codex/ad2-lineage-policy-surface` | `1ea3efe` | lineage policy add/bind/list surfaces across CLI/RPC/UI |
+| AD3 | `codex/ad3-lineage-policy-audit` | `367713b` | governance v3 schema/registry/spec closure |
 
 ## Gate Evidence (Source: `knowledgecore-docpack/AGENTS.md`)
 - Rust gate:
@@ -68,19 +85,17 @@ Record execution status after completing the post-N3 roadmap through Phases O, P
 - Final bench gate (V1 target):
   - `cargo run -p kc_cli -- bench run --corpus v1` (twice)
 
-## Carry-Forward Deferred Table (Post-Z)
+## Carry-Forward Deferred Table (Post-AD)
 | Item | Status | Carry-Forward Target | Notes |
 |---|---|---|---|
-| OIDC policy automation beyond deterministic local provider model | Deferred | Future security horizon | Current trust provider flow is deterministic and local-first |
-| Recovery escrow providers beyond AWS-first adapter | Deferred | Future security horizon | Local + AWS adapters are active baseline |
-| Merge policies beyond `conservative_plus_v2` | Deferred | Future sync horizon | Current auto-merge remains opt-in and conservative |
-| RBAC conditions beyond role-rank precedence | Deferred | Future lineage horizon | Current precedence is deterministic rank-first evaluation |
+| OIDC provider auto-discovery and tenant bootstrap templates | Deferred | Future trust horizon | Current provider lifecycle is deterministic but manually configured |
+| Escrow adapters beyond `aws`/`gcp`/`azure` | Deferred | Future recovery horizon | Multi-provider baseline is active; additional adapters pending |
+| Merge policies beyond `conservative_plus_v3` | Deferred | Future sync horizon | Current policy family remains explicit opt-in |
+| Extended lineage condition DSL (beyond `action` + `doc_id_prefix`) | Deferred | Future governance horizon | Deterministic v3 condition model is intentionally narrow |
 
-## Next Horizon Mapping (Post-Z Execution Sequence)
-- AA: trust governance automation and identity session policy v2 activation (`spec/42`, `spec/43`)
-- AB: recovery escrow provider expansion and multi-provider rotation orchestration
-- AC: merge policy `conservative_plus_v3` and safety-matrix hardening
-- AD: lineage condition governance and deterministic audit policy layering
+## Next Horizon Mapping (Post-AD)
+- AE: final consolidation and readiness packaging for the AA–AD horizon.
+- Future planning target: define post-AD roadmap only from newly identified carry-forward items listed above.
 
 ## Git Hygiene Note
 - Fast-forward merge mode was used for completed milestones.

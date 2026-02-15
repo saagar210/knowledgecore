@@ -1,24 +1,28 @@
 # Post-D–K Operations and Follow-up Policy
 
 ## Purpose
-Define stable post-delivery operations policy for KnowledgeCore Desktop, including benchmark governance, local git hygiene, and carry-forward follow-up handling after S/T/U/V and W/X/Y/Z execution.
+Define stable post-delivery operations policy for KnowledgeCore Desktop, including benchmark governance, local git hygiene, and carry-forward follow-up handling after S/T/U/V, W/X/Y/Z, and AA/AB/AC/AD execution.
 
 ## Scope
 - Applies to local development and pre-release validation runs.
 - Applies to benchmark smoke policy (`kc_cli bench run --corpus v1`).
 - Applies to local git hygiene and branch lifecycle after milestone merges.
 
-## Horizon Update (V1)
+## Horizon Update (AE1)
 - O/P/Q capabilities are active runtime contracts.
 - Phase L preview scaffolding has been retired from runtime surfaces.
 - Phase S trust and recovery contracts are active runtime capabilities.
 - Phase T conservative auto-merge preview/apply flow is active and deterministic.
 - Phase U collaborative lineage turn-lock contracts are active across core/CLI/RPC/UI.
 - Phase W managed identity trust v2 (OIDC + device certificate chain) is active.
-- Phase X recovery escrow v2 (provider abstraction with AWS-first adapter) is active.
-- Phase Y sync merge policy `conservative_plus_v2` is active and deterministic.
+- Phase X recovery escrow v3 multi-provider rollout (`aws`, `gcp`, `azure`) is active.
+- Phase Y sync merge policy `conservative_plus_v3` is active and deterministic.
 - Phase Z lineage governance v2 (vault RBAC + scoped locks) is active across core/CLI/RPC/UI.
-- Carry-forward items now exclude previously delivered deferred capabilities.
+- Phase AA trust provider governance automation and identity session policy v2 are active.
+- Phase AB recovery escrow provider expansion + rotate-all orchestration are active.
+- Phase AC merge policy expansion beyond `conservative_plus_v2` is complete.
+- Phase AD lineage governance condition layer and deterministic policy audit flows are active.
+- Previously deferred post-Z items are closed in this horizon.
 
 ## Bench Baseline Governance
 
@@ -84,13 +88,14 @@ Define stable post-delivery operations policy for KnowledgeCore Desktop, includi
 - Avoid long-lived milestone branches once merged.
 - Keep only `master` unless there is an active in-progress milestone.
 
-## Deferred Items Carry-forward Policy (Post-Z)
-- The following remain deferred until explicitly promoted:
-  - policy-driven OIDC provider governance automation (beyond current deterministic local provider model),
-  - additional escrow providers beyond AWS-first adapter (e.g., GCP/Azure/HSM variants),
-  - merge policies beyond `conservative_plus_v2`,
-  - lineage governance conditions beyond role-rank precedence (attribute/condition-based access).
-- Promotions must include:
+## Deferred Items Carry-forward Policy (Post-AD)
+- The post-Z deferred set has been delivered in AA/AB/AC/AD.
+- Newly identified post-AD carry-forward items:
+  - provider auto-discovery and tenant policy templates for OIDC governance,
+  - escrow adapters beyond `aws`/`gcp`/`azure` (HSM and private KMS variants),
+  - merge policies beyond `conservative_plus_v3` (still opt-in only),
+  - extended lineage condition DSL beyond `action` + `doc_id_prefix`.
+- Any new promotion must include:
   - explicit phase assignment,
   - schema/API impact statement,
   - verification gates and acceptance tests.

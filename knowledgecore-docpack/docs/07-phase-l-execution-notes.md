@@ -1,7 +1,7 @@
-# Phase L–Z Execution Notes
+# Phase L–AD Execution Notes
 
 ## Purpose
-Track baseline, milestone progression, gate evidence, and risk/follow-up closure across Phases L through Z.
+Track baseline, milestone progression, gate evidence, and risk/follow-up closure across Phases L through AD.
 
 ## Baseline
 - Baseline branch: `master`
@@ -53,7 +53,20 @@ Track baseline, milestone progression, gate evidence, and risk/follow-up closure
 | Y3 | `codex/y3-sync-merge-policy-v2-tests` | `dc099ca` | ff-only | Complete |
 | Z1 | `codex/z1-lineage-rbac-core` | `4bac68c` | ff-only | Complete |
 | Z2 | `codex/z2-lineage-rbac-surface` | `b2e15e1` | ff-only | Complete |
-| Z3 | `codex/z3-final-consolidation` | `(this commit)` | ff-only | Complete |
+| Z3 | `codex/z3-final-consolidation` | `e6776bb` | ff-only | Complete |
+| AA0 | `codex/aa0-trust-governance-contract` | `3946847` | ff-only | Complete |
+| AA1 | `codex/aa1-trust-governance-core` | `303f654` | ff-only | Complete |
+| AA2 | `codex/aa2-trust-governance-surface` | `f4f2fcb` | ff-only | Complete |
+| AA3 | `codex/aa3-trust-governance-schema` | `16372bb` | ff-only | Complete |
+| AB1 | `codex/ab1-escrow-provider-core` | `4090a07` | ff-only | Complete |
+| AB2 | `codex/ab2-escrow-provider-surface` | `545f391` | ff-only | Complete |
+| AB3 | `codex/ab3-escrow-verifier-schema` | `79fb2d8` | ff-only | Complete |
+| AC1 | `codex/ac1-merge-policy-v3-core` | `2ef3ed0` | ff-only | Complete |
+| AC2 | `codex/ac2-merge-policy-v3-surface` | `b81f741` | ff-only | Complete |
+| AC3 | `codex/ac3-merge-policy-v3-tests` | `0a55b01` | ff-only | Complete |
+| AD1 | `codex/ad1-lineage-policy-core` | `5dd11c9` | ff-only | Complete |
+| AD2 | `codex/ad2-lineage-policy-surface` | `1ea3efe` | ff-only | Complete |
+| AD3 | `codex/ad3-lineage-policy-audit` | `367713b` | ff-only | Complete |
 
 ## Major Contract Promotions
 - Encryption-at-rest active contract: `knowledgecore-docpack/spec/27-encryption-at-rest-v1.md`
@@ -71,6 +84,9 @@ Track baseline, milestone progression, gate evidence, and risk/follow-up closure
 - Managed identity trust v2 contract: `knowledgecore-docpack/spec/39-managed-identity-oidc-device-cert-v1.md`
 - Sync head signature chain v3 contract: `knowledgecore-docpack/spec/40-sync-head-signature-chain-v3.md`
 - Lineage governance RBAC v2 contract: `knowledgecore-docpack/spec/41-lineage-governance-rbac-v2.md`
+- Trust provider governance contract: `knowledgecore-docpack/spec/42-trust-provider-governance-v1.md`
+- Identity session policy v2 contract: `knowledgecore-docpack/spec/43-identity-session-policy-v2.md`
+- Lineage governance conditions v3 contract: `knowledgecore-docpack/spec/45-lineage-governance-conditions-v3.md`
 
 ## Verification Summary
 - Canonical Rust gate passed on completed milestones:
@@ -94,8 +110,8 @@ Track baseline, milestone progression, gate evidence, and risk/follow-up closure
 | Lineage lock contention drift | fixed 15-minute lease semantics with lock token validation and expiration tests |
 | OIDC/provider variability | deterministic claim subset normalization + certificate-chain hash tests |
 | Escrow provider dependency drift | provider abstraction with deterministic unavailable/auth failure paths |
-| Merge policy regression risk | `conservative_plus_v2` safety matrix and replay-stability tests |
-| RBAC privilege drift | deterministic role-rank precedence tests + deny-default permission checks |
+| Merge policy regression risk | `conservative_plus_v2` + `conservative_plus_v3` safety matrix and replay-stability tests |
+| Governance policy drift | deterministic role-rank + deny-override condition policy tests with canonical audit evidence |
 | UI/Tauri business-logic leakage | core-only merge/lineage lock logic + RPC/UI thin-surface tests |
 | Schema drift across Rust/UI | schema registry updates plus schema and RPC request/response tests per milestone |
 
