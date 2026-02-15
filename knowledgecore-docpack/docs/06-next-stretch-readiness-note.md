@@ -76,11 +76,11 @@ Record execution status after completing the post-N3 roadmap through Phases O, P
 | Merge policies beyond `conservative_plus_v2` | Deferred | Future sync horizon | Current auto-merge remains opt-in and conservative |
 | RBAC conditions beyond role-rank precedence | Deferred | Future lineage horizon | Current precedence is deterministic rank-first evaluation |
 
-## Next Horizon Mapping (Post-Z Candidates)
-- AA: policy-based trust governance and provider lifecycle automation
-- AB: additional escrow provider adapters and key rotation orchestration
-- AC: merge-policy extensions beyond `conservative_plus_v2` with deterministic proofs
-- AD: advanced lineage governance conditions and audit policy layering
+## Next Horizon Mapping (Post-Z Execution Sequence)
+- AA: trust governance automation and identity session policy v2 activation (`spec/42`, `spec/43`)
+- AB: recovery escrow provider expansion and multi-provider rotation orchestration
+- AC: merge policy `conservative_plus_v3` and safety-matrix hardening
+- AD: lineage condition governance and deterministic audit policy layering
 
 ## Git Hygiene Note
 - Fast-forward merge mode was used for completed milestones.

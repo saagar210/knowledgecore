@@ -1,14 +1,14 @@
-# Next Stretch Plan (Post-V)
+# Next Stretch Plan (Post-Z)
 
 ## Title
-KnowledgeCore Remaining Roadmap: Phases W, X, Y, Z
+KnowledgeCore Remaining Roadmap: Phases AA, AB, AC, AD
 
 ## Summary
-This execution horizon closes the remaining deferred scope after Phase V:
-- W: managed identity trust (OIDC + device certificates)
-- X: recovery escrow provider model (local adapter + AWS first)
-- Y: conservative auto-merge expansion with deterministic policy v2
-- Z: lineage governance v2 (vault RBAC + scoped lock workflows)
+This execution horizon closes the remaining deferred scope after Z3:
+- AA: policy-driven OIDC provider governance automation.
+- AB: recovery escrow provider expansion beyond AWS-first.
+- AC: merge policy expansion beyond `conservative_plus_v2`.
+- AD: lineage governance conditions beyond role-rank precedence.
 
 ## Global Invariants
 - Local-first remains default; remote adapters are optional.
@@ -18,80 +18,83 @@ This execution horizon closes the remaining deferred scope after Phase V:
 - Schema changes must update `SCHEMA_REGISTRY.md` and schema validation tests.
 - Milestones are merge-as-we-go with stop/fix/rerun gates.
 
-## Phase W — Managed Identity Trust v2
+## Phase AA — Trust Governance Automation
 
 ### Goal
-Introduce OIDC-backed identity sessions and certificate-chain validated device authorship for sync heads.
+Introduce deterministic OIDC provider lifecycle management with explicit policy controls and session revocation support.
 
 ### Scope
-- Trust identity provider/session model.
-- Device certificate enrollment and chain verification.
-- Sync head v3 authorship/signature chain fields.
-- CLI/RPC/UI trust onboarding and status flows.
+- Provider CRUD and enable/disable lifecycle.
+- Claim requirement policy and max clock-skew controls.
+- Session revocation state and precedence.
+- CLI/RPC/UI operator surfaces for provider governance.
 
 ### Non-goals
-- Managed recovery escrow.
-- Aggressive sync merge policy changes.
+- New trust signature formats.
+- Replacing existing trust enrollment primitives.
 
 ### Acceptance
-- Invalid identity/session/cert/signature paths fail with stable AppError codes.
-- Sync head v3 serialization and validation are deterministic.
+- Disabled providers cannot complete sessions.
+- Revoked sessions are never selected as active author identities.
+- Provider policy evaluation is deterministic and test-covered.
 
-## Phase X — Recovery Escrow v2
+## Phase AB — Recovery Escrow Expansion
 
 ### Goal
-Add recovery escrow abstraction with local adapter and AWS KMS + Secrets Manager first production adapter.
+Add deterministic multi-provider recovery escrow management with ordered provider descriptors and rotation orchestration.
 
 ### Scope
-- Escrow provider abstraction and adapter plumbing.
-- Recovery manifest v2 escrow metadata.
-- CLI/RPC/UI escrow status/enable/rotate/restore flows.
-- Export/verifier contract coverage for escrow metadata.
+- Multi-provider escrow configuration model.
+- Provider adapters for AWS, GCP, Azure (runtime-available adapters may remain env-gated).
+- CLI/RPC/UI provider add/list/rotate-all surfaces.
+- Export/verifier alignment for escrow descriptor lists.
 
 ### Non-goals
-- Multi-provider production rollout in one phase.
-- External secret persistence in repo-tracked state.
+- External secret persistence in repo-tracked files.
+- Non-deterministic provider fallback ordering.
 
 ### Acceptance
-- Local recovery remains functional.
-- Escrow-enabled workflows are deterministic and schema-validated.
+- Provider ordering is stable (`aws`, `gcp`, `azure`).
+- Manifest escrow metadata is deterministic and verifier-enforced.
+- Failures map to stable AppError codes.
 
-## Phase Y — Sync Auto-Merge Policy Expansion v2
+## Phase AC — Merge Policy v3
 
 ### Goal
-Extend merge policy to `conservative_plus_v2` with explicit safety allowlist and deterministic decision traces.
+Extend sync merge preview/apply policy with explicit RBAC conflict precondition and deterministic decision traces.
 
 ### Scope
-- Core merge policy engine update.
-- CLI/RPC/UI policy selection and preview-first workflows.
-- Matrix tests for overlap/trust/lock conflicts.
+- New policy `conservative_plus_v3`.
+- Policy selection from CLI/RPC/UI without UI merge logic.
+- Safety matrix tests for overlap, trust, lock, and RBAC conflicts.
 
 ### Non-goals
-- Automatic merge without preview.
-- Destructive overwrite behavior.
+- Automatic destructive merges.
+- Policy evaluation in UI/Tauri.
 
 ### Acceptance
-- Unsafe merges hard-fail with deterministic reasons.
-- Allowed merges are deterministic and replay-stable.
+- Unsafe merges hard-fail with deterministic reason categories.
+- Replay of identical inputs yields identical merge decisions and traces.
 
-## Phase Z — Lineage Governance v2
+## Phase AD — Lineage Condition Governance
 
 ### Goal
-Add vault-DB RBAC governance for lineage overlays and scoped locking for team workflows.
+Layer deterministic condition-based policy evaluation over RBAC for lineage overlay mutations, with audit stability.
 
 ### Scope
-- RBAC schema + deterministic permission evaluation.
-- Core enforcement on overlay mutation paths.
-- CLI/RPC/UI governance surfaces.
-- Final horizon consolidation and closure docs.
+- Policy condition model (allow/deny) and subject bindings.
+- Deterministic precedence (`priority`, `policy_id`, `subject_id`).
+- CLI/RPC/UI policy management surfaces.
+- Audit event generation and schema hardening.
 
 ### Non-goals
-- Real-time collaborative conflict resolution models (CRDT/OT).
-- Non-deterministic role arbitration.
+- Distributed lock consensus.
+- Client-side governance arbitration.
 
 ### Acceptance
-- Overlay writes require valid lock + RBAC permission.
-- Governance decisions are deterministic and test-covered.
+- Overlay mutation requires lock + RBAC + condition allow.
+- Explicit deny overrides allow deterministically.
+- Audit ordering and serialization remain stable.
 
 ## Canonical Gates
 - Rust: `cargo test -p kc_core -p kc_extract -p kc_index -p kc_ask -p kc_cli`
