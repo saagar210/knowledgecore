@@ -1,0 +1,88 @@
+name: Security Audit Incident
+
+on:
+  workflow_run:
+    workflows:
+      - Security Audit
+    types:
+      - completed
+  workflow_dispatch:
+    inputs:
+      run_url:
+        description: "Optional workflow run URL for manual incident creation"
+        required: false
+        type: string
+
+permissions:
+  contents: read
+  actions: read
+  issues: write
+
+jobs:
+  create-or-update-incident:
+    if: github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'failure'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Open or update dependency-risk incident
+        uses: actions/github-script@v7
+        env:
+          ISSUE_TITLE: "[Risk] Security Audit workflow failure"
+        with:
+          script: |
+            const isManual = context.eventName === "workflow_dispatch";
+            const run = context.payload.workflow_run;
+            const runUrl = isManual
+              ? (core.getInput("run_url") || `https://github.com/${context.repo.owner}/${context.repo.repo}/actions`)
+              : run.html_url;
+            const runId = isManual ? "manual-dispatch" : String(run.id);
+            const headSha = isManual ? context.sha : run.head_sha;
+
+            const issueBody = [
+              "<!-- security-audit-incident -->",
+              "## Security Audit Incident",
+              "",
+              "Security Audit reported a failure that needs dependency-risk triage.",
+              "",
+              `- Repository: \`${context.repo.owner}/${context.repo.repo}\``,
+              `- Run URL: ${runUrl}`,
+              `- Run ID: \`${runId}\``,
+              `- Head SHA: \`${headSha}\``,
+              `- Recorded At (UTC): ${new Date().toISOString()}`,
+              "",
+              "### Response Checklist",
+              "1. Triage root cause from workflow logs.",
+              "2. Apply fix or document upstream blocker in risk register.",
+              "3. Re-run `Security Audit` and confirm green.",
+              "4. Update `security/rustsec-policy.json` if advisory set changed."
+            ].join("\\n");
+
+            const { data: openIssues } = await github.rest.issues.listForRepo({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              state: "open",
+              per_page: 100,
+              labels: "risk,dependencies"
+            });
+
+            const existing = openIssues.find(
+              (issue) => issue.title === process.env.ISSUE_TITLE
+            );
+
+            if (existing) {
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: existing.number,
+                body: issueBody
+              });
+              core.notice(`Updated existing incident issue #${existing.number}`);
+            } else {
+              const created = await github.rest.issues.create({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                title: process.env.ISSUE_TITLE,
+                body: issueBody,
+                labels: ["risk", "dependencies", "security"]
+              });
+              core.notice(`Created incident issue #${created.data.number}`);
+            }
