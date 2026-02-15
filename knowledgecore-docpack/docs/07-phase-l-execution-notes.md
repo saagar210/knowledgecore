@@ -132,6 +132,14 @@ Track baseline, milestone progression, gate evidence, and risk/follow-up closure
   - ff-only merge to `master`,
   - immediate local branch deletion (fallback: `git update-ref -d refs/heads/<branch>`).
 
+## Closeout Extension (C0-C3)
+| Milestone | Branch | Merge Mode | Status | Notes |
+|---|---|---|---|---|
+| C0 | `codex/closeout-c0-launch-control-lock` | ff-only | Complete | launch control lock and safety artifacts (`e5a1546`) |
+| C1 | `codex/closeout-c1-full-gate-evidence` | ff-only | Complete | full canonical gate and bench evidence (`f323035`) |
+| C2 | `codex/closeout-c2-macos-artifacts` | ff-only | Complete | bundle activation + artifact manifest + GA blocker evidence (`4bf4a5c`) |
+| C3 | `codex/closeout-c3-ga-doc-pack` | in progress | In Progress | pivot docs to `GA Deferred, Pilot Active` track |
+
 ## AF–AJ Milestone Ledger (Completed)
 | Milestone | Branch | Merge Mode | Status | Notes |
 |---|---|---|---|---|

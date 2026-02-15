@@ -137,3 +137,14 @@ Record execution status after completing the post-N3 roadmap through Phases O, P
 | AI1 | `codex/ai1-lineage-condition-dsl-v4-core` | Complete | deterministic DSL expansion (`d1cbefe`) |
 | AI2 | `codex/ai2-lineage-condition-dsl-v4-surface-schema` | Complete | CLI/RPC/UI schema closure (`225ba9d`) |
 | AJ1 | `codex/aj1-post-ad-final-consolidation` | Complete | all gates + bench x2 + hygiene closure (this milestone) |
+
+## Closeout Pivot Status (C0-C3)
+- C0 completed: closeout control baseline and safety artifacts captured.
+- C1 completed: full gate evidence regenerated and bench x2 stability recorded.
+- C2 completed as GA blocker evidence:
+  - macOS bundles generated and checksummed.
+  - GA trust requirements (Developer ID signing + notarization) remain unmet on release host.
+- C3 initiated/active: documentation pivot to `GA Deferred, Pilot Active` with rollback and hypercare coverage.
+- Decision posture:
+  - GA: `NO-GO` until signed/notarized/stapled artifacts are available.
+  - Pilot: `GO` for controlled internal distribution.

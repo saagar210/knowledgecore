@@ -53,3 +53,17 @@ Establish immutable closeout controls for KnowledgeCore GA launch readiness and 
 - `/Users/d/Projects/knowledgecore/knowledgecore-docpack/AGENTS.md`
 - `/Users/d/Projects/knowledgecore/knowledgecore-docpack/docs/04-post-dk-ops-and-followup-policy.md`
 - `/Users/d/Projects/knowledgecore/knowledgecore-docpack/CHECKLIST_VERIFICATION.md`
+
+## Control Amendment (Pilot Pivot)
+- Amendment captured at (UTC): `2026-02-15T07:18:34Z`
+- Trigger: Apple Developer ID signing and notarization credentials unavailable on release host.
+- GA status: `Deferred (NO-GO)`
+- Approved interim release class: `Internal Pilot`
+- Policy update:
+  - External/public GA distribution remains blocked.
+  - Internal pilot release is permitted with explicit risk disclosure and controlled audience.
+  - GA path remains gated on signed + notarized + stapled artifact evidence.
+- Amendment evidence references:
+  - `/Users/d/Projects/knowledgecore/knowledgecore-docpack/docs/10-ga-artifact-manifest-v0.1.0.md`
+  - `/Users/d/Projects/knowledgecore/knowledgecore-docpack/docs/12-ga-go-no-go-checklist.md`
+  - `/Users/d/Projects/knowledgecore/knowledgecore-docpack/docs/14-ga-decision-record.md`
