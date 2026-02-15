@@ -67,8 +67,22 @@ pub fn trust_provider_list(
 }
 
 #[tauri::command]
+pub fn trust_provider_discover(
+    req: rpc::TrustProviderDiscoverReq,
+) -> rpc::RpcResponse<rpc::TrustProviderRes> {
+    rpc::trust_provider_discover_rpc(req)
+}
+
+#[tauri::command]
 pub fn trust_policy_set(req: rpc::TrustPolicySetReq) -> rpc::RpcResponse<rpc::TrustPolicySetRes> {
     rpc::trust_policy_set_rpc(req)
+}
+
+#[tauri::command]
+pub fn trust_policy_set_tenant_template(
+    req: rpc::TrustPolicySetTenantTemplateReq,
+) -> rpc::RpcResponse<rpc::TrustPolicySetRes> {
+    rpc::trust_policy_set_tenant_template_rpc(req)
 }
 
 #[tauri::command]

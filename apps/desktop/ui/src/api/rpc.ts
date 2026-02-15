@@ -149,6 +149,11 @@ export type TrustProviderDisableReq = {
   now_ms: number;
 };
 export type TrustProviderListReq = { vault_path: string };
+export type TrustProviderDiscoverReq = {
+  vault_path: string;
+  issuer: string;
+  now_ms: number;
+};
 export type TrustProvider = {
   provider_id: string;
   issuer: string;
@@ -165,6 +170,12 @@ export type TrustPolicySetReq = {
   provider_id: string;
   max_clock_skew_ms: number;
   require_claims_json: string;
+  now_ms: number;
+};
+export type TrustPolicySetTenantTemplateReq = {
+  vault_path: string;
+  provider: string;
+  tenant_id: string;
   now_ms: number;
 };
 export type TrustPolicySetRes = {
@@ -605,8 +616,15 @@ export const rpcMethods = {
     rpc<TrustProviderDisableReq, TrustProviderRes>("trust_provider_disable", req),
   trustProviderList: (req: TrustProviderListReq) =>
     rpc<TrustProviderListReq, TrustProviderListRes>("trust_provider_list", req),
+  trustProviderDiscover: (req: TrustProviderDiscoverReq) =>
+    rpc<TrustProviderDiscoverReq, TrustProviderRes>("trust_provider_discover", req),
   trustPolicySet: (req: TrustPolicySetReq) =>
     rpc<TrustPolicySetReq, TrustPolicySetRes>("trust_policy_set", req),
+  trustPolicySetTenantTemplate: (req: TrustPolicySetTenantTemplateReq) =>
+    rpc<TrustPolicySetTenantTemplateReq, TrustPolicySetRes>(
+      "trust_policy_set_tenant_template",
+      req
+    ),
   vaultLockStatus: (req: VaultLockStatusReq) =>
     rpc<VaultLockStatusReq, VaultLockStatusRes>("vault_lock_status", req),
   vaultUnlock: (req: VaultUnlockReq) => rpc<VaultUnlockReq, VaultUnlockRes>("vault_unlock", req),

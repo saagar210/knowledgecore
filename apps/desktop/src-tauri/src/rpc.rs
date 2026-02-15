@@ -235,6 +235,14 @@ pub struct TrustProviderListReq {
     pub vault_path: String,
 }
 
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct TrustProviderDiscoverReq {
+    pub vault_path: String,
+    pub issuer: String,
+    pub now_ms: i64,
+}
+
 #[derive(Debug, Serialize, Deserialize)]
 pub struct TrustProviderListRes {
     pub providers: Vec<TrustProviderRes>,
@@ -247,6 +255,15 @@ pub struct TrustPolicySetReq {
     pub provider_id: String,
     pub max_clock_skew_ms: i64,
     pub require_claims_json: String,
+    pub now_ms: i64,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct TrustPolicySetTenantTemplateReq {
+    pub vault_path: String,
+    pub provider: String,
+    pub tenant_id: String,
     pub now_ms: i64,
 }
 
@@ -1080,7 +1097,9 @@ pub fn vault_open_rpc(req: VaultOpenReq) -> RpcResponse<VaultOpenRes> {
     }
 }
 
-fn map_trust_provider(provider: kc_core::trust_identity::IdentityProviderRecord) -> TrustProviderRes {
+fn map_trust_provider(
+    provider: kc_core::trust_identity::IdentityProviderRecord,
+) -> TrustProviderRes {
     TrustProviderRes {
         provider_id: provider.provider_id,
         issuer: provider.issuer,
@@ -1216,12 +1235,42 @@ pub fn trust_provider_list_rpc(req: TrustProviderListReq) -> RpcResponse<TrustPr
     }
 }
 
+pub fn trust_provider_discover_rpc(req: TrustProviderDiscoverReq) -> RpcResponse<TrustProviderRes> {
+    match rpc_service::trust_provider_discover_service(
+        std::path::Path::new(&req.vault_path),
+        &req.issuer,
+        req.now_ms,
+    ) {
+        Ok(provider) => RpcResponse::ok(map_trust_provider(provider)),
+        Err(error) => RpcResponse::err(error),
+    }
+}
+
 pub fn trust_policy_set_rpc(req: TrustPolicySetReq) -> RpcResponse<TrustPolicySetRes> {
     match rpc_service::trust_provider_policy_set_service(
         std::path::Path::new(&req.vault_path),
         &req.provider_id,
         req.max_clock_skew_ms,
         &req.require_claims_json,
+        req.now_ms,
+    ) {
+        Ok(policy) => RpcResponse::ok(TrustPolicySetRes {
+            provider_id: policy.provider_id,
+            max_clock_skew_ms: policy.max_clock_skew_ms,
+            require_claims_json: policy.require_claims_json,
+            updated_at_ms: policy.updated_at_ms,
+        }),
+        Err(error) => RpcResponse::err(error),
+    }
+}
+
+pub fn trust_policy_set_tenant_template_rpc(
+    req: TrustPolicySetTenantTemplateReq,
+) -> RpcResponse<TrustPolicySetRes> {
+    match rpc_service::trust_provider_policy_set_tenant_template_service(
+        std::path::Path::new(&req.vault_path),
+        &req.provider,
+        &req.tenant_id,
         req.now_ms,
     ) {
         Ok(policy) => RpcResponse::ok(TrustPolicySetRes {
@@ -2060,7 +2109,10 @@ pub fn lineage_policy_bind_rpc(req: LineagePolicyBindReq) -> RpcResponse<Lineage
 pub fn lineage_policy_list_rpc(req: LineagePolicyListReq) -> RpcResponse<LineagePolicyListRes> {
     match rpc_service::lineage_policy_list_service(std::path::Path::new(&req.vault_path)) {
         Ok(bindings) => RpcResponse::ok(LineagePolicyListRes {
-            bindings: bindings.into_iter().map(map_lineage_policy_binding).collect(),
+            bindings: bindings
+                .into_iter()
+                .map(map_lineage_policy_binding)
+                .collect(),
         }),
         Err(error) => RpcResponse::err(error),
     }

@@ -15,9 +15,11 @@ import type {
   TrustProviderAddReq,
   TrustProviderRes,
   TrustProviderDisableReq,
+  TrustProviderDiscoverReq,
   TrustProviderListReq,
   TrustProviderListRes,
   TrustPolicySetReq,
+  TrustPolicySetTenantTemplateReq,
   TrustPolicySetRes,
   VaultLockReq,
   VaultLockRes,
@@ -125,11 +127,25 @@ export async function listTrustProviders(
   return nextStateFromRpc(await api.trustProviderList(req));
 }
 
+export async function discoverTrustProvider(
+  api: DesktopRpcApi,
+  req: TrustProviderDiscoverReq
+): Promise<ViewState<TrustProviderRes>> {
+  return nextStateFromRpc(await api.trustProviderDiscover(req));
+}
+
 export async function setTrustProviderPolicy(
   api: DesktopRpcApi,
   req: TrustPolicySetReq
 ): Promise<ViewState<TrustPolicySetRes>> {
   return nextStateFromRpc(await api.trustPolicySet(req));
+}
+
+export async function setTrustProviderTenantTemplate(
+  api: DesktopRpcApi,
+  req: TrustPolicySetTenantTemplateReq
+): Promise<ViewState<TrustPolicySetRes>> {
+  return nextStateFromRpc(await api.trustPolicySetTenantTemplate(req));
 }
 
 export async function loadVaultEncryptionStatus(

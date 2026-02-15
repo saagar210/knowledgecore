@@ -94,8 +94,7 @@ fn cli_trust_identity_and_device_workflow_round_trip() {
         "list stderr: {}",
         String::from_utf8_lossy(&listed.stderr)
     );
-    let list_json: serde_json::Value =
-        serde_json::from_slice(&listed.stdout).expect("list json");
+    let list_json: serde_json::Value = serde_json::from_slice(&listed.stdout).expect("list json");
     let devices = list_json
         .get("devices")
         .and_then(|v| v.as_array())
@@ -107,4 +106,69 @@ fn cli_trust_identity_and_device_workflow_round_trip() {
             .map(|id| id == device_id)
             .unwrap_or(false)
     }));
+}
+
+#[test]
+fn cli_trust_discovery_and_tenant_template_round_trip() {
+    let root = tempfile::tempdir().expect("tempdir").keep();
+    vault_init(&root, "demo", 1).expect("vault init");
+    let vault_path = root.to_string_lossy().to_string();
+
+    let discovered = run_cli(&[
+        "trust",
+        "provider",
+        "discover",
+        &vault_path,
+        "--issuer",
+        "https://tenant.example/oidc",
+        "--now-ms",
+        "20",
+    ]);
+    assert!(
+        discovered.status.success(),
+        "provider discover stderr: {}",
+        String::from_utf8_lossy(&discovered.stderr)
+    );
+    let discover_json: serde_json::Value =
+        serde_json::from_slice(&discovered.stdout).expect("discover json");
+    let provider_id = discover_json
+        .get("provider")
+        .and_then(|v| v.get("provider_id"))
+        .and_then(|v| v.as_str())
+        .expect("provider id in discover output")
+        .to_string();
+    assert!(provider_id.starts_with("auto-"));
+
+    let tenant_template = run_cli(&[
+        "trust",
+        "policy",
+        "set-tenant-template",
+        &vault_path,
+        "--provider",
+        "https://tenant.example/oidc",
+        "--tenant-id",
+        "Tenant-A",
+        "--now-ms",
+        "21",
+    ]);
+    assert!(
+        tenant_template.status.success(),
+        "tenant template stderr: {}",
+        String::from_utf8_lossy(&tenant_template.stderr)
+    );
+    let policy_json: serde_json::Value =
+        serde_json::from_slice(&tenant_template.stdout).expect("tenant template json");
+    assert_eq!(
+        policy_json
+            .get("policy")
+            .and_then(|v| v.get("provider_id"))
+            .and_then(|v| v.as_str()),
+        Some(provider_id.as_str())
+    );
+    assert!(policy_json
+        .get("policy")
+        .and_then(|v| v.get("require_claims_json"))
+        .and_then(|v| v.as_str())
+        .unwrap_or_default()
+        .contains("\"tenant\":\"tenant-a\""));
 }

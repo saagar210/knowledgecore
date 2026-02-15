@@ -93,6 +93,8 @@ Versioned RPC surface v1, envelope schema, and determinism notes.
          - sync_merge_preview
            - accepts optional `policy` with supported values `conservative` and `conservative_plus_v2`
            - when policy is `conservative_plus_v2`, preview report includes `schema_version=2` and deterministic `decision_trace`
+         - trust_provider_discover (deterministic issuer bootstrap to provider record)
+         - trust_policy_set_tenant_template (deterministic canonical tenant claim template)
          - lineage_query
          - lineage_query_v2
          - lineage_overlay_add, lineage_overlay_remove, lineage_overlay_list

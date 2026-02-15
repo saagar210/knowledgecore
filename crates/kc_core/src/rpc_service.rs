@@ -6,7 +6,6 @@ use crate::db::{
 use crate::events::append_event;
 use crate::hashing::blake3_hex_prefixed;
 use crate::ingest::ingest_bytes;
-use crate::locator::{resolve_locator_strict, LocatorV1};
 use crate::lineage_governance::{
     lineage_lock_acquire_scope, lineage_role_grant, lineage_role_list, lineage_role_revoke,
     LineageRoleBindingV2, LineageScopeLockLeaseV2,
@@ -15,6 +14,7 @@ use crate::lineage_policy::{
     lineage_policy_add, lineage_policy_bind, lineage_policy_list, LineagePolicyBindingV3,
     LineagePolicyV3,
 };
+use crate::locator::{resolve_locator_strict, LocatorV1};
 use crate::object_store::{is_encrypted_payload, ObjectStore};
 use crate::recovery::{
     generate_recovery_bundle, read_recovery_manifest, verify_recovery_bundle,
@@ -31,11 +31,14 @@ use crate::trust::{
     trust_device_init, trust_device_list, trust_device_verify, TrustedDeviceRecord,
 };
 use crate::trust_identity::{
-    trust_device_enroll, trust_device_verify_chain, trust_identity_complete, trust_identity_start,
-    trust_provider_add, trust_provider_disable, trust_provider_list, DeviceCertificateRecord,
-    IdentityProviderRecord, IdentitySessionRecord, IdentityStartResult,
+    discover_identity_provider, trust_device_enroll, trust_device_verify_chain,
+    trust_identity_complete, trust_identity_start, trust_provider_add, trust_provider_disable,
+    trust_provider_list, DeviceCertificateRecord, IdentityProviderRecord, IdentitySessionRecord,
+    IdentityStartResult,
 };
-use crate::trust_policy::{trust_provider_policy_set, TrustProviderPolicyV1};
+use crate::trust_policy::{
+    trust_provider_policy_set, trust_provider_policy_set_tenant_template, TrustProviderPolicyV1,
+};
 use crate::types::{DocId, ObjectHash};
 use crate::vault::{vault_init, vault_open, vault_paths, vault_save};
 use std::collections::BTreeSet;
@@ -388,7 +391,12 @@ fn upsert_recovery_escrow_provider_config_v3(
            config_ref = excluded.config_ref,
            enabled = excluded.enabled,
            updated_at_ms = excluded.updated_at_ms",
-        rusqlite::params![provider_id, config_ref, if enabled { 1 } else { 0 }, updated_at_ms],
+        rusqlite::params![
+            provider_id,
+            config_ref,
+            if enabled { 1 } else { 0 },
+            updated_at_ms
+        ],
     )
     .map_err(|e| {
         AppError::new(
@@ -420,24 +428,25 @@ fn list_recovery_escrow_provider_configs_v3(
                 serde_json::json!({ "error": e.to_string() }),
             )
         })?;
-    let rows = stmt.query_map([], |row| {
-        Ok(RecoveryEscrowProviderConfigRowV3 {
-            provider_id: row.get(0)?,
-            provider_priority: row.get(1)?,
-            config_ref: row.get(2)?,
-            enabled: row.get::<_, i64>(3)? != 0,
-            updated_at_ms: row.get(4)?,
+    let rows = stmt
+        .query_map([], |row| {
+            Ok(RecoveryEscrowProviderConfigRowV3 {
+                provider_id: row.get(0)?,
+                provider_priority: row.get(1)?,
+                config_ref: row.get(2)?,
+                enabled: row.get::<_, i64>(3)? != 0,
+                updated_at_ms: row.get(4)?,
+            })
         })
-    })
-    .map_err(|e| {
-        AppError::new(
-            "KC_RECOVERY_ESCROW_UNAVAILABLE",
-            "recovery",
-            "failed querying v3 recovery escrow provider configs",
-            false,
-            serde_json::json!({ "error": e.to_string() }),
-        )
-    })?;
+        .map_err(|e| {
+            AppError::new(
+                "KC_RECOVERY_ESCROW_UNAVAILABLE",
+                "recovery",
+                "failed querying v3 recovery escrow provider configs",
+                false,
+                serde_json::json!({ "error": e.to_string() }),
+            )
+        })?;
     let mut out = Vec::new();
     for row in rows {
         out.push(row.map_err(|e| {
@@ -1055,6 +1064,16 @@ pub fn trust_provider_list_service(vault_path: &Path) -> AppResult<Vec<IdentityP
     trust_provider_list(&conn)
 }
 
+pub fn trust_provider_discover_service(
+    vault_path: &Path,
+    issuer: &str,
+    now_ms: i64,
+) -> AppResult<IdentityProviderRecord> {
+    let vault = vault_open(vault_path)?;
+    let conn = open_db(&vault_path.join(vault.db.relative_path))?;
+    discover_identity_provider(&conn, issuer, now_ms)
+}
+
 pub fn trust_provider_policy_set_service(
     vault_path: &Path,
     provider_id: &str,
@@ -1069,6 +1088,43 @@ pub fn trust_provider_policy_set_service(
         provider_id,
         max_clock_skew_ms,
         require_claims_json,
+        now_ms,
+    )
+}
+
+pub fn trust_provider_policy_set_tenant_template_service(
+    vault_path: &Path,
+    provider_ref: &str,
+    tenant_id: &str,
+    now_ms: i64,
+) -> AppResult<TrustProviderPolicyV1> {
+    let vault = vault_open(vault_path)?;
+    let conn = open_db(&vault_path.join(vault.db.relative_path))?;
+
+    let provider = if provider_ref.starts_with("https://") || provider_ref.starts_with("http://") {
+        discover_identity_provider(&conn, provider_ref, now_ms)?
+    } else {
+        let providers = trust_provider_list(&conn)?;
+        providers
+            .into_iter()
+            .find(|item| item.provider_id == provider_ref)
+            .ok_or_else(|| {
+                AppError::new(
+                    "KC_TRUST_OIDC_PROVIDER_UNAVAILABLE",
+                    "trust_identity",
+                    "identity provider is not registered",
+                    false,
+                    serde_json::json!({ "provider_id": provider_ref }),
+                )
+            })?
+    };
+
+    trust_provider_policy_set_tenant_template(
+        &conn,
+        &provider.provider_id,
+        &provider.issuer,
+        &provider.audience,
+        tenant_id,
         now_ms,
     )
 }
@@ -1218,7 +1274,14 @@ pub fn lineage_policy_add_service(
 ) -> AppResult<LineagePolicyV3> {
     let vault = vault_open(vault_path)?;
     let conn = open_db(&vault_path.join(vault.db.relative_path))?;
-    lineage_policy_add(&conn, policy_name, effect, condition_json, created_by, now_ms)
+    lineage_policy_add(
+        &conn,
+        policy_name,
+        effect,
+        condition_json,
+        created_by,
+        now_ms,
+    )
 }
 
 pub fn lineage_policy_bind_service(
@@ -1641,8 +1704,12 @@ pub fn vault_recovery_escrow_rotate_all_service(
         }
 
         let provider_output = output_root.join(&provider_cfg.provider_id);
-        let generated =
-            generate_recovery_bundle(&vault.vault_id, &provider_output, passphrase, provider_now_ms)?;
+        let generated = generate_recovery_bundle(
+            &vault.vault_id,
+            &provider_output,
+            passphrase,
+            provider_now_ms,
+        )?;
         let blob_path = generated.bundle_path.join("key_blob.enc");
         let key_blob = fs::read(&blob_path).map_err(|e| {
             AppError::new(

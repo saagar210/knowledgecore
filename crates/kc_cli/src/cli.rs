@@ -304,6 +304,13 @@ pub enum TrustProviderCmd {
     List {
         vault_path: String,
     },
+    Discover {
+        vault_path: String,
+        #[arg(long = "issuer")]
+        issuer: String,
+        #[arg(long = "now-ms")]
+        now_ms: Option<i64>,
+    },
 }
 
 #[derive(Subcommand)]
@@ -316,6 +323,15 @@ pub enum TrustPolicyCmd {
         max_clock_skew_ms: i64,
         #[arg(long = "require-claims")]
         require_claims: String,
+        #[arg(long = "now-ms")]
+        now_ms: Option<i64>,
+    },
+    SetTenantTemplate {
+        vault_path: String,
+        #[arg(long = "provider")]
+        provider: String,
+        #[arg(long = "tenant-id")]
+        tenant_id: String,
         #[arg(long = "now-ms")]
         now_ms: Option<i64>,
     },

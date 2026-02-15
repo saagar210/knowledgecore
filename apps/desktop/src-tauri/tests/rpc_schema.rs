@@ -5,13 +5,14 @@ use apps_desktop_tauri::rpc::{
     LineageQueryV2Req, LineageRoleGrantReq, LineageRoleListReq, LineageRoleRevokeReq,
     SearchQueryReq, SyncMergePreviewReq, SyncPullReq, SyncPushReq, SyncStatusReq,
     TrustDeviceEnrollReq, TrustDeviceListReq, TrustDeviceVerifyChainReq, TrustIdentityCompleteReq,
-    TrustIdentityStartReq, TrustPolicySetReq, TrustProviderAddReq, TrustProviderDisableReq,
-    TrustProviderListReq, VaultEncryptionEnableReq, VaultEncryptionMigrateReq,
-    VaultEncryptionStatusReq, VaultInitReq, VaultLockReq, VaultLockStatusReq,
-    VaultRecoveryEscrowEnableReq, VaultRecoveryEscrowProviderAddReq,
-    VaultRecoveryEscrowProviderListReq, VaultRecoveryEscrowRestoreReq,
-    VaultRecoveryEscrowRotateAllReq, VaultRecoveryEscrowRotateReq, VaultRecoveryEscrowStatusReq,
-    VaultRecoveryGenerateReq, VaultRecoveryStatusReq, VaultRecoveryVerifyReq, VaultUnlockReq,
+    TrustIdentityStartReq, TrustPolicySetReq, TrustPolicySetTenantTemplateReq, TrustProviderAddReq,
+    TrustProviderDisableReq, TrustProviderDiscoverReq, TrustProviderListReq,
+    VaultEncryptionEnableReq, VaultEncryptionMigrateReq, VaultEncryptionStatusReq, VaultInitReq,
+    VaultLockReq, VaultLockStatusReq, VaultRecoveryEscrowEnableReq,
+    VaultRecoveryEscrowProviderAddReq, VaultRecoveryEscrowProviderListReq,
+    VaultRecoveryEscrowRestoreReq, VaultRecoveryEscrowRotateAllReq, VaultRecoveryEscrowRotateReq,
+    VaultRecoveryEscrowStatusReq, VaultRecoveryGenerateReq, VaultRecoveryStatusReq,
+    VaultRecoveryVerifyReq, VaultUnlockReq,
 };
 
 #[test]
@@ -396,6 +397,13 @@ fn rpc_schema_trust_provider_requests_validate_shapes() {
     });
     assert!(serde_json::from_value::<TrustProviderListReq>(list).is_ok());
 
+    let discover = serde_json::json!({
+        "vault_path": "/tmp/vault",
+        "issuer": "https://corp.example/oidc",
+        "now_ms": 201
+    });
+    assert!(serde_json::from_value::<TrustProviderDiscoverReq>(discover).is_ok());
+
     let policy_set = serde_json::json!({
         "vault_path": "/tmp/vault",
         "provider_id": "corp",
@@ -404,6 +412,14 @@ fn rpc_schema_trust_provider_requests_validate_shapes() {
         "now_ms": 202
     });
     assert!(serde_json::from_value::<TrustPolicySetReq>(policy_set).is_ok());
+
+    let policy_template = serde_json::json!({
+        "vault_path": "/tmp/vault",
+        "provider": "https://corp.example/oidc",
+        "tenant_id": "tenant-a",
+        "now_ms": 203
+    });
+    assert!(serde_json::from_value::<TrustPolicySetTenantTemplateReq>(policy_template).is_ok());
 }
 
 #[test]
@@ -434,6 +450,16 @@ fn rpc_schema_trust_provider_rejects_unknown_fields_and_missing_now_ms() {
         "extra": "nope"
     });
     assert!(serde_json::from_value::<TrustPolicySetReq>(bad_policy).is_err());
+
+    let missing_tenant_template_now = serde_json::json!({
+        "vault_path": "/tmp/vault",
+        "provider": "corp",
+        "tenant_id": "tenant-a"
+    });
+    assert!(
+        serde_json::from_value::<TrustPolicySetTenantTemplateReq>(missing_tenant_template_now)
+            .is_err()
+    );
 }
 
 #[test]

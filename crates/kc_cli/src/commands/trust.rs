@@ -2,7 +2,8 @@ use kc_core::app_error::AppResult;
 use kc_core::rpc_service::{
     trust_device_enroll_service, trust_device_list_service, trust_device_verify_chain_service,
     trust_identity_complete_service, trust_identity_start_service, trust_provider_add_service,
-    trust_provider_disable_service, trust_provider_list_service, trust_provider_policy_set_service,
+    trust_provider_disable_service, trust_provider_discover_service, trust_provider_list_service,
+    trust_provider_policy_set_service, trust_provider_policy_set_tenant_template_service,
 };
 use std::path::Path;
 
@@ -13,7 +14,11 @@ fn now_ms() -> i64 {
     now.as_millis() as i64
 }
 
-pub fn run_identity_start(vault_path: &str, provider: &str, now_override: Option<i64>) -> AppResult<()> {
+pub fn run_identity_start(
+    vault_path: &str,
+    provider: &str,
+    now_override: Option<i64>,
+) -> AppResult<()> {
     let out = trust_identity_start_service(
         Path::new(vault_path),
         provider,
@@ -170,6 +175,27 @@ pub fn run_provider_list(vault_path: &str) -> AppResult<()> {
     Ok(())
 }
 
+pub fn run_provider_discover(
+    vault_path: &str,
+    issuer: &str,
+    now_override: Option<i64>,
+) -> AppResult<()> {
+    let out = trust_provider_discover_service(
+        Path::new(vault_path),
+        issuer,
+        now_override.unwrap_or_else(now_ms),
+    )?;
+    println!(
+        "{}",
+        serde_json::to_string_pretty(&serde_json::json!({
+            "status": "ok",
+            "provider": out
+        }))
+        .unwrap_or_else(|_| "{}".to_string())
+    );
+    Ok(())
+}
+
 pub fn run_policy_set(
     vault_path: &str,
     provider_id: &str,
@@ -182,6 +208,29 @@ pub fn run_policy_set(
         provider_id,
         max_clock_skew_ms,
         require_claims_json,
+        now_override.unwrap_or_else(now_ms),
+    )?;
+    println!(
+        "{}",
+        serde_json::to_string_pretty(&serde_json::json!({
+            "status": "ok",
+            "policy": out
+        }))
+        .unwrap_or_else(|_| "{}".to_string())
+    );
+    Ok(())
+}
+
+pub fn run_policy_set_tenant_template(
+    vault_path: &str,
+    provider_ref: &str,
+    tenant_id: &str,
+    now_override: Option<i64>,
+) -> AppResult<()> {
+    let out = trust_provider_policy_set_tenant_template_service(
+        Path::new(vault_path),
+        provider_ref,
+        tenant_id,
         now_override.unwrap_or_else(now_ms),
     )?;
     println!(

@@ -18,9 +18,9 @@ mod verifier;
 use clap::Parser;
 use cli::{
     BenchCmd, Cli, Command, DepsCmd, FixturesCmd, GcCmd, IndexCmd, IngestCmd, LineageCmd,
-    LineageLockCmd, LineageOverlayCmd, LineagePolicyCmd, LineageRoleCmd, SyncCmd, TrustCmd, TrustDeviceCmd,
-    TrustIdentityCmd, TrustPolicyCmd, TrustProviderCmd,
-    VaultCmd, VaultDbEncryptCmd, VaultEncryptCmd, VaultRecoveryCmd, VaultRecoveryEscrowCmd,
+    LineageLockCmd, LineageOverlayCmd, LineagePolicyCmd, LineageRoleCmd, SyncCmd, TrustCmd,
+    TrustDeviceCmd, TrustIdentityCmd, TrustPolicyCmd, TrustProviderCmd, VaultCmd,
+    VaultDbEncryptCmd, VaultEncryptCmd, VaultRecoveryCmd, VaultRecoveryEscrowCmd,
     VaultRecoveryEscrowProviderCmd,
 };
 use kc_core::vault::{vault_init, vault_open};
@@ -301,7 +301,9 @@ fn main() {
                     subject,
                     role,
                 } => commands::lineage::run_role_revoke(&vault_path, &subject, &role),
-                LineageRoleCmd::List { vault_path } => commands::lineage::run_role_list(&vault_path),
+                LineageRoleCmd::List { vault_path } => {
+                    commands::lineage::run_role_list(&vault_path)
+                }
             },
             LineageCmd::Policy { cmd } => match cmd {
                 LineagePolicyCmd::Add {
@@ -421,6 +423,11 @@ fn main() {
                 TrustProviderCmd::List { vault_path } => {
                     commands::trust::run_provider_list(&vault_path)
                 }
+                TrustProviderCmd::Discover {
+                    vault_path,
+                    issuer,
+                    now_ms,
+                } => commands::trust::run_provider_discover(&vault_path, &issuer, now_ms),
             },
             TrustCmd::Policy { cmd } => match cmd {
                 TrustPolicyCmd::Set {
@@ -434,6 +441,17 @@ fn main() {
                     &provider_id,
                     max_clock_skew_ms,
                     &require_claims,
+                    now_ms,
+                ),
+                TrustPolicyCmd::SetTenantTemplate {
+                    vault_path,
+                    provider,
+                    tenant_id,
+                    now_ms,
+                } => commands::trust::run_policy_set_tenant_template(
+                    &vault_path,
+                    &provider,
+                    &tenant_id,
                     now_ms,
                 ),
             },

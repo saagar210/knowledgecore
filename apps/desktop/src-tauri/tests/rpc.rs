@@ -1,29 +1,29 @@
 use apps_desktop_tauri::commands;
 use apps_desktop_tauri::rpc::{
     ingest_inbox_start_rpc, ingest_inbox_stop_rpc, jobs_list_rpc, lineage_lock_acquire_rpc,
-    lineage_lock_acquire_scope_rpc,
-    lineage_lock_release_rpc, lineage_lock_status_rpc, lineage_overlay_add_rpc,
-    lineage_overlay_list_rpc, lineage_overlay_remove_rpc, lineage_policy_add_rpc,
-    lineage_policy_bind_rpc, lineage_policy_list_rpc, lineage_query_rpc, lineage_query_v2_rpc,
-    lineage_role_grant_rpc, lineage_role_list_rpc, lineage_role_revoke_rpc,
+    lineage_lock_acquire_scope_rpc, lineage_lock_release_rpc, lineage_lock_status_rpc,
+    lineage_overlay_add_rpc, lineage_overlay_list_rpc, lineage_overlay_remove_rpc,
+    lineage_policy_add_rpc, lineage_policy_bind_rpc, lineage_policy_list_rpc, lineage_query_rpc,
+    lineage_query_v2_rpc, lineage_role_grant_rpc, lineage_role_list_rpc, lineage_role_revoke_rpc,
     sync_merge_preview_rpc, sync_pull_rpc, sync_push_rpc, sync_status_rpc, trust_device_enroll_rpc,
     trust_device_list_rpc, trust_device_verify_chain_rpc, trust_identity_complete_rpc,
-    trust_identity_start_rpc, vault_encryption_enable_rpc, vault_encryption_migrate_rpc,
-    vault_encryption_status_rpc, vault_init_rpc, vault_lock_rpc, vault_lock_status_rpc,
-    vault_open_rpc, vault_recovery_escrow_enable_rpc, vault_recovery_escrow_restore_rpc,
+    trust_identity_start_rpc, trust_policy_set_tenant_template_rpc, trust_provider_discover_rpc,
+    vault_encryption_enable_rpc, vault_encryption_migrate_rpc, vault_encryption_status_rpc,
+    vault_init_rpc, vault_lock_rpc, vault_lock_status_rpc, vault_open_rpc,
+    vault_recovery_escrow_enable_rpc, vault_recovery_escrow_provider_add_rpc,
+    vault_recovery_escrow_provider_list_rpc, vault_recovery_escrow_restore_rpc,
     vault_recovery_escrow_rotate_all_rpc, vault_recovery_escrow_rotate_rpc,
-    vault_recovery_escrow_provider_add_rpc, vault_recovery_escrow_provider_list_rpc,
-    vault_recovery_escrow_status_rpc,
-    vault_recovery_generate_rpc, vault_recovery_status_rpc, vault_recovery_verify_rpc,
-    vault_unlock_rpc, IngestInboxStartReq, IngestInboxStopReq, JobsListReq, LineageLockAcquireReq,
-    LineageLockAcquireScopeReq, LineageLockReleaseReq, LineageLockStatusReq, LineageOverlayAddReq,
-    LineageOverlayListReq, LineageOverlayRemoveReq, LineagePolicyAddReq, LineagePolicyBindReq,
-    LineagePolicyListReq, LineageQueryReq, LineageQueryV2Req, LineageRoleGrantReq,
-    LineageRoleListReq, LineageRoleRevokeReq, RpcResponse,
+    vault_recovery_escrow_status_rpc, vault_recovery_generate_rpc, vault_recovery_status_rpc,
+    vault_recovery_verify_rpc, vault_unlock_rpc, IngestInboxStartReq, IngestInboxStopReq,
+    JobsListReq, LineageLockAcquireReq, LineageLockAcquireScopeReq, LineageLockReleaseReq,
+    LineageLockStatusReq, LineageOverlayAddReq, LineageOverlayListReq, LineageOverlayRemoveReq,
+    LineagePolicyAddReq, LineagePolicyBindReq, LineagePolicyListReq, LineageQueryReq,
+    LineageQueryV2Req, LineageRoleGrantReq, LineageRoleListReq, LineageRoleRevokeReq, RpcResponse,
     SyncMergePreviewReq, SyncPullReq, SyncPushReq, SyncStatusReq, TrustDeviceEnrollReq,
     TrustDeviceListReq, TrustDeviceVerifyChainReq, TrustIdentityCompleteReq, TrustIdentityStartReq,
-    VaultEncryptionEnableReq, VaultEncryptionMigrateReq, VaultEncryptionStatusReq, VaultInitReq,
-    VaultLockReq, VaultLockStatusReq, VaultOpenReq, VaultRecoveryEscrowEnableReq,
+    TrustPolicySetTenantTemplateReq, TrustProviderDiscoverReq, VaultEncryptionEnableReq,
+    VaultEncryptionMigrateReq, VaultEncryptionStatusReq, VaultInitReq, VaultLockReq,
+    VaultLockStatusReq, VaultOpenReq, VaultRecoveryEscrowEnableReq,
     VaultRecoveryEscrowProviderAddReq, VaultRecoveryEscrowProviderListReq,
     VaultRecoveryEscrowRestoreReq, VaultRecoveryEscrowRotateAllReq, VaultRecoveryEscrowRotateReq,
     VaultRecoveryEscrowStatusReq, VaultRecoveryGenerateReq, VaultRecoveryStatusReq,
@@ -182,6 +182,51 @@ fn rpc_trust_identity_and_device_workflow_round_trip() {
     match listed {
         RpcResponse::Ok { data } => assert!(data.devices.iter().any(|d| d.device_id == device_id)),
         RpcResponse::Err { error } => panic!("trust device list failed: {}", error.code),
+    }
+}
+
+#[test]
+fn rpc_trust_provider_discovery_and_tenant_template_round_trip() {
+    let root = tempfile::tempdir().expect("tempdir").keep();
+    let vault_path = root.to_string_lossy().to_string();
+
+    let init = vault_init_rpc(VaultInitReq {
+        vault_path: vault_path.clone(),
+        vault_slug: "demo".to_string(),
+        now_ms: 1,
+    });
+    match init {
+        RpcResponse::Ok { .. } => {}
+        RpcResponse::Err { error } => panic!("vault init failed: {}", error.code),
+    }
+
+    let discovered = trust_provider_discover_rpc(TrustProviderDiscoverReq {
+        vault_path: vault_path.clone(),
+        issuer: "https://tenant.example/oidc".to_string(),
+        now_ms: 2,
+    });
+    let provider_id = match discovered {
+        RpcResponse::Ok { data } => {
+            assert!(data.provider_id.starts_with("auto-"));
+            assert_eq!(data.issuer, "https://tenant.example/oidc");
+            data.provider_id
+        }
+        RpcResponse::Err { error } => panic!("provider discover failed: {}", error.code),
+    };
+
+    let policy = trust_policy_set_tenant_template_rpc(TrustPolicySetTenantTemplateReq {
+        vault_path,
+        provider: "https://tenant.example/oidc".to_string(),
+        tenant_id: "Tenant-A".to_string(),
+        now_ms: 3,
+    });
+    match policy {
+        RpcResponse::Ok { data } => {
+            assert_eq!(data.provider_id, provider_id);
+            assert_eq!(data.max_clock_skew_ms, 5_000);
+            assert!(data.require_claims_json.contains("\"tenant\":\"tenant-a\""));
+        }
+        RpcResponse::Err { error } => panic!("tenant template set failed: {}", error.code),
     }
 }
 
@@ -386,12 +431,13 @@ fn rpc_vault_recovery_escrow_enable_rotate_restore_round_trip() {
         RpcResponse::Err { error } => panic!("escrow enable failed: {}", error.code),
     }
 
-    let provider_added = vault_recovery_escrow_provider_add_rpc(VaultRecoveryEscrowProviderAddReq {
-        vault_path: root.to_string_lossy().to_string(),
-        provider: "aws".to_string(),
-        config_ref: "kms://alias/kc-test".to_string(),
-        now_ms: 2,
-    });
+    let provider_added =
+        vault_recovery_escrow_provider_add_rpc(VaultRecoveryEscrowProviderAddReq {
+            vault_path: root.to_string_lossy().to_string(),
+            provider: "aws".to_string(),
+            config_ref: "kms://alias/kc-test".to_string(),
+            now_ms: 2,
+        });
     match provider_added {
         RpcResponse::Ok { data } => {
             assert_eq!(data.provider.provider, "aws");
