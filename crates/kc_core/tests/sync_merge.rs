@@ -380,3 +380,183 @@ fn sync_merge_preview_v3_supports_safe_disjoint_and_unsafe_reasons() {
     let err = ensure_conservative_plus_v3_merge_safe(&unsafe_rbac).expect_err("rbac unsafe");
     assert_eq!(err.code, "KC_SYNC_MERGE_POLICY_V3_UNSAFE");
 }
+
+#[test]
+fn sync_merge_preview_v3_matrix_and_deterministic_ordering() {
+    let hash_a =
+        "blake3:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa".to_string();
+    let hash_b =
+        "blake3:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb".to_string();
+    let hash_c =
+        "blake3:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc".to_string();
+
+    struct Case {
+        local: SyncMergeChangeSetV1,
+        remote: SyncMergeChangeSetV1,
+        ctx: SyncMergeContextV2,
+        expected_safe: bool,
+        expected_reasons: Vec<String>,
+        expected_error: Option<&'static str>,
+    }
+
+    let cases = vec![
+        Case {
+            local: SyncMergeChangeSetV1 {
+                object_hashes: vec![hash_a.clone()],
+                lineage_overlay_ids: vec!["overlay-a".to_string()],
+            },
+            remote: SyncMergeChangeSetV1 {
+                object_hashes: vec![hash_b.clone()],
+                lineage_overlay_ids: vec!["overlay-b".to_string()],
+            },
+            ctx: SyncMergeContextV2::default(),
+            expected_safe: true,
+            expected_reasons: vec!["safe_disjoint".to_string()],
+            expected_error: None,
+        },
+        Case {
+            local: SyncMergeChangeSetV1 {
+                object_hashes: vec![hash_a.clone(), hash_c.clone()],
+                lineage_overlay_ids: vec!["overlay-a".to_string()],
+            },
+            remote: SyncMergeChangeSetV1 {
+                object_hashes: vec![hash_c.clone(), hash_b.clone()],
+                lineage_overlay_ids: vec!["overlay-b".to_string()],
+            },
+            ctx: SyncMergeContextV2::default(),
+            expected_safe: false,
+            expected_reasons: vec!["unsafe_overlap_object".to_string()],
+            expected_error: Some("KC_SYNC_MERGE_NOT_SAFE"),
+        },
+        Case {
+            local: SyncMergeChangeSetV1 {
+                object_hashes: vec![hash_a.clone()],
+                lineage_overlay_ids: vec!["overlay-shared".to_string()],
+            },
+            remote: SyncMergeChangeSetV1 {
+                object_hashes: vec![hash_b.clone()],
+                lineage_overlay_ids: vec!["overlay-shared".to_string()],
+            },
+            ctx: SyncMergeContextV2::default(),
+            expected_safe: false,
+            expected_reasons: vec!["unsafe_overlay_overlap".to_string()],
+            expected_error: Some("KC_SYNC_MERGE_NOT_SAFE"),
+        },
+        Case {
+            local: SyncMergeChangeSetV1 {
+                object_hashes: vec![hash_a.clone()],
+                lineage_overlay_ids: vec![],
+            },
+            remote: SyncMergeChangeSetV1 {
+                object_hashes: vec![hash_b.clone()],
+                lineage_overlay_ids: vec![],
+            },
+            ctx: SyncMergeContextV2 {
+                trust_chain_mismatch: true,
+                lock_conflict: false,
+                rbac_conflict: false,
+            },
+            expected_safe: false,
+            expected_reasons: vec!["unsafe_trust".to_string()],
+            expected_error: Some("KC_SYNC_MERGE_TRUST_CONFLICT"),
+        },
+        Case {
+            local: SyncMergeChangeSetV1 {
+                object_hashes: vec![hash_a.clone()],
+                lineage_overlay_ids: vec![],
+            },
+            remote: SyncMergeChangeSetV1 {
+                object_hashes: vec![hash_b.clone()],
+                lineage_overlay_ids: vec![],
+            },
+            ctx: SyncMergeContextV2 {
+                trust_chain_mismatch: false,
+                lock_conflict: true,
+                rbac_conflict: false,
+            },
+            expected_safe: false,
+            expected_reasons: vec!["unsafe_lock".to_string()],
+            expected_error: Some("KC_SYNC_MERGE_LOCK_CONFLICT"),
+        },
+        Case {
+            local: SyncMergeChangeSetV1 {
+                object_hashes: vec![hash_a.clone()],
+                lineage_overlay_ids: vec![],
+            },
+            remote: SyncMergeChangeSetV1 {
+                object_hashes: vec![hash_b.clone()],
+                lineage_overlay_ids: vec![],
+            },
+            ctx: SyncMergeContextV2 {
+                trust_chain_mismatch: false,
+                lock_conflict: false,
+                rbac_conflict: true,
+            },
+            expected_safe: false,
+            expected_reasons: vec!["unsafe_rbac".to_string()],
+            expected_error: Some("KC_SYNC_MERGE_POLICY_V3_UNSAFE"),
+        },
+        Case {
+            local: SyncMergeChangeSetV1 {
+                object_hashes: vec![hash_a.clone(), hash_c.clone()],
+                lineage_overlay_ids: vec!["overlay-shared".to_string()],
+            },
+            remote: SyncMergeChangeSetV1 {
+                object_hashes: vec![hash_c.clone(), hash_b.clone()],
+                lineage_overlay_ids: vec!["overlay-shared".to_string()],
+            },
+            ctx: SyncMergeContextV2 {
+                trust_chain_mismatch: true,
+                lock_conflict: true,
+                rbac_conflict: true,
+            },
+            expected_safe: false,
+            expected_reasons: vec![
+                "unsafe_overlap_object".to_string(),
+                "unsafe_overlay_overlap".to_string(),
+                "unsafe_trust".to_string(),
+                "unsafe_lock".to_string(),
+                "unsafe_rbac".to_string(),
+            ],
+            expected_error: Some("KC_SYNC_MERGE_TRUST_CONFLICT"),
+        },
+    ];
+
+    for (idx, case) in cases.into_iter().enumerate() {
+        let report = merge_preview_with_policy_v2(
+            &case.local,
+            &case.remote,
+            &case.ctx,
+            "conservative_plus_v3",
+            4242,
+        )
+        .unwrap_or_else(|e| panic!("case {idx} preview failed: {}", e.code));
+        let report_again = merge_preview_with_policy_v2(
+            &case.local,
+            &case.remote,
+            &case.ctx,
+            "conservative_plus_v3",
+            4242,
+        )
+        .unwrap_or_else(|e| panic!("case {idx} second preview failed: {}", e.code));
+
+        assert_eq!(
+            report, report_again,
+            "case {idx} report must be replay-stable"
+        );
+        assert_eq!(report.safe, case.expected_safe, "case {idx}");
+        assert_eq!(report.reasons, case.expected_reasons, "case {idx}");
+
+        match case.expected_error {
+            Some(code) => {
+                let err = ensure_conservative_plus_v3_merge_safe(&report)
+                    .expect_err(&format!("case {idx} expected error {code}"));
+                assert_eq!(err.code, code, "case {idx}");
+            }
+            None => {
+                ensure_conservative_plus_v3_merge_safe(&report)
+                    .unwrap_or_else(|e| panic!("case {idx} expected safe merge, got {}", e.code));
+            }
+        }
+    }
+}

@@ -296,3 +296,100 @@ fn cli_sync_merge_preview_and_conservative_pull_work() {
         String::from_utf8_lossy(&merged_pull_v3.stderr)
     );
 }
+
+#[test]
+fn cli_sync_merge_preview_v3_is_replay_stable_and_blocks_overlap_pull() {
+    let root = tempfile::tempdir().expect("tempdir").keep();
+    let vault_a = root.join("vault_a");
+    let vault_b = root.join("vault_b");
+    let sync_target = root.join("sync-target");
+
+    vault_init(&vault_a, "a", 1).expect("vault a init");
+    vault_init(&vault_b, "b", 1).expect("vault b init");
+
+    let conn_a = open_db(&vault_a.join("db/knowledge.sqlite")).expect("open db a");
+    let conn_b = open_db(&vault_b.join("db/knowledge.sqlite")).expect("open db b");
+    let store_a = ObjectStore::new(vault_a.join("store/objects"));
+    let store_b = ObjectStore::new(vault_b.join("store/objects"));
+
+    store_a
+        .put_bytes(&conn_a, b"baseline", 1)
+        .expect("put baseline");
+    sync_push(&conn_a, &vault_a, &sync_target, 100).expect("push baseline");
+    sync_pull(&conn_b, &vault_b, &sync_target, 101).expect("pull baseline");
+    let conn_b = open_db(&vault_b.join("db/knowledge.sqlite")).expect("reopen db b");
+
+    // Write identical post-baseline bytes on both sides so v3 detects object overlap.
+    store_a
+        .put_bytes(&conn_a, b"shared-overlap", 2)
+        .expect("put local shared overlap");
+    store_b
+        .put_bytes(&conn_b, b"shared-overlap", 2)
+        .expect("put remote shared overlap");
+    sync_push(&conn_b, &vault_b, &sync_target, 200).expect("push remote overlap");
+
+    let bin = env!("CARGO_BIN_EXE_kc_cli");
+
+    let preview_first = Command::new(bin)
+        .args([
+            "sync",
+            "merge-preview",
+            vault_a.to_string_lossy().as_ref(),
+            sync_target.to_string_lossy().as_ref(),
+            "--policy",
+            "conservative_plus_v3",
+            "--now-ms",
+            "300",
+        ])
+        .output()
+        .expect("run v3 preview first");
+    assert!(
+        preview_first.status.success(),
+        "preview first stderr: {}",
+        String::from_utf8_lossy(&preview_first.stderr)
+    );
+    let preview_first_stdout =
+        String::from_utf8(preview_first.stdout).expect("preview first stdout utf8");
+    assert!(preview_first_stdout.contains("\"merge_policy\": \"conservative_plus_v3\""));
+    assert!(preview_first_stdout.contains("\"safe\": false"));
+    assert!(preview_first_stdout.contains("\"unsafe_overlap_object\""));
+
+    let preview_second = Command::new(bin)
+        .args([
+            "sync",
+            "merge-preview",
+            vault_a.to_string_lossy().as_ref(),
+            sync_target.to_string_lossy().as_ref(),
+            "--policy",
+            "conservative_plus_v3",
+            "--now-ms",
+            "300",
+        ])
+        .output()
+        .expect("run v3 preview second");
+    assert!(
+        preview_second.status.success(),
+        "preview second stderr: {}",
+        String::from_utf8_lossy(&preview_second.stderr)
+    );
+    let preview_second_stdout =
+        String::from_utf8(preview_second.stdout).expect("preview second stdout utf8");
+    assert_eq!(preview_first_stdout, preview_second_stdout);
+
+    let unsafe_pull = Command::new(bin)
+        .args([
+            "sync",
+            "pull",
+            vault_a.to_string_lossy().as_ref(),
+            sync_target.to_string_lossy().as_ref(),
+            "--auto-merge",
+            "conservative_plus_v3",
+            "--now-ms",
+            "301",
+        ])
+        .output()
+        .expect("run v3 unsafe pull");
+    assert!(!unsafe_pull.status.success(), "expected unsafe pull to fail");
+    let stderr = String::from_utf8(unsafe_pull.stderr).expect("unsafe pull stderr utf8");
+    assert!(stderr.contains("KC_SYNC_MERGE_NOT_SAFE"), "stderr: {stderr}");
+}
