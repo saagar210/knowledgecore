@@ -89,10 +89,10 @@ Versioned RPC surface v1, envelope schema, and determinism notes.
          - ask_question
          - events_list, jobs_list
          - sync_status, sync_push, sync_pull
-           - `sync_pull` accepts optional `auto_merge` with supported values `conservative` and `conservative_plus_v2`
+           - `sync_pull` accepts optional `auto_merge` with supported values `conservative`, `conservative_plus_v2`, `conservative_plus_v3`, and `conservative_plus_v4`
          - sync_merge_preview
-           - accepts optional `policy` with supported values `conservative` and `conservative_plus_v2`
-           - when policy is `conservative_plus_v2`, preview report includes `schema_version=2` and deterministic `decision_trace`
+           - accepts optional `policy` with supported values `conservative`, `conservative_plus_v2`, `conservative_plus_v3`, and `conservative_plus_v4`
+           - `conservative_plus_v2` emits `schema_version=2`; `conservative_plus_v3` emits `schema_version=3`; `conservative_plus_v4` emits `schema_version=4`, each with deterministic `decision_trace`
          - trust_provider_discover (deterministic issuer bootstrap to provider record)
          - trust_policy_set_tenant_template (deterministic canonical tenant claim template)
          - lineage_query

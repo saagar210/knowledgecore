@@ -242,6 +242,28 @@ fn cli_sync_merge_preview_and_conservative_pull_work() {
     assert!(preview_v3_stdout.contains("\"merge_policy\": \"conservative_plus_v3\""));
     assert!(preview_v3_stdout.contains("\"safe_disjoint\""));
 
+    let merge_preview_v4 = Command::new(bin)
+        .args([
+            "sync",
+            "merge-preview",
+            vault_a.to_string_lossy().as_ref(),
+            sync_target.to_string_lossy().as_ref(),
+            "--policy",
+            "conservative_plus_v4",
+            "--now-ms",
+            "300",
+        ])
+        .output()
+        .expect("run merge preview v4");
+    assert!(
+        merge_preview_v4.status.success(),
+        "merge preview v4 stderr: {}",
+        String::from_utf8_lossy(&merge_preview_v4.stderr)
+    );
+    let preview_v4_stdout = String::from_utf8(merge_preview_v4.stdout).expect("preview v4 utf8");
+    assert!(preview_v4_stdout.contains("\"merge_policy\": \"conservative_plus_v4\""));
+    assert!(preview_v4_stdout.contains("\"safe_disjoint_v4\""));
+
     let conflict_pull = Command::new(bin)
         .args([
             "sync",
@@ -294,6 +316,25 @@ fn cli_sync_merge_preview_and_conservative_pull_work() {
         merged_pull_v3.status.success(),
         "merged pull v3 stderr: {}",
         String::from_utf8_lossy(&merged_pull_v3.stderr)
+    );
+
+    let merged_pull_v4 = Command::new(bin)
+        .args([
+            "sync",
+            "pull",
+            vault_a.to_string_lossy().as_ref(),
+            sync_target.to_string_lossy().as_ref(),
+            "--auto-merge",
+            "conservative_plus_v4",
+            "--now-ms",
+            "304",
+        ])
+        .output()
+        .expect("run pull with conservative_plus_v4 auto merge");
+    assert!(
+        merged_pull_v4.status.success(),
+        "merged pull v4 stderr: {}",
+        String::from_utf8_lossy(&merged_pull_v4.stderr)
     );
 }
 
@@ -389,7 +430,13 @@ fn cli_sync_merge_preview_v3_is_replay_stable_and_blocks_overlap_pull() {
         ])
         .output()
         .expect("run v3 unsafe pull");
-    assert!(!unsafe_pull.status.success(), "expected unsafe pull to fail");
+    assert!(
+        !unsafe_pull.status.success(),
+        "expected unsafe pull to fail"
+    );
     let stderr = String::from_utf8(unsafe_pull.stderr).expect("unsafe pull stderr utf8");
-    assert!(stderr.contains("KC_SYNC_MERGE_NOT_SAFE"), "stderr: {stderr}");
+    assert!(
+        stderr.contains("KC_SYNC_MERGE_NOT_SAFE"),
+        "stderr: {stderr}"
+    );
 }

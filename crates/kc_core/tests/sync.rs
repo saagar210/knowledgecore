@@ -421,3 +421,36 @@ fn sync_pull_with_conservative_plus_v3_auto_merge_applies_disjoint_changes() {
     .expect("pull with conservative_plus_v3 merge");
     assert!(!merged.snapshot_id.is_empty());
 }
+
+#[test]
+fn sync_pull_with_conservative_plus_v4_auto_merge_applies_disjoint_changes() {
+    let root = tempfile::tempdir().expect("tempdir").keep();
+    let vault_a = root.join("vault_a");
+    let vault_b = root.join("vault_b");
+    let sync_target = root.join("sync-target");
+
+    vault_init(&vault_a, "a", 1).expect("vault a init");
+    vault_init(&vault_b, "b", 1).expect("vault b init");
+
+    let conn_a = open_db(&vault_a.join("db/knowledge.sqlite")).expect("open db a");
+    let conn_b = open_db(&vault_b.join("db/knowledge.sqlite")).expect("open db b");
+    insert_object(&conn_a, &vault_a, b"baseline", 1);
+
+    sync_push(&conn_a, &vault_a, &sync_target, 100).expect("push baseline");
+    sync_pull(&conn_b, &vault_b, &sync_target, 101).expect("pull baseline into b");
+    let conn_b = open_db(&vault_b.join("db/knowledge.sqlite")).expect("reopen db b");
+
+    insert_object(&conn_a, &vault_a, b"local-only-change", 2);
+    insert_object(&conn_b, &vault_b, b"remote-only-change", 2);
+    sync_push(&conn_b, &vault_b, &sync_target, 200).expect("push remote-only delta");
+
+    let merged = sync_pull_target_with_mode(
+        &conn_a,
+        &vault_a,
+        sync_target.to_string_lossy().as_ref(),
+        301,
+        Some("conservative_plus_v4"),
+    )
+    .expect("pull with conservative_plus_v4 merge");
+    assert!(!merged.snapshot_id.is_empty());
+}

@@ -685,6 +685,25 @@ fn rpc_sync_supports_s3_uri_targets_via_emulation() {
         RpcResponse::Err { error } => panic!("sync merge preview failed: {}", error.code),
     }
 
+    let preview_v4 = sync_merge_preview_rpc(SyncMergePreviewReq {
+        vault_path: root.to_string_lossy().to_string(),
+        target_path: target_uri.to_string(),
+        policy: Some("conservative_plus_v4".to_string()),
+        now_ms: 6,
+    });
+    match preview_v4 {
+        RpcResponse::Ok { data } => {
+            assert_eq!(data.report.merge_policy, "conservative_plus_v4");
+            assert_eq!(data.report.schema_version, 4);
+            assert!(data
+                .report
+                .decision_trace
+                .as_ref()
+                .is_some_and(|trace| !trace.is_empty()));
+        }
+        RpcResponse::Err { error } => panic!("sync merge preview v4 failed: {}", error.code),
+    }
+
     std::env::remove_var("KC_VAULT_PASSPHRASE");
     std::env::remove_var("KC_SYNC_S3_EMULATE_ROOT");
 }
