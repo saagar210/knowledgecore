@@ -1,4 +1,4 @@
-# Lineage Governance Conditions v3
+# Lineage Governance Conditions v4
 
 ## Purpose
 Define deterministic condition-policy layering for lineage governance so overlay mutations require lock validity, RBAC allow, and policy-condition allow with deterministic audit trails.
@@ -31,6 +31,8 @@ Define deterministic condition-policy layering for lineage governance so overlay
 - Core condition fields (`condition_json`):
   - `action` (optional string)
   - `doc_id_prefix` (optional string)
+  - `doc_id_suffix` (optional string)
+  - `subject_id_prefix` (optional string)
 - Surface contracts:
   - CLI lineage policy flows: `kc_cli lineage policy add|bind|list`
   - RPC lineage policy flows: `lineage_policy_add|bind|list`
@@ -42,13 +44,14 @@ Define deterministic condition-policy layering for lineage governance so overlay
 ## Determinism and version-boundary rules
 - `condition_json` is canonical JSON before persistence.
 - Policy IDs are deterministic for policy names:
-  - `blake3("kc.lineage.policy.v3\\n" + policy_name)`
+  - `blake3("kc.lineage.policy.v3\\n" + policy_name)` (preserved for backward compatibility)
 - Policy list ordering is deterministic by:
   - `priority ASC`, `policy_id ASC`, `subject_id ASC`
 - Decision reasons are stable:
   - `policy_allow`, `policy_deny`, `no_matching_allow_policy`
 - Audit ordering is deterministic by:
   - `ts_ms ASC`, `audit_id ASC`
+- v4 extends deterministic condition evaluation with `doc_id_suffix` and `subject_id_prefix`; unsupported/unknown keys remain rejected.
 - Any change to precedence, supported condition keys, canonicalization, reason categories, or audit ordering requires version-boundary review.
 
 ## Failure modes and AppError code map
@@ -64,6 +67,7 @@ Define deterministic condition-policy layering for lineage governance so overlay
 ## Acceptance tests
 - Policy list ordering is deterministic across repeated runs.
 - Deny overrides allow for matching conditions.
+- v4 condition keys (`doc_id_suffix`, `subject_id_prefix`) are evaluated deterministically for allow/deny matching.
 - No-match paths fail with `KC_LINEAGE_PERMISSION_DENIED`.
 - Matching deny paths fail with `KC_LINEAGE_POLICY_DENY_ENFORCED`.
 - Audit rows serialize deterministic canonical `details_json`.

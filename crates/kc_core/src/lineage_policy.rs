@@ -42,11 +42,15 @@ pub struct LineagePolicyDecisionV3 {
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 #[serde(deny_unknown_fields)]
-struct LineagePolicyConditionV3 {
+struct LineagePolicyConditionV4 {
     #[serde(default)]
     action: Option<String>,
     #[serde(default)]
     doc_id_prefix: Option<String>,
+    #[serde(default)]
+    doc_id_suffix: Option<String>,
+    #[serde(default)]
+    subject_id_prefix: Option<String>,
 }
 
 #[derive(Debug, Clone)]
@@ -93,7 +97,7 @@ fn default_priority(effect: &str) -> i64 {
     }
 }
 
-fn parse_condition(condition_json: &str) -> AppResult<(LineagePolicyConditionV3, String)> {
+fn parse_condition(condition_json: &str) -> AppResult<(LineagePolicyConditionV4, String)> {
     let parsed = serde_json::from_str::<Value>(condition_json).map_err(|e| {
         policy_error(
             "KC_LINEAGE_POLICY_CONDITION_INVALID",
@@ -110,7 +114,7 @@ fn parse_condition(condition_json: &str) -> AppResult<(LineagePolicyConditionV3,
     };
 
     let canonical = canonical_json_string(&parsed)?;
-    let condition = serde_json::from_str::<LineagePolicyConditionV3>(&canonical).map_err(|e| {
+    let condition = serde_json::from_str::<LineagePolicyConditionV4>(&canonical).map_err(|e| {
         policy_error(
             "KC_LINEAGE_POLICY_CONDITION_INVALID",
             "failed decoding lineage policy condition fields",
@@ -136,6 +140,24 @@ fn parse_condition(condition_json: &str) -> AppResult<(LineagePolicyConditionV3,
             ));
         }
     }
+    if let Some(suffix) = &condition.doc_id_suffix {
+        if suffix.trim().is_empty() {
+            return Err(policy_error(
+                "KC_LINEAGE_POLICY_CONDITION_INVALID",
+                "lineage policy doc_id_suffix condition must not be empty",
+                serde_json::json!({ "field": "doc_id_suffix" }),
+            ));
+        }
+    }
+    if let Some(prefix) = &condition.subject_id_prefix {
+        if prefix.trim().is_empty() {
+            return Err(policy_error(
+                "KC_LINEAGE_POLICY_CONDITION_INVALID",
+                "lineage policy subject_id_prefix condition must not be empty",
+                serde_json::json!({ "field": "subject_id_prefix" }),
+            ));
+        }
+    }
 
     Ok((condition, canonical))
 }
@@ -145,7 +167,8 @@ fn policy_id_for_name(name: &str) -> String {
 }
 
 fn evaluate_condition(
-    condition: &LineagePolicyConditionV3,
+    condition: &LineagePolicyConditionV4,
+    subject_id: &str,
     action: &str,
     doc_id: Option<&str>,
 ) -> bool {
@@ -159,6 +182,19 @@ fn evaluate_condition(
             return false;
         };
         if !doc.starts_with(prefix) {
+            return false;
+        }
+    }
+    if let Some(suffix) = &condition.doc_id_suffix {
+        let Some(doc) = doc_id else {
+            return false;
+        };
+        if !doc.ends_with(suffix) {
+            return false;
+        }
+    }
+    if let Some(prefix) = &condition.subject_id_prefix {
+        if !subject_id.starts_with(prefix) {
             return false;
         }
     }
@@ -396,13 +432,13 @@ pub fn lineage_policy_decision(
         })?;
     let rows = stmt
         .query_map([subject_id], |row| {
-                Ok(EvaluatedPolicy {
-                    policy_id: row.get(0)?,
-                    policy_name: row.get(1)?,
-                    effect: row.get(2)?,
-                    condition_json: row.get(3)?,
-                })
+            Ok(EvaluatedPolicy {
+                policy_id: row.get(0)?,
+                policy_name: row.get(1)?,
+                effect: row.get(2)?,
+                condition_json: row.get(3)?,
             })
+        })
         .map_err(|e| {
             policy_error(
                 "KC_LINEAGE_QUERY_FAILED",
@@ -422,7 +458,7 @@ pub fn lineage_policy_decision(
             )
         })?;
         let (condition, _) = parse_condition(&policy.condition_json)?;
-        if !evaluate_condition(&condition, action, doc_id) {
+        if !evaluate_condition(&condition, subject_id, action, doc_id) {
             continue;
         }
         if policy.effect == "deny" {
