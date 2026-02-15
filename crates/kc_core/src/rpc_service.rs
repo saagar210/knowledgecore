@@ -26,8 +26,10 @@ use crate::trust::{
 };
 use crate::trust_identity::{
     trust_device_enroll, trust_device_verify_chain, trust_identity_complete, trust_identity_start,
-    DeviceCertificateRecord, IdentitySessionRecord, IdentityStartResult,
+    trust_provider_add, trust_provider_disable, trust_provider_list, DeviceCertificateRecord,
+    IdentityProviderRecord, IdentitySessionRecord, IdentityStartResult,
 };
+use crate::trust_policy::{trust_provider_policy_set, TrustProviderPolicyV1};
 use crate::types::{DocId, ObjectHash};
 use crate::vault::{vault_init, vault_open, vault_paths, vault_save};
 use std::collections::BTreeSet;
@@ -816,6 +818,53 @@ pub fn trust_device_list_service(vault_path: &Path) -> AppResult<Vec<TrustedDevi
     let vault = vault_open(vault_path)?;
     let conn = open_db(&vault_path.join(vault.db.relative_path))?;
     trust_device_list(&conn)
+}
+
+pub fn trust_provider_add_service(
+    vault_path: &Path,
+    provider_id: &str,
+    issuer: &str,
+    audience: &str,
+    jwks_url: &str,
+    now_ms: i64,
+) -> AppResult<IdentityProviderRecord> {
+    let vault = vault_open(vault_path)?;
+    let conn = open_db(&vault_path.join(vault.db.relative_path))?;
+    trust_provider_add(&conn, provider_id, issuer, audience, jwks_url, now_ms)
+}
+
+pub fn trust_provider_disable_service(
+    vault_path: &Path,
+    provider_id: &str,
+    now_ms: i64,
+) -> AppResult<IdentityProviderRecord> {
+    let vault = vault_open(vault_path)?;
+    let conn = open_db(&vault_path.join(vault.db.relative_path))?;
+    trust_provider_disable(&conn, provider_id, now_ms)
+}
+
+pub fn trust_provider_list_service(vault_path: &Path) -> AppResult<Vec<IdentityProviderRecord>> {
+    let vault = vault_open(vault_path)?;
+    let conn = open_db(&vault_path.join(vault.db.relative_path))?;
+    trust_provider_list(&conn)
+}
+
+pub fn trust_provider_policy_set_service(
+    vault_path: &Path,
+    provider_id: &str,
+    max_clock_skew_ms: i64,
+    require_claims_json: &str,
+    now_ms: i64,
+) -> AppResult<TrustProviderPolicyV1> {
+    let vault = vault_open(vault_path)?;
+    let conn = open_db(&vault_path.join(vault.db.relative_path))?;
+    trust_provider_policy_set(
+        &conn,
+        provider_id,
+        max_clock_skew_ms,
+        require_claims_json,
+        now_ms,
+    )
 }
 
 pub fn lineage_query_service(

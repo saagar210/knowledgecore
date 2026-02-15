@@ -201,6 +201,14 @@ pub enum TrustCmd {
         #[command(subcommand)]
         cmd: TrustDeviceCmd,
     },
+    Provider {
+        #[command(subcommand)]
+        cmd: TrustProviderCmd,
+    },
+    Policy {
+        #[command(subcommand)]
+        cmd: TrustPolicyCmd,
+    },
 }
 
 #[derive(Subcommand)]
@@ -241,6 +249,48 @@ pub enum TrustDeviceCmd {
     },
     List {
         vault_path: String,
+    },
+}
+
+#[derive(Subcommand)]
+pub enum TrustProviderCmd {
+    Add {
+        vault_path: String,
+        #[arg(long = "provider-id")]
+        provider_id: String,
+        #[arg(long = "issuer")]
+        issuer: String,
+        #[arg(long = "aud")]
+        aud: String,
+        #[arg(long = "jwks")]
+        jwks: String,
+        #[arg(long = "now-ms")]
+        now_ms: Option<i64>,
+    },
+    Disable {
+        vault_path: String,
+        #[arg(long = "provider-id")]
+        provider_id: String,
+        #[arg(long = "now-ms")]
+        now_ms: Option<i64>,
+    },
+    List {
+        vault_path: String,
+    },
+}
+
+#[derive(Subcommand)]
+pub enum TrustPolicyCmd {
+    Set {
+        vault_path: String,
+        #[arg(long = "provider-id")]
+        provider_id: String,
+        #[arg(long = "max-clock-skew-ms")]
+        max_clock_skew_ms: i64,
+        #[arg(long = "require-claims")]
+        require_claims: String,
+        #[arg(long = "now-ms")]
+        now_ms: Option<i64>,
     },
 }
 

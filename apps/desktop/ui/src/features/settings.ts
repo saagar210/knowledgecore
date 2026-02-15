@@ -12,6 +12,13 @@ import type {
   TrustDeviceVerifyChainRes,
   TrustDeviceListReq,
   TrustDeviceListRes,
+  TrustProviderAddReq,
+  TrustProviderRes,
+  TrustProviderDisableReq,
+  TrustProviderListReq,
+  TrustProviderListRes,
+  TrustPolicySetReq,
+  TrustPolicySetRes,
   VaultLockReq,
   VaultLockRes,
   VaultLockStatusReq,
@@ -89,6 +96,34 @@ export async function listTrustDevices(
   req: TrustDeviceListReq
 ): Promise<ViewState<TrustDeviceListRes>> {
   return nextStateFromRpc(await api.trustDeviceList(req));
+}
+
+export async function addTrustProvider(
+  api: DesktopRpcApi,
+  req: TrustProviderAddReq
+): Promise<ViewState<TrustProviderRes>> {
+  return nextStateFromRpc(await api.trustProviderAdd(req));
+}
+
+export async function disableTrustProvider(
+  api: DesktopRpcApi,
+  req: TrustProviderDisableReq
+): Promise<ViewState<TrustProviderRes>> {
+  return nextStateFromRpc(await api.trustProviderDisable(req));
+}
+
+export async function listTrustProviders(
+  api: DesktopRpcApi,
+  req: TrustProviderListReq
+): Promise<ViewState<TrustProviderListRes>> {
+  return nextStateFromRpc(await api.trustProviderList(req));
+}
+
+export async function setTrustProviderPolicy(
+  api: DesktopRpcApi,
+  req: TrustPolicySetReq
+): Promise<ViewState<TrustPolicySetRes>> {
+  return nextStateFromRpc(await api.trustPolicySet(req));
 }
 
 export async function loadVaultEncryptionStatus(

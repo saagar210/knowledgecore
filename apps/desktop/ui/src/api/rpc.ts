@@ -135,6 +135,44 @@ export type TrustDeviceListItem = {
   created_at_ms: number;
 };
 export type TrustDeviceListRes = { devices: TrustDeviceListItem[] };
+export type TrustProviderAddReq = {
+  vault_path: string;
+  provider_id: string;
+  issuer: string;
+  aud: string;
+  jwks: string;
+  now_ms: number;
+};
+export type TrustProviderDisableReq = {
+  vault_path: string;
+  provider_id: string;
+  now_ms: number;
+};
+export type TrustProviderListReq = { vault_path: string };
+export type TrustProvider = {
+  provider_id: string;
+  issuer: string;
+  audience: string;
+  jwks_url: string;
+  enabled: boolean;
+  created_at_ms: number;
+  updated_at_ms: number;
+};
+export type TrustProviderRes = TrustProvider;
+export type TrustProviderListRes = { providers: TrustProvider[] };
+export type TrustPolicySetReq = {
+  vault_path: string;
+  provider_id: string;
+  max_clock_skew_ms: number;
+  require_claims_json: string;
+  now_ms: number;
+};
+export type TrustPolicySetRes = {
+  provider_id: string;
+  max_clock_skew_ms: number;
+  require_claims_json: string;
+  updated_at_ms: number;
+};
 export type VaultLockStatusReq = { vault_path: string };
 export type VaultLockStatusRes = {
   db_encryption_enabled: boolean;
@@ -485,6 +523,14 @@ export const rpcMethods = {
     rpc<TrustDeviceVerifyChainReq, TrustDeviceVerifyChainRes>("trust_device_verify_chain", req),
   trustDeviceList: (req: TrustDeviceListReq) =>
     rpc<TrustDeviceListReq, TrustDeviceListRes>("trust_device_list", req),
+  trustProviderAdd: (req: TrustProviderAddReq) =>
+    rpc<TrustProviderAddReq, TrustProviderRes>("trust_provider_add", req),
+  trustProviderDisable: (req: TrustProviderDisableReq) =>
+    rpc<TrustProviderDisableReq, TrustProviderRes>("trust_provider_disable", req),
+  trustProviderList: (req: TrustProviderListReq) =>
+    rpc<TrustProviderListReq, TrustProviderListRes>("trust_provider_list", req),
+  trustPolicySet: (req: TrustPolicySetReq) =>
+    rpc<TrustPolicySetReq, TrustPolicySetRes>("trust_policy_set", req),
   vaultLockStatus: (req: VaultLockStatusReq) =>
     rpc<VaultLockStatusReq, VaultLockStatusRes>("vault_lock_status", req),
   vaultUnlock: (req: VaultUnlockReq) => rpc<VaultUnlockReq, VaultUnlockRes>("vault_unlock", req),

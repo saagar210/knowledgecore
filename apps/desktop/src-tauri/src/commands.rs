@@ -46,6 +46,32 @@ pub fn trust_device_list(
 }
 
 #[tauri::command]
+pub fn trust_provider_add(
+    req: rpc::TrustProviderAddReq,
+) -> rpc::RpcResponse<rpc::TrustProviderRes> {
+    rpc::trust_provider_add_rpc(req)
+}
+
+#[tauri::command]
+pub fn trust_provider_disable(
+    req: rpc::TrustProviderDisableReq,
+) -> rpc::RpcResponse<rpc::TrustProviderRes> {
+    rpc::trust_provider_disable_rpc(req)
+}
+
+#[tauri::command]
+pub fn trust_provider_list(
+    req: rpc::TrustProviderListReq,
+) -> rpc::RpcResponse<rpc::TrustProviderListRes> {
+    rpc::trust_provider_list_rpc(req)
+}
+
+#[tauri::command]
+pub fn trust_policy_set(req: rpc::TrustPolicySetReq) -> rpc::RpcResponse<rpc::TrustPolicySetRes> {
+    rpc::trust_policy_set_rpc(req)
+}
+
+#[tauri::command]
 pub fn vault_lock_status(
     req: rpc::VaultLockStatusReq,
 ) -> rpc::RpcResponse<rpc::VaultLockStatusRes> {

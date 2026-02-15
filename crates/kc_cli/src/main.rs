@@ -19,7 +19,7 @@ use clap::Parser;
 use cli::{
     BenchCmd, Cli, Command, DepsCmd, FixturesCmd, GcCmd, IndexCmd, IngestCmd, LineageCmd,
     LineageLockCmd, LineageOverlayCmd, LineageRoleCmd, SyncCmd, TrustCmd, TrustDeviceCmd,
-    TrustIdentityCmd,
+    TrustIdentityCmd, TrustPolicyCmd, TrustProviderCmd,
     VaultCmd, VaultDbEncryptCmd, VaultEncryptCmd, VaultRecoveryCmd, VaultRecoveryEscrowCmd,
 };
 use kc_core::vault::{vault_init, vault_open};
@@ -337,6 +337,46 @@ fn main() {
                 TrustDeviceCmd::List { vault_path } => {
                     commands::trust::run_device_list(&vault_path)
                 }
+            },
+            TrustCmd::Provider { cmd } => match cmd {
+                TrustProviderCmd::Add {
+                    vault_path,
+                    provider_id,
+                    issuer,
+                    aud,
+                    jwks,
+                    now_ms,
+                } => commands::trust::run_provider_add(
+                    &vault_path,
+                    &provider_id,
+                    &issuer,
+                    &aud,
+                    &jwks,
+                    now_ms,
+                ),
+                TrustProviderCmd::Disable {
+                    vault_path,
+                    provider_id,
+                    now_ms,
+                } => commands::trust::run_provider_disable(&vault_path, &provider_id, now_ms),
+                TrustProviderCmd::List { vault_path } => {
+                    commands::trust::run_provider_list(&vault_path)
+                }
+            },
+            TrustCmd::Policy { cmd } => match cmd {
+                TrustPolicyCmd::Set {
+                    vault_path,
+                    provider_id,
+                    max_clock_skew_ms,
+                    require_claims,
+                    now_ms,
+                } => commands::trust::run_policy_set(
+                    &vault_path,
+                    &provider_id,
+                    max_clock_skew_ms,
+                    &require_claims,
+                    now_ms,
+                ),
             },
         },
     };

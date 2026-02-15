@@ -201,6 +201,65 @@ pub struct TrustDeviceListRes {
 
 #[derive(Debug, Deserialize)]
 #[serde(deny_unknown_fields)]
+pub struct TrustProviderAddReq {
+    pub vault_path: String,
+    pub provider_id: String,
+    pub issuer: String,
+    pub aud: String,
+    pub jwks: String,
+    pub now_ms: i64,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct TrustProviderRes {
+    pub provider_id: String,
+    pub issuer: String,
+    pub audience: String,
+    pub jwks_url: String,
+    pub enabled: bool,
+    pub created_at_ms: i64,
+    pub updated_at_ms: i64,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct TrustProviderDisableReq {
+    pub vault_path: String,
+    pub provider_id: String,
+    pub now_ms: i64,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct TrustProviderListReq {
+    pub vault_path: String,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct TrustProviderListRes {
+    pub providers: Vec<TrustProviderRes>,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct TrustPolicySetReq {
+    pub vault_path: String,
+    pub provider_id: String,
+    pub max_clock_skew_ms: i64,
+    pub require_claims_json: String,
+    pub now_ms: i64,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct TrustPolicySetRes {
+    pub provider_id: String,
+    pub max_clock_skew_ms: i64,
+    pub require_claims_json: String,
+    pub updated_at_ms: i64,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct VaultLockStatusReq {
     pub vault_path: String,
 }
@@ -897,6 +956,18 @@ pub fn vault_open_rpc(req: VaultOpenReq) -> RpcResponse<VaultOpenRes> {
     }
 }
 
+fn map_trust_provider(provider: kc_core::trust_identity::IdentityProviderRecord) -> TrustProviderRes {
+    TrustProviderRes {
+        provider_id: provider.provider_id,
+        issuer: provider.issuer,
+        audience: provider.audience,
+        jwks_url: provider.jwks_url,
+        enabled: provider.enabled,
+        created_at_ms: provider.created_at_ms,
+        updated_at_ms: provider.updated_at_ms,
+    }
+}
+
 pub fn trust_identity_start_rpc(req: TrustIdentityStartReq) -> RpcResponse<TrustIdentityStartRes> {
     match rpc_service::trust_identity_start_service(
         std::path::Path::new(&req.vault_path),
@@ -982,6 +1053,58 @@ pub fn trust_device_list_rpc(req: TrustDeviceListReq) -> RpcResponse<TrustDevice
                     created_at_ms: d.created_at_ms,
                 })
                 .collect(),
+        }),
+        Err(error) => RpcResponse::err(error),
+    }
+}
+
+pub fn trust_provider_add_rpc(req: TrustProviderAddReq) -> RpcResponse<TrustProviderRes> {
+    match rpc_service::trust_provider_add_service(
+        std::path::Path::new(&req.vault_path),
+        &req.provider_id,
+        &req.issuer,
+        &req.aud,
+        &req.jwks,
+        req.now_ms,
+    ) {
+        Ok(provider) => RpcResponse::ok(map_trust_provider(provider)),
+        Err(error) => RpcResponse::err(error),
+    }
+}
+
+pub fn trust_provider_disable_rpc(req: TrustProviderDisableReq) -> RpcResponse<TrustProviderRes> {
+    match rpc_service::trust_provider_disable_service(
+        std::path::Path::new(&req.vault_path),
+        &req.provider_id,
+        req.now_ms,
+    ) {
+        Ok(provider) => RpcResponse::ok(map_trust_provider(provider)),
+        Err(error) => RpcResponse::err(error),
+    }
+}
+
+pub fn trust_provider_list_rpc(req: TrustProviderListReq) -> RpcResponse<TrustProviderListRes> {
+    match rpc_service::trust_provider_list_service(std::path::Path::new(&req.vault_path)) {
+        Ok(providers) => RpcResponse::ok(TrustProviderListRes {
+            providers: providers.into_iter().map(map_trust_provider).collect(),
+        }),
+        Err(error) => RpcResponse::err(error),
+    }
+}
+
+pub fn trust_policy_set_rpc(req: TrustPolicySetReq) -> RpcResponse<TrustPolicySetRes> {
+    match rpc_service::trust_provider_policy_set_service(
+        std::path::Path::new(&req.vault_path),
+        &req.provider_id,
+        req.max_clock_skew_ms,
+        &req.require_claims_json,
+        req.now_ms,
+    ) {
+        Ok(policy) => RpcResponse::ok(TrustPolicySetRes {
+            provider_id: policy.provider_id,
+            max_clock_skew_ms: policy.max_clock_skew_ms,
+            require_claims_json: policy.require_claims_json,
+            updated_at_ms: policy.updated_at_ms,
         }),
         Err(error) => RpcResponse::err(error),
     }
