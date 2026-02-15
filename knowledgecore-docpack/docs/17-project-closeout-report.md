@@ -50,3 +50,31 @@ KnowledgeCore launch closeout completed with a controlled pilot release (`v0.1.0
 ## Closeout Status
 - Project status: `Closed for pilot launch track`
 - GA completion status: `Open follow-up (credential-dependent)`
+
+## Final Consolidation Evidence (Post-C6)
+Command source references:
+- `/Users/d/Projects/knowledgecore/knowledgecore-docpack/AGENTS.md`
+- `/Users/d/Projects/knowledgecore/knowledgecore-docpack/docs/04-post-dk-ops-and-followup-policy.md`
+- `/Users/d/Projects/knowledgecore/knowledgecore-docpack/CHECKLIST_VERIFICATION.md`
+
+Gate reruns on `master`:
+| Command | Start (UTC) | End (UTC) | Result |
+|---|---|---|---|
+| `cargo test -p kc_core -p kc_extract -p kc_index -p kc_ask -p kc_cli` | `2026-02-15T07:23:47Z` | `2026-02-15T07:24:04Z` | PASS |
+| `cargo test -p kc_core -- schema_` | `2026-02-15T07:24:08Z` | `2026-02-15T07:24:10Z` | PASS |
+| `cargo test -p kc_cli -- schema_` | `2026-02-15T07:24:16Z` | `2026-02-15T07:24:27Z` | PASS |
+| `cargo test -p apps_desktop_tauri -- rpc_` | `2026-02-15T07:24:16Z` | `2026-02-15T07:24:32Z` | PASS |
+| `cargo test -p apps_desktop_tauri -- rpc_schema` | `2026-02-15T07:24:16Z` | `2026-02-15T07:24:23Z` | PASS |
+| `pnpm lint && pnpm test && pnpm tauri build` | `2026-02-15T07:24:35Z` | `2026-02-15T07:25:09Z` | PASS |
+
+Bench closure rerun:
+| Run | Command | Start (UTC) | End (UTC) | elapsed_ms | baseline_ms | checksum | Result |
+|---|---|---|---|---:|---:|---:|---|
+| 1 | `cargo run -p kc_cli -- bench run --corpus v1` | `2026-02-15T07:25:18Z` | `2026-02-15T07:25:19Z` | `13` | `10` | `7311227353339408228` | PASS |
+| 2 | `cargo run -p kc_cli -- bench run --corpus v1` | `2026-02-15T07:25:18Z` | `2026-02-15T07:25:19Z` | `13` | `10` | `7311227353339408228` | PASS |
+
+Git hygiene verification:
+- `git status --short --branch` => `## master`
+- `git branch --list 'codex/*'` => no output
+- `git branch --no-merged master` => no output
+- `git branch --list` => `* master`

@@ -147,6 +147,11 @@ Track baseline, milestone progression, gate evidence, and risk/follow-up closure
 | C5 | `codex/closeout-c5-ga-release-execution` | ff-only | Complete | pilot publication record with tag `v0.1.0-pilot.1` (`9c295e6`) |
 | C6 | `codex/closeout-c6-hypercare-and-archive` | ff-only | Complete | hypercare log and pilot closeout report packaging (this milestone) |
 
+## Final Consolidation
+| Milestone | Branch | Merge Mode | Status | Notes |
+|---|---|---|---|---|
+| CF | `codex/closeout-final-consolidation` | ff-only | Complete | reran full gates + bench x2 on `master`; verified branch hygiene closure |
+
 ## AF–AJ Milestone Ledger (Completed)
 | Milestone | Branch | Merge Mode | Status | Notes |
 |---|---|---|---|---|
