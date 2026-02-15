@@ -200,13 +200,13 @@ fn read_state(conn: &Connection, key: &str) -> AppResult<Option<String>> {
             serde_json::json!({ "error": e.to_string(), "key": key }),
         )
     })?;
-    Ok(value.map(|row| row.get(0)).transpose().map_err(|e| {
+    value.map(|row| row.get(0)).transpose().map_err(|e| {
         sync_error(
             "KC_SYNC_STATE_FAILED",
             "failed decoding sync state row",
             serde_json::json!({ "error": e.to_string(), "key": key }),
         )
-    })?)
+    })
 }
 
 fn write_state(conn: &Connection, key: &str, value: &str, now_ms: i64) -> AppResult<()> {

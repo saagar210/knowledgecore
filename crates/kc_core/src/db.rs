@@ -3,6 +3,7 @@ use rusqlite::Connection;
 use serde::Deserialize;
 use std::collections::HashMap;
 use std::fs;
+use std::io::ErrorKind;
 use std::path::{Path, PathBuf};
 use std::sync::{Mutex, OnceLock};
 
@@ -145,6 +146,63 @@ fn verify_db_passphrase(db_path: &Path, passphrase: &str) -> AppResult<()> {
     validate_key_on_connection(&conn, passphrase)
 }
 
+fn remove_file_if_exists(path: &Path, phase: &str) -> AppResult<()> {
+    match fs::remove_file(path) {
+        Ok(()) => Ok(()),
+        Err(e) if e.kind() == ErrorKind::NotFound => Ok(()),
+        Err(e) => Err(AppError::new(
+            "KC_DB_ENCRYPTION_MIGRATION_FAILED",
+            "db",
+            "failed clearing migration artifact",
+            false,
+            serde_json::json!({
+                "phase": phase,
+                "path": path,
+                "error": e.to_string()
+            }),
+        )),
+    }
+}
+
+fn rollback_migration_files(
+    db_path: &Path,
+    tmp_path: &Path,
+    bak_path: &Path,
+) -> Result<(), Vec<serde_json::Value>> {
+    let mut rollback_errors = Vec::new();
+
+    if let Err(e) = remove_file_if_exists(db_path, "rollback_remove_promoted_db") {
+        rollback_errors.push(serde_json::json!({
+            "operation": "remove_promoted_db",
+            "path": db_path,
+            "error": e.details.get("error").cloned().unwrap_or_else(|| serde_json::json!(e.message))
+        }));
+    }
+
+    if let Err(e) = fs::rename(bak_path, db_path) {
+        rollback_errors.push(serde_json::json!({
+            "operation": "restore_backup",
+            "from": bak_path,
+            "to": db_path,
+            "error": e.to_string()
+        }));
+    }
+
+    if let Err(e) = remove_file_if_exists(tmp_path, "rollback_remove_tmp") {
+        rollback_errors.push(serde_json::json!({
+            "operation": "remove_tmp",
+            "path": tmp_path,
+            "error": e.details.get("error").cloned().unwrap_or_else(|| serde_json::json!(e.message))
+        }));
+    }
+
+    if rollback_errors.is_empty() {
+        Ok(())
+    } else {
+        Err(rollback_errors)
+    }
+}
+
 pub fn db_unlock(vault_path: &Path, db_path: &Path, passphrase: &str) -> AppResult<()> {
     let key = normalize_session_key(vault_path);
     verify_db_passphrase(db_path, passphrase)?;
@@ -227,8 +285,8 @@ pub fn migrate_db_to_sqlcipher(db_path: &Path, passphrase: &str) -> AppResult<Db
 
     let tmp_path = db_path.with_extension("sqlcipher.tmp");
     let bak_path = db_path.with_extension("pre-sqlcipher.bak");
-    let _ = fs::remove_file(&tmp_path);
-    let _ = fs::remove_file(&bak_path);
+    remove_file_if_exists(&tmp_path, "preflight_remove_tmp")?;
+    remove_file_if_exists(&bak_path, "preflight_remove_backup")?;
 
     let pass = sql_string_literal(passphrase);
     let tmp_lit = attach_path_literal(&tmp_path);
@@ -278,13 +336,25 @@ pub fn migrate_db_to_sqlcipher(db_path: &Path, passphrase: &str) -> AppResult<Db
 
     match finalize {
         Ok(()) => {
-            let _ = fs::remove_file(&bak_path);
+            remove_file_if_exists(&bak_path, "finalize_remove_plaintext_backup")?;
             Ok(DbMigrationOutcome::Migrated)
         }
         Err(err) => {
-            let _ = fs::remove_file(db_path);
-            let _ = fs::rename(&bak_path, db_path);
-            let _ = fs::remove_file(&tmp_path);
+            if let Err(rollback_errors) = rollback_migration_files(db_path, &tmp_path, &bak_path) {
+                return Err(AppError::new(
+                    "KC_DB_ENCRYPTION_MIGRATION_FAILED",
+                    "db",
+                    "failed finalizing db migration and rollback",
+                    false,
+                    serde_json::json!({
+                        "finalize_error": err,
+                        "rollback_errors": rollback_errors,
+                        "db_path": db_path,
+                        "tmp_path": tmp_path,
+                        "backup_path": bak_path
+                    }),
+                ));
+            }
             Err(err)
         }
     }
@@ -890,4 +960,39 @@ pub fn schema_version(conn: &Connection) -> AppResult<i64> {
                 serde_json::json!({ "error": e.to_string() }),
             )
         })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{remove_file_if_exists, rollback_migration_files};
+
+    #[test]
+    fn remove_file_if_exists_reports_unexpected_errors() {
+        let root = tempfile::tempdir().expect("tempdir");
+        let path = root.path().join("not-a-file");
+        std::fs::create_dir_all(&path).expect("create directory");
+
+        let err = remove_file_if_exists(&path, "test-phase").expect_err("expected remove failure");
+        assert_eq!(err.code, "KC_DB_ENCRYPTION_MIGRATION_FAILED");
+        assert_eq!(err.details["phase"], "test-phase");
+    }
+
+    #[test]
+    fn rollback_migration_files_reports_restore_failure() {
+        let root = tempfile::tempdir().expect("tempdir");
+        let db_path = root.path().join("knowledge.sqlite");
+        let tmp_path = db_path.with_extension("sqlcipher.tmp");
+        let bak_path = db_path.with_extension("pre-sqlcipher.bak");
+        std::fs::write(&db_path, b"db").expect("write db");
+        std::fs::write(&tmp_path, b"tmp").expect("write tmp");
+
+        let rollback_errors = rollback_migration_files(&db_path, &tmp_path, &bak_path)
+            .expect_err("expected rollback to report restore failure");
+        assert!(
+            rollback_errors
+                .iter()
+                .any(|entry| entry.get("operation") == Some(&serde_json::json!("restore_backup"))),
+            "rollback errors should include restore_backup entry"
+        );
+    }
 }

@@ -1,7 +1,9 @@
 use kc_core::canon_json::to_canonical_bytes;
 use kc_core::db::open_db;
-use kc_core::ingest::ingest_bytes;
-use kc_core::lineage::{lineage_lock_acquire, lineage_overlay_add, lineage_overlay_remove};
+use kc_core::ingest::{ingest_bytes, IngestBytesReq};
+use kc_core::lineage::{
+    lineage_lock_acquire, lineage_overlay_add, lineage_overlay_remove, LineageOverlayAddReq,
+};
 use kc_core::lineage_governance::{
     ensure_lineage_permission, lineage_lock_acquire_scope, lineage_lock_release_scope,
     lineage_lock_scope_status, lineage_permission_decision, lineage_role_grant, lineage_role_list,
@@ -119,12 +121,14 @@ fn lineage_overlay_mutation_requires_rbac_permission() {
     let ingested = ingest_bytes(
         &conn,
         &store,
-        b"lineage governance",
-        "text/plain",
-        "notes",
-        1,
-        None,
-        1,
+        IngestBytesReq {
+            bytes: b"lineage governance",
+            mime: "text/plain",
+            source_kind: "notes",
+            effective_ts_ms: 1,
+            source_path: None,
+            now_ms: 1,
+        },
     )
     .expect("ingest");
     let doc_id = ingested.doc_id.0;
@@ -132,14 +136,16 @@ fn lineage_overlay_mutation_requires_rbac_permission() {
 
     let denied = lineage_overlay_add(
         &conn,
-        &doc_id,
-        &format!("doc:{doc_id}"),
-        "note:overlay",
-        "supports",
-        "rbac",
-        &lock.token,
-        11,
-        "owner-a",
+        LineageOverlayAddReq {
+            doc_id: &doc_id,
+            from_node_id: &format!("doc:{doc_id}"),
+            to_node_id: "note:overlay",
+            relation: "supports",
+            evidence: "rbac",
+            lock_token: &lock.token,
+            created_at_ms: 11,
+            created_by: "owner-a",
+        },
     )
     .expect_err("overlay add should require permission");
     assert_eq!(denied.code, "KC_LINEAGE_PERMISSION_DENIED");
@@ -158,14 +164,16 @@ fn lineage_overlay_mutation_requires_rbac_permission() {
         .expect("bind allow policy");
     let added = lineage_overlay_add(
         &conn,
-        &doc_id,
-        &format!("doc:{doc_id}"),
-        "note:overlay",
-        "supports",
-        "rbac",
-        &lock.token,
-        13,
-        "owner-a",
+        LineageOverlayAddReq {
+            doc_id: &doc_id,
+            from_node_id: &format!("doc:{doc_id}"),
+            to_node_id: "note:overlay",
+            relation: "supports",
+            evidence: "rbac",
+            lock_token: &lock.token,
+            created_at_ms: 13,
+            created_by: "owner-a",
+        },
     )
     .expect("overlay add with permission");
     lineage_overlay_remove(&conn, &added.overlay_id, &lock.token, 14)

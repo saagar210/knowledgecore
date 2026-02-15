@@ -1,8 +1,8 @@
 use kc_core::db::open_db;
-use kc_core::ingest::ingest_bytes;
+use kc_core::ingest::{ingest_bytes, IngestBytesReq};
 use kc_core::lineage::{
     lineage_lock_acquire, lineage_lock_release, lineage_lock_status, lineage_overlay_add,
-    lineage_overlay_list,
+    lineage_overlay_list, LineageOverlayAddReq,
 };
 use kc_core::lineage_governance::lineage_role_grant;
 use kc_core::lineage_policy::{lineage_policy_add, lineage_policy_bind};
@@ -14,12 +14,14 @@ fn seed_doc(conn: &rusqlite::Connection, vault_root: &std::path::Path) -> String
     let ingested = ingest_bytes(
         conn,
         &store,
-        b"lineage lock seed",
-        "text/plain",
-        "notes",
-        1,
-        None,
-        1,
+        IngestBytesReq {
+            bytes: b"lineage lock seed",
+            mime: "text/plain",
+            source_kind: "notes",
+            effective_ts_ms: 1,
+            source_path: None,
+            now_ms: 1,
+        },
     )
     .expect("ingest");
     ingested.doc_id.0
@@ -92,14 +94,16 @@ fn lineage_overlay_mutation_requires_valid_lock_token() {
 
     let err = lineage_overlay_add(
         &conn,
-        &doc_id,
-        &doc_node,
-        chunk_node,
-        "supports",
-        "manual",
-        "blake3:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
-        100,
-        "test",
+        LineageOverlayAddReq {
+            doc_id: &doc_id,
+            from_node_id: &doc_node,
+            to_node_id: chunk_node,
+            relation: "supports",
+            evidence: "manual",
+            lock_token: "blake3:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            created_at_ms: 100,
+            created_by: "test",
+        },
     )
     .expect_err("missing valid lock should fail");
     assert_eq!(err.code, "KC_LINEAGE_LOCK_INVALID");
@@ -109,14 +113,16 @@ fn lineage_overlay_mutation_requires_valid_lock_token() {
     grant_overlay_policy(&conn, "tester", 100);
     let _added = lineage_overlay_add(
         &conn,
-        &doc_id,
-        &doc_node,
-        chunk_node,
-        "supports",
-        "manual",
-        &lock.token,
-        101,
-        "tester",
+        LineageOverlayAddReq {
+            doc_id: &doc_id,
+            from_node_id: &doc_node,
+            to_node_id: chunk_node,
+            relation: "supports",
+            evidence: "manual",
+            lock_token: &lock.token,
+            created_at_ms: 101,
+            created_by: "tester",
+        },
     )
     .expect("overlay add with lock");
     let listed = lineage_overlay_list(&conn, &doc_id).expect("list");
@@ -136,14 +142,16 @@ fn lineage_overlay_mutation_rejects_expired_lock() {
 
     let err = lineage_overlay_add(
         &conn,
-        &doc_id,
-        &doc_node,
-        "chunk:expired",
-        "supports",
-        "manual",
-        &lock.token,
-        100 + 15 * 60 * 1000 + 1,
-        "tester",
+        LineageOverlayAddReq {
+            doc_id: &doc_id,
+            from_node_id: &doc_node,
+            to_node_id: "chunk:expired",
+            relation: "supports",
+            evidence: "manual",
+            lock_token: &lock.token,
+            created_at_ms: 100 + 15 * 60 * 1000 + 1,
+            created_by: "tester",
+        },
     )
     .expect_err("expired lock should fail");
     assert_eq!(err.code, "KC_LINEAGE_LOCK_EXPIRED");

@@ -1,10 +1,10 @@
 use kc_core::db::open_db;
 use kc_core::events::append_event;
 use kc_core::hashing::blake3_hex_prefixed;
-use kc_core::ingest::ingest_bytes;
+use kc_core::ingest::{ingest_bytes, IngestBytesReq};
 use kc_core::lineage::{
     lineage_lock_acquire, lineage_overlay_add, lineage_overlay_list, lineage_overlay_remove,
-    query_lineage, query_lineage_v2,
+    query_lineage, query_lineage_v2, LineageOverlayAddReq,
 };
 use kc_core::lineage_governance::lineage_role_grant;
 use kc_core::lineage_policy::{lineage_policy_add, lineage_policy_bind};
@@ -27,12 +27,14 @@ fn lineage_query_is_deterministic_and_sorted() {
     let ingested = ingest_bytes(
         &conn,
         &store,
-        b"hello lineage",
-        "text/plain",
-        "notes",
-        1,
-        Some("/tmp/z-source.txt"),
-        10,
+        IngestBytesReq {
+            bytes: b"hello lineage",
+            mime: "text/plain",
+            source_kind: "notes",
+            effective_ts_ms: 1,
+            source_path: Some("/tmp/z-source.txt"),
+            now_ms: 10,
+        },
     )
     .expect("ingest");
 
@@ -176,12 +178,14 @@ fn lineage_overlay_add_list_remove_and_query_v2_are_deterministic() {
     let ingested = ingest_bytes(
         &conn,
         &store,
-        b"overlay lineage",
-        "text/plain",
-        "notes",
-        1,
-        None,
-        10,
+        IngestBytesReq {
+            bytes: b"overlay lineage",
+            mime: "text/plain",
+            source_kind: "notes",
+            effective_ts_ms: 1,
+            source_path: None,
+            now_ms: 10,
+        },
     )
     .expect("ingest");
 
@@ -209,14 +213,16 @@ fn lineage_overlay_add_list_remove_and_query_v2_are_deterministic() {
         lineage_lock_acquire(&conn, &ingested.doc_id.0, "lineage-test", 20).expect("acquire lock");
     let added = lineage_overlay_add(
         &conn,
-        &ingested.doc_id.0,
-        &doc_node,
-        chunk_node,
-        "related_to",
-        "manual-link",
-        &lock.token,
-        21,
-        "lineage-test",
+        LineageOverlayAddReq {
+            doc_id: &ingested.doc_id.0,
+            from_node_id: &doc_node,
+            to_node_id: chunk_node,
+            relation: "related_to",
+            evidence: "manual-link",
+            lock_token: &lock.token,
+            created_at_ms: 21,
+            created_by: "lineage-test",
+        },
     )
     .expect("add overlay");
     assert_eq!(added.created_by, "lineage-test");

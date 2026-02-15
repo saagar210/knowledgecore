@@ -24,6 +24,10 @@ if (!fs.existsSync(policyPath)) {
 
 const policy = JSON.parse(fs.readFileSync(policyPath, "utf8"));
 const allow = new Map((policy.allow || []).map((entry) => [entry.id, entry]));
+const maxReviewWindowDays = Number(policy?.metadata?.max_review_window_days ?? 45);
+if (!Number.isFinite(maxReviewWindowDays) || maxReviewWindowDays < 1) {
+  fail("metadata.max_review_window_days must be a positive integer");
+}
 
 let auditJson;
 try {
@@ -54,6 +58,11 @@ const advisoryWarnings = [
 ];
 
 const today = isoDate(new Date());
+const maxReviewDate = (() => {
+  const dt = new Date(`${today}T00:00:00Z`);
+  dt.setUTCDate(dt.getUTCDate() + Math.trunc(maxReviewWindowDays));
+  return isoDate(dt);
+})();
 const failures = [];
 
 for (const warning of advisoryWarnings) {
@@ -71,6 +80,11 @@ for (const warning of advisoryWarnings) {
   if (!allowed.review_by) {
     failures.push(`policy entry ${id} missing review_by date`);
     continue;
+  }
+  if (allowed.review_by > maxReviewDate) {
+    failures.push(
+      `policy entry ${id} review_by ${allowed.review_by} exceeds ${maxReviewWindowDays} day window (${maxReviewDate})`
+    );
   }
   if (allowed.review_by < today) {
     failures.push(`policy entry ${id} expired on ${allowed.review_by}`);
@@ -93,5 +107,5 @@ if (failures.length > 0) {
 }
 
 console.log(
-  `audit-rust: PASS (vulnerabilities=0, advisory_warnings=${advisoryWarnings.length}, date=${today})`
+  `audit-rust: PASS (vulnerabilities=0, advisory_warnings=${advisoryWarnings.length}, date=${today}, max_review_window_days=${maxReviewWindowDays})`
 );

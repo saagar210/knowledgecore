@@ -1,5 +1,5 @@
 use kc_core::db::open_db;
-use kc_core::ingest::ingest_bytes;
+use kc_core::ingest::{ingest_bytes, IngestBytesReq};
 use kc_core::object_store::ObjectStore;
 
 #[test]
@@ -12,24 +12,28 @@ fn ingest_is_idempotent_and_persists_doc_source() {
     let first = ingest_bytes(
         &conn,
         &store,
-        input,
-        "text/plain",
-        "notes",
-        100,
-        Some("/tmp/a.txt"),
-        200,
+        IngestBytesReq {
+            bytes: input,
+            mime: "text/plain",
+            source_kind: "notes",
+            effective_ts_ms: 100,
+            source_path: Some("/tmp/a.txt"),
+            now_ms: 200,
+        },
     )
     .expect("first ingest");
 
     let second = ingest_bytes(
         &conn,
         &store,
-        input,
-        "text/plain",
-        "notes",
-        100,
-        Some("/tmp/a.txt"),
-        201,
+        IngestBytesReq {
+            bytes: input,
+            mime: "text/plain",
+            source_kind: "notes",
+            effective_ts_ms: 100,
+            source_path: Some("/tmp/a.txt"),
+            now_ms: 201,
+        },
     )
     .expect("second ingest");
 

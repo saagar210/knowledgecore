@@ -36,6 +36,9 @@ jobs:
       - name: Dependency Watch (Advisory)
         run: node ./scripts/dependency-watch.mjs --no-fail
 
+      - name: Dependency Watch (Strict)
+        run: node ./scripts/dependency-watch.mjs
+
   dependency-sweep:
     name: Weekly Dependency Sweep
     if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'

@@ -1957,14 +1957,16 @@ pub fn lineage_query_v2_rpc(req: LineageQueryV2Req) -> RpcResponse<LineageQueryV
 pub fn lineage_overlay_add_rpc(req: LineageOverlayAddReq) -> RpcResponse<LineageOverlayAddRes> {
     match rpc_service::lineage_overlay_add_service(
         std::path::Path::new(&req.vault_path),
-        &req.doc_id,
-        &req.from_node_id,
-        &req.to_node_id,
-        &req.relation,
-        &req.evidence,
-        &req.lock_token,
-        req.created_at_ms,
-        req.created_by.as_deref(),
+        rpc_service::LineageOverlayAddServiceReq {
+            doc_id: &req.doc_id,
+            from_node_id: &req.from_node_id,
+            to_node_id: &req.to_node_id,
+            relation: &req.relation,
+            evidence: &req.evidence,
+            lock_token: &req.lock_token,
+            created_at_ms: req.created_at_ms,
+            created_by: req.created_by.as_deref(),
+        },
     ) {
         Ok(overlay) => RpcResponse::ok(LineageOverlayAddRes {
             overlay: map_lineage_overlay_entry(overlay),

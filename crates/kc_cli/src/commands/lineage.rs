@@ -2,7 +2,7 @@ use kc_core::app_error::AppResult;
 use kc_core::db::open_db;
 use kc_core::lineage::{
     lineage_lock_acquire, lineage_lock_release, lineage_lock_status, lineage_overlay_add,
-    lineage_overlay_list, lineage_overlay_remove,
+    lineage_overlay_list, lineage_overlay_remove, LineageOverlayAddReq,
 };
 use kc_core::lineage_governance::{
     lineage_lock_acquire_scope, lineage_role_grant, lineage_role_list, lineage_role_revoke,
@@ -11,29 +11,32 @@ use kc_core::lineage_policy::{lineage_policy_add, lineage_policy_bind, lineage_p
 use kc_core::vault::vault_open;
 use std::path::Path;
 
-pub fn run_overlay_add(
-    vault_path: &str,
-    doc_id: &str,
-    from_node_id: &str,
-    to_node_id: &str,
-    relation: &str,
-    evidence: &str,
-    lock_token: &str,
-    created_by: &str,
-    now_ms: i64,
-) -> AppResult<()> {
+pub struct RunOverlayAddReq<'a> {
+    pub doc_id: &'a str,
+    pub from_node_id: &'a str,
+    pub to_node_id: &'a str,
+    pub relation: &'a str,
+    pub evidence: &'a str,
+    pub lock_token: &'a str,
+    pub created_by: &'a str,
+    pub now_ms: i64,
+}
+
+pub fn run_overlay_add(vault_path: &str, req: RunOverlayAddReq<'_>) -> AppResult<()> {
     let vault = vault_open(Path::new(vault_path))?;
     let conn = open_db(&Path::new(vault_path).join(vault.db.relative_path))?;
     let entry = lineage_overlay_add(
         &conn,
-        doc_id,
-        from_node_id,
-        to_node_id,
-        relation,
-        evidence,
-        lock_token,
-        now_ms,
-        created_by,
+        LineageOverlayAddReq {
+            doc_id: req.doc_id,
+            from_node_id: req.from_node_id,
+            to_node_id: req.to_node_id,
+            relation: req.relation,
+            evidence: req.evidence,
+            lock_token: req.lock_token,
+            created_at_ms: req.now_ms,
+            created_by: req.created_by,
+        },
     )?;
     println!(
         "{}",
@@ -265,10 +268,10 @@ mod tests {
     use super::{
         run_lock_acquire, run_lock_acquire_scope, run_lock_release, run_lock_status,
         run_overlay_add, run_overlay_list, run_overlay_remove, run_policy_add, run_policy_bind,
-        run_policy_list, run_role_grant, run_role_list, run_role_revoke,
+        run_policy_list, run_role_grant, run_role_list, run_role_revoke, RunOverlayAddReq,
     };
     use kc_core::db::open_db;
-    use kc_core::ingest::ingest_bytes;
+    use kc_core::ingest::{ingest_bytes, IngestBytesReq};
     use kc_core::lineage::{lineage_lock_acquire, lineage_overlay_list};
     use kc_core::lineage_governance::{
         lineage_lock_scope_status, lineage_role_grant, lineage_role_list,
@@ -287,12 +290,14 @@ mod tests {
         let ingested = ingest_bytes(
             &conn,
             &store,
-            b"cli lineage overlay",
-            "text/plain",
-            "notes",
-            1,
-            None,
-            1,
+            IngestBytesReq {
+                bytes: b"cli lineage overlay",
+                mime: "text/plain",
+                source_kind: "notes",
+                effective_ts_ms: 1,
+                source_path: None,
+                now_ms: 1,
+            },
         )
         .expect("ingest");
 
@@ -317,14 +322,16 @@ mod tests {
 
         run_overlay_add(
             root.to_string_lossy().as_ref(),
-            &doc_id,
-            &doc_node,
-            chunk_node,
-            "related_to",
-            "cli",
-            &lock_token,
-            "cli-test",
-            3,
+            RunOverlayAddReq {
+                doc_id: &doc_id,
+                from_node_id: &doc_node,
+                to_node_id: chunk_node,
+                relation: "related_to",
+                evidence: "cli",
+                lock_token: &lock_token,
+                created_by: "cli-test",
+                now_ms: 3,
+            },
         )
         .expect("overlay add");
         run_overlay_list(root.to_string_lossy().as_ref(), &doc_id).expect("overlay list");

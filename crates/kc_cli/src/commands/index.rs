@@ -193,7 +193,7 @@ mod tests {
     use kc_core::canonical::persist_canonical_text;
     use kc_core::db::open_db;
     use kc_core::hashing::blake3_hex_prefixed;
-    use kc_core::ingest::ingest_bytes;
+    use kc_core::ingest::{ingest_bytes, IngestBytesReq};
     use kc_core::object_store::ObjectStore;
     use kc_core::services::CanonicalTextArtifact;
     use kc_core::types::{CanonicalHash, ObjectHash};
@@ -209,12 +209,14 @@ mod tests {
         let ingested = ingest_bytes(
             &conn,
             &store,
-            b"doc bytes",
-            "text/plain",
-            "notes",
-            1,
-            None,
-            1,
+            IngestBytesReq {
+                bytes: b"doc bytes",
+                mime: "text/plain",
+                source_kind: "notes",
+                effective_ts_ms: 1,
+                source_path: None,
+                now_ms: 1,
+            },
         )
         .expect("ingest");
         let canonical = b"hello deterministic index".to_vec();

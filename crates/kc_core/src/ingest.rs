@@ -13,16 +13,27 @@ pub struct IngestedDoc {
     pub effective_ts_ms: i64,
 }
 
+pub struct IngestBytesReq<'a> {
+    pub bytes: &'a [u8],
+    pub mime: &'a str,
+    pub source_kind: &'a str,
+    pub effective_ts_ms: i64,
+    pub source_path: Option<&'a str>,
+    pub now_ms: i64,
+}
+
 pub fn ingest_bytes(
     conn: &Connection,
     object_store: &crate::object_store::ObjectStore,
-    bytes: &[u8],
-    mime: &str,
-    source_kind: &str,
-    effective_ts_ms: i64,
-    source_path: Option<&str>,
-    now_ms: i64,
+    req: IngestBytesReq<'_>,
 ) -> AppResult<IngestedDoc> {
+    let bytes = req.bytes;
+    let mime = req.mime;
+    let source_kind = req.source_kind;
+    let effective_ts_ms = req.effective_ts_ms;
+    let source_path = req.source_path;
+    let now_ms = req.now_ms;
+
     let ingest_event = append_event(
         conn,
         now_ms,

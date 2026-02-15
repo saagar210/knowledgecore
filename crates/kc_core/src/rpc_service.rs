@@ -5,7 +5,7 @@ use crate::db::{
 };
 use crate::events::append_event;
 use crate::hashing::blake3_hex_prefixed;
-use crate::ingest::ingest_bytes;
+use crate::ingest::{ingest_bytes, IngestBytesReq};
 use crate::lineage_governance::{
     lineage_lock_acquire_scope, lineage_role_grant, lineage_role_list, lineage_role_revoke,
     LineageRoleBindingV2, LineageScopeLockLeaseV2,
@@ -761,12 +761,14 @@ pub fn ingest_scan_folder_service(
         ingest_bytes(
             &conn,
             &store,
-            &bytes,
-            &mime_for_path(&path),
-            source_kind,
-            now_ms,
-            Some(&path.to_string_lossy()),
-            now_ms,
+            IngestBytesReq {
+                bytes: &bytes,
+                mime: &mime_for_path(&path),
+                source_kind,
+                effective_ts_ms: now_ms,
+                source_path: Some(&path.to_string_lossy()),
+                now_ms,
+            },
         )?;
         ingested += 1;
     }
@@ -797,12 +799,14 @@ pub fn ingest_inbox_start_service(
     let out = ingest_bytes(
         &conn,
         &store,
-        &bytes,
-        &mime_for_path(file_path),
-        source_kind,
-        now_ms,
-        Some(&file_path.to_string_lossy()),
-        now_ms,
+        IngestBytesReq {
+            bytes: &bytes,
+            mime: &mime_for_path(file_path),
+            source_kind,
+            effective_ts_ms: now_ms,
+            source_path: Some(&file_path.to_string_lossy()),
+            now_ms,
+        },
     )?;
 
     let job_id = format!(
@@ -1202,29 +1206,35 @@ pub fn lineage_query_v2_service(
     crate::lineage::query_lineage_v2(&conn, seed_doc_id, depth, now_ms)
 }
 
+pub struct LineageOverlayAddServiceReq<'a> {
+    pub doc_id: &'a str,
+    pub from_node_id: &'a str,
+    pub to_node_id: &'a str,
+    pub relation: &'a str,
+    pub evidence: &'a str,
+    pub lock_token: &'a str,
+    pub created_at_ms: i64,
+    pub created_by: Option<&'a str>,
+}
+
 pub fn lineage_overlay_add_service(
     vault_path: &Path,
-    doc_id: &str,
-    from_node_id: &str,
-    to_node_id: &str,
-    relation: &str,
-    evidence: &str,
-    lock_token: &str,
-    created_at_ms: i64,
-    created_by: Option<&str>,
+    req: LineageOverlayAddServiceReq<'_>,
 ) -> AppResult<crate::lineage::LineageOverlayEntryV1> {
     let vault = vault_open(vault_path)?;
     let conn = open_db(&vault_path.join(vault.db.relative_path))?;
     crate::lineage::lineage_overlay_add(
         &conn,
-        doc_id,
-        from_node_id,
-        to_node_id,
-        relation,
-        evidence,
-        lock_token,
-        created_at_ms,
-        created_by.unwrap_or("overlay"),
+        crate::lineage::LineageOverlayAddReq {
+            doc_id: req.doc_id,
+            from_node_id: req.from_node_id,
+            to_node_id: req.to_node_id,
+            relation: req.relation,
+            evidence: req.evidence,
+            lock_token: req.lock_token,
+            created_at_ms: req.created_at_ms,
+            created_by: req.created_by.unwrap_or("overlay"),
+        },
     )
 }
 

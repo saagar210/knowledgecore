@@ -1,5 +1,6 @@
-use criterion::{black_box, criterion_group, criterion_main, Criterion};
+use criterion::{criterion_group, criterion_main, Criterion};
 use kc_core::hashing::blake3_hex_prefixed;
+use std::hint::black_box;
 
 fn hash_bench(c: &mut Criterion) {
     c.bench_function("core_hash_1kb", |b| {

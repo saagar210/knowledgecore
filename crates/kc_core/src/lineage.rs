@@ -801,15 +801,17 @@ fn validate_overlay_fields(
 
 pub fn lineage_overlay_add(
     conn: &Connection,
-    doc_id: &str,
-    from_node_id: &str,
-    to_node_id: &str,
-    relation: &str,
-    evidence: &str,
-    lock_token: &str,
-    created_at_ms: i64,
-    created_by: &str,
+    req: LineageOverlayAddReq<'_>,
 ) -> AppResult<LineageOverlayEntryV1> {
+    let doc_id = req.doc_id;
+    let from_node_id = req.from_node_id;
+    let to_node_id = req.to_node_id;
+    let relation = req.relation;
+    let evidence = req.evidence;
+    let lock_token = req.lock_token;
+    let created_at_ms = req.created_at_ms;
+    let created_by = req.created_by;
+
     validate_overlay_fields(
         doc_id,
         from_node_id,
@@ -876,6 +878,17 @@ pub fn lineage_overlay_add(
             serde_json::json!({ "error": e.to_string() }),
         )),
     }
+}
+
+pub struct LineageOverlayAddReq<'a> {
+    pub doc_id: &'a str,
+    pub from_node_id: &'a str,
+    pub to_node_id: &'a str,
+    pub relation: &'a str,
+    pub evidence: &'a str,
+    pub lock_token: &'a str,
+    pub created_at_ms: i64,
+    pub created_by: &'a str,
 }
 
 pub fn lineage_overlay_remove(

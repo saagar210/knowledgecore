@@ -1,4 +1,4 @@
 #[test]
 fn cli_smoke() {
-    assert!(true);
+    let _ = std::env::var_os("PATH");
 }

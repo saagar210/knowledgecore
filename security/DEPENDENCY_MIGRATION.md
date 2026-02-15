@@ -3,6 +3,7 @@
 ## Current status
 - RustSec vulnerabilities: `0`.
 - RustSec advisory warnings are policy-gated by `security/rustsec-policy.json`.
+- Policy review window is capped by `metadata.max_review_window_days` (enforced by `scripts/audit-rust.mjs`).
 - CI gate: `.github/workflows/security-audit.yml` job `rustsec-policy`.
 - Weekly sweep: same workflow job `dependency-sweep` (`cargo update` + policy check).
 - Upstream release watch: `security/dependency-watch.json` + `scripts/dependency-watch.mjs`.

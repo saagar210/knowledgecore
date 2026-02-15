@@ -1,4 +1,4 @@
 #[test]
 fn ask_smoke() {
-    assert!(true);
+    let _ = kc_ask::RetrievedOnlyAskService::default();
 }

@@ -3,7 +3,7 @@ use kc_core::canonical::persist_canonical_text;
 use kc_core::chunking::{chunk_document, default_chunking_config_v1};
 use kc_core::db::open_db;
 use kc_core::hashing::blake3_hex_prefixed;
-use kc_core::ingest::ingest_bytes;
+use kc_core::ingest::{ingest_bytes, IngestBytesReq};
 use kc_core::locator::{LocatorRange, LocatorV1};
 use kc_core::object_store::ObjectStore;
 use kc_core::services::CanonicalTextArtifact;
@@ -104,12 +104,14 @@ fn ask_runs_retrieved_only_end_to_end() {
     let ingested = ingest_bytes(
         &conn,
         &store,
-        b"raw bytes",
-        "text/plain",
-        "notes",
-        1,
-        None,
-        1,
+        IngestBytesReq {
+            bytes: b"raw bytes",
+            mime: "text/plain",
+            source_kind: "notes",
+            effective_ts_ms: 1,
+            source_path: None,
+            now_ms: 1,
+        },
     )
     .expect("ingest");
 

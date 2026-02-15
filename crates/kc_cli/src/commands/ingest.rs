@@ -1,6 +1,6 @@
 use kc_core::app_error::{AppError, AppResult};
 use kc_core::db::open_db;
-use kc_core::ingest::ingest_bytes;
+use kc_core::ingest::{ingest_bytes, IngestBytesReq};
 use kc_core::object_store::ObjectStore;
 use kc_core::vault::{vault_open, vault_paths};
 use std::fs;
@@ -56,12 +56,14 @@ fn ingest_one(vault_path: &Path, file_path: &Path, source_kind: &str) -> AppResu
     let doc = ingest_bytes(
         &db,
         &store,
-        &bytes,
-        detect_mime(file_path),
-        source_kind,
-        effective_ts_ms(file_path, now),
-        file_path.to_str(),
-        now,
+        IngestBytesReq {
+            bytes: &bytes,
+            mime: detect_mime(file_path),
+            source_kind,
+            effective_ts_ms: effective_ts_ms(file_path, now),
+            source_path: file_path.to_str(),
+            now_ms: now,
+        },
     )?;
 
     println!("ingested {} -> {}", file_path.display(), doc.doc_id.0);
