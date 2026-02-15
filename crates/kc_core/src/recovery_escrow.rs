@@ -3,7 +3,7 @@ use crate::canon_json::to_canonical_bytes;
 use crate::hashing::blake3_hex_prefixed;
 use serde::{Deserialize, Serialize};
 
-pub const ESCROW_PROVIDER_PRIORITY: [&str; 3] = ["aws", "gcp", "azure"];
+pub const ESCROW_PROVIDER_PRIORITY: [&str; 4] = ["aws", "gcp", "azure", "local"];
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct RecoveryEscrowDescriptorV2 {
@@ -51,12 +51,15 @@ pub trait RecoveryEscrowProvider: Send + Sync {
 }
 
 pub fn provider_priority(provider_id: &str) -> i64 {
-    match provider_id {
-        "aws" => 0,
-        "gcp" => 1,
-        "azure" => 2,
-        _ => 9,
-    }
+    ESCROW_PROVIDER_PRIORITY
+        .iter()
+        .position(|candidate| *candidate == provider_id)
+        .map(|idx| idx as i64)
+        .unwrap_or(9)
+}
+
+pub fn supported_provider_ids() -> &'static [&'static str] {
+    &ESCROW_PROVIDER_PRIORITY
 }
 
 pub fn normalize_provider_configs(configs: &mut [RecoveryEscrowProviderConfigV3]) {

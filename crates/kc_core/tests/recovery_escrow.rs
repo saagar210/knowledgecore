@@ -3,6 +3,7 @@ use kc_core::recovery_escrow::{
     canonical_descriptor_hash, normalize_escrow_descriptors, normalize_provider_configs,
     provider_priority, RecoveryEscrowDescriptorV2, RecoveryEscrowProvider,
     RecoveryEscrowProviderConfigV3, RecoveryEscrowReadRequest, RecoveryEscrowWriteRequest,
+    ESCROW_PROVIDER_PRIORITY,
 };
 use kc_core::recovery_escrow_aws::{AwsRecoveryEscrowConfig, AwsRecoveryEscrowProvider};
 use kc_core::recovery_escrow_azure::{AzureRecoveryEscrowConfig, AzureRecoveryEscrowProvider};
@@ -116,15 +117,26 @@ fn recovery_escrow_gcp_and_azure_report_unavailable_without_emulation() {
 
 #[test]
 fn recovery_escrow_provider_priority_and_ordering_are_deterministic() {
+    assert_eq!(
+        ESCROW_PROVIDER_PRIORITY,
+        ["aws", "gcp", "azure", "local"]
+    );
     assert!(provider_priority("aws") < provider_priority("gcp"));
     assert!(provider_priority("gcp") < provider_priority("azure"));
+    assert!(provider_priority("azure") < provider_priority("local"));
 
     let mut providers = vec![
         RecoveryEscrowProviderConfigV3 {
-            provider_id: "azure".to_string(),
+            provider_id: "local".to_string(),
             config_ref: "z".to_string(),
             enabled: true,
             updated_at_ms: 3,
+        },
+        RecoveryEscrowProviderConfigV3 {
+            provider_id: "azure".to_string(),
+            config_ref: "z2".to_string(),
+            enabled: true,
+            updated_at_ms: 4,
         },
         RecoveryEscrowProviderConfigV3 {
             provider_id: "aws".to_string(),
@@ -141,14 +153,20 @@ fn recovery_escrow_provider_priority_and_ordering_are_deterministic() {
     ];
     normalize_provider_configs(&mut providers);
     let provider_ids: Vec<String> = providers.into_iter().map(|p| p.provider_id).collect();
-    assert_eq!(provider_ids, vec!["aws", "gcp", "azure"]);
+    assert_eq!(provider_ids, vec!["aws", "gcp", "azure", "local"]);
 
     let mut descs = vec![
         RecoveryEscrowDescriptorV2 {
-            provider: "azure".to_string(),
+            provider: "local".to_string(),
             provider_ref: "c".to_string(),
             key_id: "k3".to_string(),
             wrapped_at_ms: 3,
+        },
+        RecoveryEscrowDescriptorV2 {
+            provider: "azure".to_string(),
+            provider_ref: "d".to_string(),
+            key_id: "k4".to_string(),
+            wrapped_at_ms: 4,
         },
         RecoveryEscrowDescriptorV2 {
             provider: "aws".to_string(),
@@ -165,5 +183,5 @@ fn recovery_escrow_provider_priority_and_ordering_are_deterministic() {
     ];
     normalize_escrow_descriptors(&mut descs);
     let ordered: Vec<String> = descs.into_iter().map(|d| d.provider).collect();
-    assert_eq!(ordered, vec!["aws", "gcp", "azure"]);
+    assert_eq!(ordered, vec!["aws", "gcp", "azure", "local"]);
 }

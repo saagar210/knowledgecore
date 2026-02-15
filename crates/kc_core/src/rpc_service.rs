@@ -21,7 +21,8 @@ use crate::recovery::{
     write_recovery_manifest, RecoveryManifestV2,
 };
 use crate::recovery_escrow::{
-    RecoveryEscrowProvider, RecoveryEscrowReadRequest, RecoveryEscrowWriteRequest,
+    provider_priority, supported_provider_ids, RecoveryEscrowProvider, RecoveryEscrowReadRequest,
+    RecoveryEscrowWriteRequest,
 };
 use crate::recovery_escrow_aws::{AwsRecoveryEscrowConfig, AwsRecoveryEscrowProvider};
 use crate::recovery_escrow_azure::{AzureRecoveryEscrowConfig, AzureRecoveryEscrowProvider};
@@ -365,6 +366,8 @@ fn upsert_recovery_escrow_provider_config_v3(
     enabled: bool,
     updated_at_ms: i64,
 ) -> AppResult<()> {
+    let normalized_provider_id = provider_id.trim().to_ascii_lowercase();
+    let priority = provider_priority(&normalized_provider_id);
     conn.execute(
         "INSERT INTO recovery_escrow_provider_configs(
             provider_id,
@@ -375,15 +378,10 @@ fn upsert_recovery_escrow_provider_config_v3(
          )
          VALUES(
            ?1,
-           CASE ?1
-             WHEN 'aws' THEN 0
-             WHEN 'gcp' THEN 1
-             WHEN 'azure' THEN 2
-             ELSE 9
-           END,
            ?2,
            ?3,
-           ?4
+           ?4,
+           ?5
          )
          ON CONFLICT(provider_id)
          DO UPDATE SET
@@ -392,7 +390,8 @@ fn upsert_recovery_escrow_provider_config_v3(
            enabled = excluded.enabled,
            updated_at_ms = excluded.updated_at_ms",
         rusqlite::params![
-            provider_id,
+            normalized_provider_id,
+            priority,
             config_ref,
             if enabled { 1 } else { 0 },
             updated_at_ms
@@ -404,7 +403,7 @@ fn upsert_recovery_escrow_provider_config_v3(
             "recovery",
             "failed upserting v3 recovery escrow provider config",
             false,
-            serde_json::json!({ "error": e.to_string(), "provider": provider_id }),
+            serde_json::json!({ "error": e.to_string(), "provider": normalized_provider_id }),
         )
     })?;
     Ok(())
@@ -500,7 +499,8 @@ fn resolve_recovery_escrow_provider(
     vault_path: &Path,
     vault_id: &str,
 ) -> AppResult<Box<dyn RecoveryEscrowProvider>> {
-    match provider_id {
+    let normalized_provider_id = provider_id.trim().to_ascii_lowercase();
+    match normalized_provider_id.as_str() {
         "aws" => {
             let region = std::env::var("KC_RECOVERY_ESCROW_AWS_REGION")
                 .ok()
@@ -577,14 +577,14 @@ fn resolve_recovery_escrow_provider(
         "local" => Ok(Box::new(LocalRecoveryEscrowProvider::new(
             vault_path.join("recovery-escrow-local"),
         ))),
-        other => Err(AppError::new(
+        _ => Err(AppError::new(
             "KC_RECOVERY_ESCROW_PROVIDER_UNSUPPORTED",
             "recovery",
             "unsupported recovery escrow provider",
             false,
             serde_json::json!({
-                "provider": other,
-                "supported": ["aws", "gcp", "azure", "local"]
+                "provider": normalized_provider_id,
+                "supported": supported_provider_ids()
             }),
         )),
     }
