@@ -1,11 +1,14 @@
 use kc_core::db::open_db;
 use kc_core::trust::{trust_device_init, trust_device_verify};
 use kc_core::trust_identity::{
-    expected_cert_chain_hash, trust_device_enroll, trust_device_verify_chain, trust_identity_complete,
-    trust_identity_start, trust_provider_add, trust_provider_disable, trust_provider_list,
-    verified_author_identity,
+    discover_identity_provider, expected_cert_chain_hash, provider_id_from_issuer,
+    trust_device_enroll, trust_device_verify_chain, trust_identity_complete, trust_identity_start,
+    trust_provider_add, trust_provider_disable, trust_provider_list, verified_author_identity,
 };
-use kc_core::trust_policy::{trust_provider_policy_get, trust_provider_policy_set, trust_session_revoke};
+use kc_core::trust_policy::{
+    trust_provider_policy_get, trust_provider_policy_set, trust_provider_policy_set_tenant_template,
+    trust_session_revoke,
+};
 use kc_core::vault::vault_init;
 
 fn setup_verified_device_with_identity(
@@ -239,5 +242,65 @@ fn trust_provider_policy_serializes_claims_canonically() {
     assert_eq!(
         stored.require_claims_json,
         r#"{"aud":"kc-desktop:corp","iss":"https://corp.example/oidc","sub":"alice@example.com"}"#
+    );
+}
+
+#[test]
+fn provider_id_from_issuer_is_deterministic() {
+    let issuer = "https://tenant.example/oidc/";
+    let first = provider_id_from_issuer(issuer).expect("derive provider id");
+    let second = provider_id_from_issuer("https://tenant.example/oidc").expect("derive provider id");
+    assert_eq!(first, second);
+    assert!(first.starts_with("auto-"));
+}
+
+#[test]
+fn trust_identity_start_supports_issuer_discovery_reference() {
+    let temp = tempfile::tempdir().expect("tempdir");
+    let vault_path = temp.path().join("vault");
+    vault_init(&vault_path, "demo", 100).expect("vault init");
+    let conn = open_db(&vault_path.join("db/knowledge.sqlite")).expect("open db");
+
+    let discovered = discover_identity_provider(&conn, "https://tenant.example/oidc", 110)
+        .expect("discover provider");
+    let started =
+        trust_identity_start(&conn, "https://tenant.example/oidc", 111).expect("identity start");
+    assert_eq!(started.provider_id, discovered.provider_id);
+
+    let session = trust_identity_complete(
+        &conn,
+        "https://tenant.example/oidc",
+        "sub:issuer-user@example.com",
+        112,
+    )
+    .expect("identity complete");
+    assert_eq!(session.provider_id, discovered.provider_id);
+}
+
+#[test]
+fn tenant_template_policy_sets_canonical_claims() {
+    let temp = tempfile::tempdir().expect("tempdir");
+    let vault_path = temp.path().join("vault");
+    vault_init(&vault_path, "demo", 100).expect("vault init");
+    let conn = open_db(&vault_path.join("db/knowledge.sqlite")).expect("open db");
+
+    let provider = discover_identity_provider(&conn, "https://tenant.example/oidc", 115)
+        .expect("discover provider");
+    let policy = trust_provider_policy_set_tenant_template(
+        &conn,
+        &provider.provider_id,
+        &provider.issuer,
+        &provider.audience,
+        "Tenant-A",
+        116,
+    )
+    .expect("set tenant template");
+    assert_eq!(policy.max_clock_skew_ms, 5_000);
+    assert_eq!(
+        policy.require_claims_json,
+        format!(
+            "{{\"aud\":\"{}\",\"iss\":\"{}\",\"tenant\":\"tenant-a\"}}",
+            provider.audience, provider.issuer
+        )
     );
 }

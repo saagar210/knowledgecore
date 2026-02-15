@@ -61,6 +61,36 @@ fn identity_error(code: &str, message: &str, details: serde_json::Value) -> AppE
     AppError::new(code, "trust_identity", message, false, details)
 }
 
+fn provider_ref_is_issuer(provider_ref: &str) -> bool {
+    let trimmed = provider_ref.trim();
+    trimmed.starts_with("https://") || trimmed.starts_with("http://")
+}
+
+fn normalize_issuer(issuer: &str) -> AppResult<String> {
+    let normalized = issuer.trim().trim_end_matches('/').to_ascii_lowercase();
+    if normalized.is_empty() {
+        return Err(identity_error(
+            "KC_TRUST_OIDC_PROVIDER_UNAVAILABLE",
+            "issuer is required",
+            serde_json::json!({}),
+        ));
+    }
+    if !provider_ref_is_issuer(&normalized) {
+        return Err(identity_error(
+            "KC_TRUST_OIDC_PROVIDER_UNAVAILABLE",
+            "issuer must use http(s) scheme",
+            serde_json::json!({ "issuer": normalized }),
+        ));
+    }
+    Ok(normalized)
+}
+
+pub fn provider_id_from_issuer(issuer: &str) -> AppResult<String> {
+    let normalized = normalize_issuer(issuer)?;
+    let hash = blake3_hex_prefixed(format!("kc.trust.provider.discovery.v1\n{}", normalized).as_bytes());
+    Ok(format!("auto-{}", &hash[7..19]))
+}
+
 fn default_issuer(provider_id: &str) -> String {
     format!("https://{}.oidc.knowledgecore.local", provider_id)
 }
@@ -71,6 +101,25 @@ fn default_audience(provider_id: &str) -> String {
 
 fn default_jwks_url(provider_id: &str) -> String {
     format!("{}/.well-known/jwks.json", default_issuer(provider_id))
+}
+
+pub fn discover_identity_provider(
+    conn: &Connection,
+    issuer: &str,
+    now_ms: i64,
+) -> AppResult<IdentityProviderRecord> {
+    let normalized_issuer = normalize_issuer(issuer)?;
+    let provider_id = provider_id_from_issuer(&normalized_issuer)?;
+    let audience = default_audience(&provider_id);
+    let jwks_url = format!("{}/.well-known/jwks.json", normalized_issuer);
+    upsert_identity_provider_with_jwks(
+        conn,
+        &provider_id,
+        &normalized_issuer,
+        &audience,
+        &jwks_url,
+        now_ms,
+    )
 }
 
 fn canonical_json_string(value: serde_json::Value) -> AppResult<String> {
@@ -326,25 +375,29 @@ pub fn trust_provider_list(conn: &Connection) -> AppResult<Vec<IdentityProviderR
 
 pub fn trust_identity_start(
     conn: &Connection,
-    provider_id: &str,
+    provider_ref: &str,
     now_ms: i64,
 ) -> AppResult<IdentityStartResult> {
-    let provider = match load_provider(conn, provider_id)? {
-        Some(existing) => existing,
-        None => upsert_identity_provider(
-            conn,
-            provider_id,
-            &default_issuer(provider_id),
-            &default_audience(provider_id),
-            now_ms,
-        )?,
+    let provider = if provider_ref_is_issuer(provider_ref) {
+        discover_identity_provider(conn, provider_ref, now_ms)?
+    } else {
+        match load_provider(conn, provider_ref)? {
+            Some(existing) => existing,
+            None => upsert_identity_provider(
+                conn,
+                provider_ref,
+                &default_issuer(provider_ref),
+                &default_audience(provider_ref),
+                now_ms,
+            )?,
+        }
     };
 
     if !provider.enabled {
         return Err(identity_error(
             "KC_TRUST_PROVIDER_DISABLED",
             "identity provider is disabled",
-            serde_json::json!({ "provider_id": provider_id }),
+            serde_json::json!({ "provider_id": provider.provider_id }),
         ));
     }
 
@@ -378,40 +431,48 @@ fn normalized_subject(provider_id: &str, auth_code: &str) -> String {
 
 pub fn trust_identity_complete(
     conn: &Connection,
-    provider_id: &str,
+    provider_ref: &str,
     auth_code: &str,
     now_ms: i64,
 ) -> AppResult<IdentitySessionRecord> {
-    let provider = load_provider(conn, provider_id)?.ok_or_else(|| {
-        identity_error(
-            "KC_TRUST_OIDC_PROVIDER_UNAVAILABLE",
-            "identity provider is not registered",
-            serde_json::json!({ "provider_id": provider_id }),
-        )
-    })?;
+    let provider = if provider_ref_is_issuer(provider_ref) {
+        discover_identity_provider(conn, provider_ref, now_ms)?
+    } else {
+        load_provider(conn, provider_ref)?.ok_or_else(|| {
+            identity_error(
+                "KC_TRUST_OIDC_PROVIDER_UNAVAILABLE",
+                "identity provider is not registered",
+                serde_json::json!({ "provider_id": provider_ref }),
+            )
+        })?
+    };
     if !provider.enabled {
         return Err(identity_error(
             "KC_TRUST_PROVIDER_DISABLED",
             "identity provider is disabled",
-            serde_json::json!({ "provider_id": provider_id }),
+            serde_json::json!({ "provider_id": provider.provider_id }),
         ));
     }
     if auth_code.trim().is_empty() {
         return Err(identity_error(
             "KC_TRUST_IDENTITY_INVALID",
             "auth_code is required",
-            serde_json::json!({ "provider_id": provider_id }),
+            serde_json::json!({ "provider_id": provider.provider_id }),
         ));
     }
 
-    let subject = normalized_subject(provider_id, auth_code);
+    let provider_id = provider.provider_id.clone();
+    let provider_issuer = provider.issuer.clone();
+    let provider_audience = provider.audience.clone();
+
+    let subject = normalized_subject(&provider_id, auth_code);
     let issued_at_ms = now_ms;
     let expires_at_ms = now_ms + DEFAULT_SESSION_TTL_MS;
     let claim_subset_json = canonical_json_string(serde_json::json!({
-        "aud": provider.audience,
+        "aud": provider_audience,
         "exp": expires_at_ms,
         "iat": issued_at_ms,
-        "iss": provider.issuer,
+        "iss": provider_issuer,
         "sub": subject
     }))?;
     let session_id = uuid::Uuid::new_v4().to_string();
@@ -421,7 +482,7 @@ pub fn trust_identity_complete(
          VALUES(?1, ?2, ?3, ?4, ?5, ?6, ?7)",
         params![
             session_id,
-            provider.provider_id,
+            provider_id,
             subject,
             claim_subset_json,
             issued_at_ms,
@@ -433,7 +494,7 @@ pub fn trust_identity_complete(
         identity_error(
             "KC_TRUST_IDENTITY_INVALID",
             "failed creating identity session",
-            serde_json::json!({ "error": e.to_string(), "provider_id": provider_id }),
+            serde_json::json!({ "error": e.to_string(), "provider_id": provider_ref }),
         )
     })?;
 

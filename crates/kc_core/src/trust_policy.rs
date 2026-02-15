@@ -4,6 +4,8 @@ use rusqlite::{params, Connection, OptionalExtension};
 use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value};
 
+const DEFAULT_TENANT_TEMPLATE_CLOCK_SKEW_MS: i64 = 5_000;
+
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct TrustProviderPolicyV1 {
     pub provider_id: String,
@@ -69,6 +71,52 @@ fn parse_require_claims(require_claims_json: &str) -> AppResult<Map<String, Valu
             serde_json::json!({}),
         )),
     }
+}
+
+fn normalize_tenant_id(tenant_id: &str) -> AppResult<String> {
+    let normalized = tenant_id.trim().to_ascii_lowercase();
+    if normalized.is_empty() {
+        return Err(policy_error(
+            "KC_TRUST_PROVIDER_POLICY_INVALID",
+            "tenant_id must not be empty",
+            serde_json::json!({}),
+        ));
+    }
+    Ok(normalized)
+}
+
+pub fn trust_provider_policy_set_tenant_template(
+    conn: &Connection,
+    provider_id: &str,
+    issuer: &str,
+    audience: &str,
+    tenant_id: &str,
+    now_ms: i64,
+) -> AppResult<TrustProviderPolicyV1> {
+    let tenant_id = normalize_tenant_id(tenant_id)?;
+    let issuer = issuer.trim().trim_end_matches('/').to_ascii_lowercase();
+    if issuer.is_empty() || audience.trim().is_empty() {
+        return Err(policy_error(
+            "KC_TRUST_PROVIDER_POLICY_INVALID",
+            "issuer and audience are required",
+            serde_json::json!({ "issuer": issuer, "audience": audience }),
+        ));
+    }
+
+    let claims = serde_json::json!({
+        "aud": audience.trim(),
+        "iss": issuer,
+        "tenant": tenant_id
+    });
+    let require_claims_json = canonical_json_string(&claims)?;
+
+    trust_provider_policy_set(
+        conn,
+        provider_id,
+        DEFAULT_TENANT_TEMPLATE_CLOCK_SKEW_MS,
+        &require_claims_json,
+        now_ms,
+    )
 }
 
 pub fn trust_provider_policy_set(
