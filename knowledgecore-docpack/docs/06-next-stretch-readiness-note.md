@@ -148,3 +148,12 @@ Record execution status after completing the post-N3 roadmap through Phases O, P
 - Decision posture:
   - GA: `NO-GO` until signed/notarized/stapled artifacts are available.
   - Pilot: `GO` for controlled internal distribution.
+
+## Closeout Completion Status (C4-C6)
+- C4 completed: formal dual-track decision recorded.
+  - GA: `NO-GO`
+  - Pilot: `GO (internal only)`
+- C5 completed: pilot publication record finalized and tag `v0.1.0-pilot.1` created.
+- C6 completed: hypercare logging and final closeout packaging complete for pilot track.
+- Remaining open item for GA promotion:
+  - Apple signing/notarization credential readiness and artifact trust closure.

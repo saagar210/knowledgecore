@@ -138,7 +138,14 @@ Track baseline, milestone progression, gate evidence, and risk/follow-up closure
 | C0 | `codex/closeout-c0-launch-control-lock` | ff-only | Complete | launch control lock and safety artifacts (`e5a1546`) |
 | C1 | `codex/closeout-c1-full-gate-evidence` | ff-only | Complete | full canonical gate and bench evidence (`f323035`) |
 | C2 | `codex/closeout-c2-macos-artifacts` | ff-only | Complete | bundle activation + artifact manifest + GA blocker evidence (`4bf4a5c`) |
-| C3 | `codex/closeout-c3-ga-doc-pack` | in progress | In Progress | pivot docs to `GA Deferred, Pilot Active` track |
+| C3 | `codex/closeout-c3-ga-doc-pack` | ff-only | Complete | pivot docs to `GA Deferred, Pilot Active` track (`26df033`) |
+
+## Closeout Extension (C4-C6)
+| Milestone | Branch | Merge Mode | Status | Notes |
+|---|---|---|---|---|
+| C4 | `codex/closeout-c4-go-no-go-record` | ff-only | Complete | final dual-track decision gate with GA NO-GO / Pilot GO (`dfbec2a`) |
+| C5 | `codex/closeout-c5-ga-release-execution` | ff-only | Complete | pilot publication record with tag `v0.1.0-pilot.1` (`9c295e6`) |
+| C6 | `codex/closeout-c6-hypercare-and-archive` | ff-only | Complete | hypercare log and pilot closeout report packaging (this milestone) |
 
 ## AF–AJ Milestone Ledger (Completed)
 | Milestone | Branch | Merge Mode | Status | Notes |
