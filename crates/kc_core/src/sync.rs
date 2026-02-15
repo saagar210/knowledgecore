@@ -18,7 +18,7 @@ use serde::{Deserialize, Serialize};
 use std::collections::BTreeSet;
 use std::fs;
 use std::io::Cursor;
-use std::path::{Path, PathBuf};
+use std::path::{Component, Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};
 
 const TRUST_MODEL_PASSPHRASE_V1: &str = "passphrase_v1";
@@ -335,6 +335,32 @@ fn copy_tree_sorted(src: &Path, dst: &Path) -> AppResult<()> {
     Ok(())
 }
 
+fn safe_zip_relative_path(name: &str) -> AppResult<PathBuf> {
+    let mut out = PathBuf::new();
+    for component in Path::new(name).components() {
+        match component {
+            Component::Normal(part) => out.push(part),
+            _ => {
+                return Err(sync_error(
+                    "KC_SYNC_TARGET_INVALID",
+                    "sync snapshot zip contains invalid entry path",
+                    serde_json::json!({ "entry": name }),
+                ));
+            }
+        }
+    }
+
+    if out.as_os_str().is_empty() {
+        return Err(sync_error(
+            "KC_SYNC_TARGET_INVALID",
+            "sync snapshot zip contains empty entry path",
+            serde_json::json!({ "entry": name }),
+        ));
+    }
+
+    Ok(out)
+}
+
 fn unpack_zip_snapshot(zip_bytes: &[u8], output_dir: &Path) -> AppResult<()> {
     fs::create_dir_all(output_dir).map_err(|e| {
         sync_error(
@@ -369,6 +395,7 @@ fn unpack_zip_snapshot(zip_bytes: &[u8], output_dir: &Path) -> AppResult<()> {
     names.sort();
 
     for name in names {
+        let rel = safe_zip_relative_path(&name)?;
         let mut file = archive.by_name(&name).map_err(|e| {
             sync_error(
                 "KC_SYNC_TARGET_INVALID",
@@ -376,7 +403,7 @@ fn unpack_zip_snapshot(zip_bytes: &[u8], output_dir: &Path) -> AppResult<()> {
                 serde_json::json!({ "error": e.to_string(), "name": name }),
             )
         })?;
-        let out_path = output_dir.join(&name);
+        let out_path = output_dir.join(rel);
         if let Some(parent) = out_path.parent() {
             fs::create_dir_all(parent).map_err(|e| {
                 sync_error(
@@ -1980,9 +2007,10 @@ fn sync_pull_s3_target(
         })?;
 
         let unpack_dir = std::env::temp_dir().join(format!(
-            "kc_sync_pull_unpack_{}_{}",
+            "kc_sync_pull_unpack_{}_{}_{}",
             std::process::id(),
-            now_ms
+            now_ms,
+            next_sync_temp_suffix()
         ));
         if unpack_dir.exists() {
             fs::remove_dir_all(&unpack_dir).map_err(|e| {
@@ -2060,5 +2088,55 @@ pub fn sync_pull_target_with_mode(
             now_ms,
             mode,
         ),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::unpack_zip_snapshot;
+    use std::io::Write;
+    use zip::write::FileOptions;
+
+    fn zip_bytes(entries: &[(&str, &[u8])]) -> Vec<u8> {
+        let mut bytes = std::io::Cursor::new(Vec::new());
+        {
+            let mut writer = zip::ZipWriter::new(&mut bytes);
+            for &(name, payload) in entries {
+                writer
+                    .start_file(
+                        name,
+                        FileOptions::default().compression_method(zip::CompressionMethod::Stored),
+                    )
+                    .expect("start file");
+                writer.write_all(payload).expect("write zip entry");
+            }
+            writer.finish().expect("finish zip");
+        }
+        bytes.into_inner()
+    }
+
+    #[test]
+    fn unpack_zip_snapshot_rejects_parent_traversal() {
+        let root = tempfile::tempdir().expect("tempdir");
+        let out = root.path().join("out");
+        let bytes = zip_bytes(&[("../escape.txt", b"owned")]);
+
+        let err = unpack_zip_snapshot(&bytes, &out).expect_err("path traversal must fail");
+        assert_eq!(err.code, "KC_SYNC_TARGET_INVALID");
+        assert!(!root.path().join("escape.txt").exists());
+    }
+
+    #[test]
+    fn unpack_zip_snapshot_extracts_safe_entries() {
+        let root = tempfile::tempdir().expect("tempdir");
+        let out = root.path().join("out");
+        let bytes = zip_bytes(&[
+            ("manifest.json", b"{\"schema\":1}"),
+            ("db/knowledge.sqlite", b"db"),
+        ]);
+
+        unpack_zip_snapshot(&bytes, &out).expect("safe zip should unpack");
+        assert!(out.join("manifest.json").exists());
+        assert!(out.join("db/knowledge.sqlite").exists());
     }
 }

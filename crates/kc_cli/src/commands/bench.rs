@@ -16,9 +16,7 @@ struct BenchBaselineV1 {
 
 fn checksum_str(accum: u64, value: &str) -> u64 {
     value.bytes().fold(accum, |state, b| {
-        state
-            .wrapping_mul(0x100000001b3)
-            .wrapping_add(b as u64)
+        state.wrapping_mul(0x100000001b3).wrapping_add(b as u64)
     })
 }
 

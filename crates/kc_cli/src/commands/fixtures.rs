@@ -104,7 +104,10 @@ pub fn generate_corpus(corpus: &str) -> AppResult<PathBuf> {
     let workspace_root = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
         .join("..")
         .join("..");
-    let root = workspace_root.join("fixtures").join("golden_corpus").join(corpus);
+    let root = workspace_root
+        .join("fixtures")
+        .join("golden_corpus")
+        .join(corpus);
     write_fixture(
         root.join("md/doc-1.md"),
         br#"# Product Notes

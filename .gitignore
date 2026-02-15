@@ -21,3 +21,6 @@ Cargo.lock
 
 # Local git hygiene backups
 .git-backups/
+
+# Local audit workspace
+.codex_audit/

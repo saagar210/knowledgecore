@@ -10,17 +10,15 @@ pub fn run_gc(vault_path: &str) -> AppResult<()> {
     let paths = vault_paths(Path::new(vault_path));
     let db = open_db(&Path::new(vault_path).join(vault.db.relative_path))?;
 
-    let mut stmt = db
-        .prepare("SELECT object_hash FROM objects")
-        .map_err(|e| {
-            AppError::new(
-                "KC_DB_INTEGRITY_FAILED",
-                "gc",
-                "failed preparing object query",
-                false,
-                serde_json::json!({ "error": e.to_string() }),
-            )
-        })?;
+    let mut stmt = db.prepare("SELECT object_hash FROM objects").map_err(|e| {
+        AppError::new(
+            "KC_DB_INTEGRITY_FAILED",
+            "gc",
+            "failed preparing object query",
+            false,
+            serde_json::json!({ "error": e.to_string() }),
+        )
+    })?;
 
     let existing: HashSet<String> = stmt
         .query_map([], |row| row.get(0))

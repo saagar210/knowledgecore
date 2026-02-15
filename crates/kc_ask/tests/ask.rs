@@ -1,6 +1,6 @@
 use kc_ask::{AskRequest, AskService, RetrievedOnlyAskService};
-use kc_core::chunking::{chunk_document, default_chunking_config_v1};
 use kc_core::canonical::persist_canonical_text;
+use kc_core::chunking::{chunk_document, default_chunking_config_v1};
 use kc_core::db::open_db;
 use kc_core::hashing::blake3_hex_prefixed;
 use kc_core::ingest::ingest_bytes;
@@ -13,8 +13,12 @@ use kc_core::vault::vault_init;
 fn sample_locator(v: i64) -> LocatorV1 {
     LocatorV1 {
         v,
-        doc_id: DocId("blake3:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa".to_string()),
-        canonical_hash: CanonicalHash("blake3:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb".to_string()),
+        doc_id: DocId(
+            "blake3:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa".to_string(),
+        ),
+        canonical_hash: CanonicalHash(
+            "blake3:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb".to_string(),
+        ),
         range: LocatorRange { start: 0, end: 5 },
         hints: None,
     }
@@ -51,7 +55,11 @@ fn ask_invalid_citations_hard_fails() {
     };
 
     let err = service
-        .finalize_answer(&req, "answer".to_string(), vec![(0, vec![sample_locator(2)])])
+        .finalize_answer(
+            &req,
+            "answer".to_string(),
+            vec![(0, vec![sample_locator(2)])],
+        )
         .expect_err("must fail");
     assert_eq!(err.code, "KC_ASK_INVALID_CITATIONS");
 }
@@ -69,13 +77,21 @@ fn ask_writes_trace_for_valid_citations() {
     };
 
     let out = service
-        .finalize_answer(&req, "answer".to_string(), vec![(0, vec![sample_locator(1)])])
+        .finalize_answer(
+            &req,
+            "answer".to_string(),
+            vec![(0, vec![sample_locator(1)])],
+        )
         .expect("success");
 
     assert!(out.trace_path.exists());
-    let trace: serde_json::Value = serde_json::from_slice(&std::fs::read(out.trace_path).expect("read trace"))
-        .expect("parse trace");
-    assert_eq!(trace.get("schema_version").and_then(|v| v.as_i64()), Some(1));
+    let trace: serde_json::Value =
+        serde_json::from_slice(&std::fs::read(out.trace_path).expect("read trace"))
+            .expect("parse trace");
+    assert_eq!(
+        trace.get("schema_version").and_then(|v| v.as_i64()),
+        Some(1)
+    );
 }
 
 #[test]
@@ -114,8 +130,13 @@ fn ask_runs_retrieved_only_end_to_end() {
 
     let canonical_text_str = String::from_utf8(canonical_text.clone()).expect("utf8");
     let chunk_cfg = default_chunking_config_v1();
-    let chunks = chunk_document(&ingested.doc_id, &canonical_text_str, "text/plain", &chunk_cfg)
-        .expect("chunk document");
+    let chunks = chunk_document(
+        &ingested.doc_id,
+        &canonical_text_str,
+        "text/plain",
+        &chunk_cfg,
+    )
+    .expect("chunk document");
     assert!(!chunks.is_empty());
 
     for chunk in &chunks {
@@ -168,7 +189,8 @@ fn ask_runs_retrieved_only_end_to_end() {
     assert!(out.trace_path.exists());
 
     let trace: serde_json::Value =
-        serde_json::from_slice(&std::fs::read(out.trace_path).expect("read trace")).expect("trace json");
+        serde_json::from_slice(&std::fs::read(out.trace_path).expect("read trace"))
+            .expect("trace json");
     let retrieval_chunks = trace
         .get("retrieval")
         .and_then(|r| r.get("chunks"))
@@ -186,15 +208,23 @@ fn ask_normalizes_citation_locator_ordering() {
 
     let locator_b = LocatorV1 {
         v: 1,
-        doc_id: DocId("blake3:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb".to_string()),
-        canonical_hash: CanonicalHash("blake3:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb".to_string()),
+        doc_id: DocId(
+            "blake3:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb".to_string(),
+        ),
+        canonical_hash: CanonicalHash(
+            "blake3:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb".to_string(),
+        ),
         range: LocatorRange { start: 5, end: 10 },
         hints: None,
     };
     let locator_a = LocatorV1 {
         v: 1,
-        doc_id: DocId("blake3:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa".to_string()),
-        canonical_hash: CanonicalHash("blake3:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa".to_string()),
+        doc_id: DocId(
+            "blake3:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa".to_string(),
+        ),
+        canonical_hash: CanonicalHash(
+            "blake3:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa".to_string(),
+        ),
         range: LocatorRange { start: 1, end: 4 },
         hints: None,
     };

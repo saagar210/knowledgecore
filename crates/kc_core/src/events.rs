@@ -14,7 +14,12 @@ pub struct EventRecord {
     pub event_hash: String,
 }
 
-pub fn append_event(conn: &Connection, ts_ms: i64, event_type: &str, payload: &Value) -> AppResult<EventRecord> {
+pub fn append_event(
+    conn: &Connection,
+    ts_ms: i64,
+    event_type: &str,
+    payload: &Value,
+) -> AppResult<EventRecord> {
     let prev_event_hash: Option<String> = conn
         .query_row(
             "SELECT event_hash FROM events ORDER BY event_id DESC LIMIT 1",

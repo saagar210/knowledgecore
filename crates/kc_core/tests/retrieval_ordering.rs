@@ -87,9 +87,19 @@ fn retrieval_recency_changes_order_when_enabled() {
         &vector,
         |chunk_id| {
             if chunk_id.0 == "c_old" {
-                Ok((DocId("d1".to_string()), 0, "other".to_string(), now_ms - 40 * 24 * 60 * 60 * 1000))
+                Ok((
+                    DocId("d1".to_string()),
+                    0,
+                    "other".to_string(),
+                    now_ms - 40 * 24 * 60 * 60 * 1000,
+                ))
             } else {
-                Ok((DocId("d2".to_string()), 0, "other".to_string(), now_ms - 2 * 24 * 60 * 60 * 1000))
+                Ok((
+                    DocId("d2".to_string()),
+                    0,
+                    "other".to_string(),
+                    now_ms - 2 * 24 * 60 * 60 * 1000,
+                ))
             }
         },
         &cfg,

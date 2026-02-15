@@ -29,16 +29,15 @@ pub fn init_fts(conn: &Connection) -> AppResult<()> {
 
 pub fn rebuild_rows(conn: &Connection, rows: &[FtsRow]) -> AppResult<()> {
     init_fts(conn)?;
-    conn.execute("DELETE FROM chunks_fts", [])
-        .map_err(|e| {
-            AppError::new(
-                "KC_FTS_REBUILD_FAILED",
-                "fts",
-                "failed clearing FTS table",
-                false,
-                serde_json::json!({ "error": e.to_string() }),
-            )
-        })?;
+    conn.execute("DELETE FROM chunks_fts", []).map_err(|e| {
+        AppError::new(
+            "KC_FTS_REBUILD_FAILED",
+            "fts",
+            "failed clearing FTS table",
+            false,
+            serde_json::json!({ "error": e.to_string() }),
+        )
+    })?;
 
     let mut sorted = rows.to_vec();
     sorted.sort_by(|a, b| {

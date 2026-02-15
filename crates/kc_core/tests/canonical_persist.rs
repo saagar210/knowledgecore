@@ -61,8 +61,12 @@ fn canonical_persist_rejects_hash_mismatch() {
     let artifact = CanonicalTextArtifact {
         doc_id: DocId(doc_id),
         canonical_bytes: b"mismatch".to_vec(),
-        canonical_hash: CanonicalHash("blake3:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa".to_string()),
-        canonical_object_hash: ObjectHash("blake3:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb".to_string()),
+        canonical_hash: CanonicalHash(
+            "blake3:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa".to_string(),
+        ),
+        canonical_object_hash: ObjectHash(
+            "blake3:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb".to_string(),
+        ),
         extractor_name: "test".to_string(),
         extractor_version: "1".to_string(),
         extractor_flags_json: "{}".to_string(),

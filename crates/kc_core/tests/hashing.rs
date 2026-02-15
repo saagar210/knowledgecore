@@ -16,6 +16,7 @@ fn hashing_invalid_prefix_rejected() {
 
 #[test]
 fn hashing_invalid_hex_rejected() {
-    let err = validate_blake3_prefixed("blake3:ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789abcdef").expect_err("invalid hex");
+    let err = validate_blake3_prefixed("blake3:ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789abcdef")
+        .expect_err("invalid hex");
     assert_eq!(err.code, "KC_HASH_DECODE_FAILED");
 }

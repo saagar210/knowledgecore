@@ -59,12 +59,7 @@ impl S3SyncTransport {
         }
     }
 
-    fn map_remote_error(
-        &self,
-        message: String,
-        operation: &str,
-        key: &str,
-    ) -> AppError {
+    fn map_remote_error(&self, message: String, operation: &str, key: &str) -> AppError {
         let (code, retryable) = Self::classify_remote_error(&message);
         AppError::new(
             code,
@@ -79,10 +74,7 @@ impl S3SyncTransport {
         )
     }
 
-    fn run_async<T>(
-        &self,
-        fut: impl std::future::Future<Output = AppResult<T>>,
-    ) -> AppResult<T> {
+    fn run_async<T>(&self, fut: impl std::future::Future<Output = AppResult<T>>) -> AppResult<T> {
         let rt = tokio::runtime::Builder::new_current_thread()
             .enable_all()
             .build()
@@ -161,12 +153,7 @@ impl S3SyncTransport {
         })
     }
 
-    pub fn write_bytes(
-        &self,
-        leaf: &str,
-        bytes: &[u8],
-        content_type: &str,
-    ) -> AppResult<()> {
+    pub fn write_bytes(&self, leaf: &str, bytes: &[u8], content_type: &str) -> AppResult<()> {
         if let Some(path) = self.emulated_path(leaf) {
             if let Some(parent) = path.parent() {
                 std::fs::create_dir_all(parent).map_err(|e| {

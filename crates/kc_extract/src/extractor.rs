@@ -1,7 +1,9 @@
 use crate::html::canonicalize_html;
 use crate::md::canonicalize_markdown;
 use crate::normalize::normalize_text_v1;
-use crate::ocr::{ocr_pdf_via_images, should_run_ocr, tesseract_version, traineddata_hashes, OcrConfig};
+use crate::ocr::{
+    ocr_pdf_via_images, should_run_ocr, tesseract_version, traineddata_hashes, OcrConfig,
+};
 use crate::pdf::{extract_pdf_text, PdfiumConfig};
 use kc_core::app_error::{AppError, AppResult};
 use kc_core::canon_json::to_canonical_bytes;
@@ -58,8 +60,7 @@ impl ExtractService for DefaultExtractor {
                             tesseract_cmd: None,
                             language: ocr_language.clone(),
                         },
-                    )
-                    {
+                    ) {
                         Ok(ocr_text) => {
                             ocr_used = true;
                             ocr_status = "used".to_string();
@@ -89,25 +90,23 @@ impl ExtractService for DefaultExtractor {
         let tesseract_version = tesseract_version(tesseract_cmd).unwrap_or_default();
         let trained_hashes = traineddata_hashes(&ocr_language);
 
-        let toolchain_json = String::from_utf8(
-            to_canonical_bytes(&serde_json::json!({
-                "pdfium": {
-                    "identity": self.toolchain.pdfium_identity,
-                    "backend": "pdfium-render",
+        let toolchain_json = String::from_utf8(to_canonical_bytes(&serde_json::json!({
+            "pdfium": {
+                "identity": self.toolchain.pdfium_identity,
+                "backend": "pdfium-render",
+            },
+            "tesseract": {
+                "identity": self.toolchain.tesseract_identity,
+                "version": tesseract_version,
+                "language": ocr_language,
+                "traineddata_hashes": trained_hashes,
+                "params": {
+                    "psm": 6
                 },
-                "tesseract": {
-                    "identity": self.toolchain.tesseract_identity,
-                    "version": tesseract_version,
-                    "language": ocr_language,
-                    "traineddata_hashes": trained_hashes,
-                    "params": {
-                        "psm": 6
-                    },
-                },
-                "ocr_used": ocr_used,
-                "ocr_status": ocr_status,
-            }))?,
-        )
+            },
+            "ocr_used": ocr_used,
+            "ocr_status": ocr_status,
+        }))?)
         .map_err(|e| AppError::internal(&format!("toolchain json encoding failed: {e}")))?;
 
         let extractor_flags_json = String::from_utf8(to_canonical_bytes(&serde_json::json!({

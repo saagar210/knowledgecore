@@ -1,0 +1,67 @@
+name: Security Audit
+
+on:
+  pull_request:
+  push:
+    branches:
+      - master
+  schedule:
+    - cron: "0 14 * * 1"
+  workflow_dispatch:
+
+jobs:
+  rustsec-policy:
+    name: RustSec Policy Gate
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Install cargo-audit
+        uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-audit
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Run RustSec Policy Gate
+        run: node ./scripts/audit-rust.mjs
+
+      - name: Dependency Watch (Advisory)
+        run: node ./scripts/dependency-watch.mjs --no-fail
+
+  dependency-sweep:
+    name: Weekly Dependency Sweep
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Install cargo-audit
+        uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-audit
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Update Cargo Dependencies
+        run: cargo update
+
+      - name: Check Upstream Dependency Releases
+        run: node ./scripts/dependency-watch.mjs
+
+      - name: Re-run RustSec Policy Gate After Update
+        run: node ./scripts/audit-rust.mjs

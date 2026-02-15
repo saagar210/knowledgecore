@@ -116,7 +116,10 @@ impl RecoveryEscrowProvider for AzureRecoveryEscrowProvider {
         let descriptor = RecoveryEscrowDescriptorV2 {
             provider: self.provider_id().to_string(),
             provider_ref,
-            key_id: format!("azurekv:{}/{}", self.config.key_vault_url, self.config.key_name),
+            key_id: format!(
+                "azurekv:{}/{}",
+                self.config.key_vault_url, self.config.key_name
+            ),
             wrapped_at_ms: req.now_ms,
         };
         validate_escrow_descriptor(&descriptor)?;

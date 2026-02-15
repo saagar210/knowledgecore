@@ -7,8 +7,12 @@ use kc_core::vault::vault_init;
 fn sample_locator() -> LocatorV1 {
     LocatorV1 {
         v: 1,
-        doc_id: DocId("blake3:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa".to_string()),
-        canonical_hash: CanonicalHash("blake3:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb".to_string()),
+        doc_id: DocId(
+            "blake3:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa".to_string(),
+        ),
+        canonical_hash: CanonicalHash(
+            "blake3:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb".to_string(),
+        ),
         range: LocatorRange { start: 0, end: 5 },
         hints: None,
     }
@@ -61,8 +65,9 @@ fn schema_trace_accepts_written_trace() {
         )
         .expect("finalize");
 
-    let value: serde_json::Value = serde_json::from_slice(&std::fs::read(out.trace_path).expect("read trace"))
-        .expect("parse trace");
+    let value: serde_json::Value =
+        serde_json::from_slice(&std::fs::read(out.trace_path).expect("read trace"))
+            .expect("parse trace");
     let schema = JSONSchema::compile(&trace_schema()).expect("compile trace schema");
     assert!(schema.is_valid(&value));
 }

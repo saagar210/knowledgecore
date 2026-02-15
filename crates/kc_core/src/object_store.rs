@@ -77,10 +77,7 @@ impl ObjectStore {
         }
     }
 
-    fn deterministic_nonce(
-        object_hash: &ObjectHash,
-        key_reference: &str,
-    ) -> [u8; 24] {
+    fn deterministic_nonce(object_hash: &ObjectHash, key_reference: &str) -> [u8; 24] {
         let material = format!("{}:{}", object_hash.0, key_reference);
         let digest = blake3::hash(material.as_bytes());
         let mut nonce = [0u8; 24];

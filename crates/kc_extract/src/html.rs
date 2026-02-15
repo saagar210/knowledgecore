@@ -14,7 +14,11 @@ pub fn canonicalize_html(input: &str) -> String {
         let raw = cap.get(2).map(|m| m.as_str()).unwrap_or_default();
         let title = tag_re.replace_all(raw, "").to_string();
         let marker = format!("{}\n", heading_marker(level, &title));
-        with_markers = with_markers.replacen(cap.get(0).map(|m| m.as_str()).unwrap_or_default(), &(marker + raw), 1);
+        with_markers = with_markers.replacen(
+            cap.get(0).map(|m| m.as_str()).unwrap_or_default(),
+            &(marker + raw),
+            1,
+        );
     }
 
     tag_re.replace_all(&with_markers, "").to_string()

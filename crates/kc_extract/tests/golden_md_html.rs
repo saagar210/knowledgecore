@@ -12,7 +12,10 @@ fn golden_md_contains_heading_markers() {
     let input = b"# Title\n\nhello\n## Child\nworld\n";
     let out = extractor
         .extract_canonical(ExtractInput {
-            doc_id: &DocId("blake3:1111111111111111111111111111111111111111111111111111111111111111".to_string()),
+            doc_id: &DocId(
+                "blake3:1111111111111111111111111111111111111111111111111111111111111111"
+                    .to_string(),
+            ),
             bytes: input,
             mime: "text/markdown",
             source_kind: "notes",
@@ -34,7 +37,10 @@ fn golden_html_contains_heading_markers() {
     let input = b"<h1>Title</h1><p>Hello</p><h2>Child</h2>";
     let out = extractor
         .extract_canonical(ExtractInput {
-            doc_id: &DocId("blake3:2222222222222222222222222222222222222222222222222222222222222222".to_string()),
+            doc_id: &DocId(
+                "blake3:2222222222222222222222222222222222222222222222222222222222222222"
+                    .to_string(),
+            ),
             bytes: input,
             mime: "text/html",
             source_kind: "confluence_exports",

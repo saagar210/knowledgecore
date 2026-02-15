@@ -15,7 +15,11 @@ pub fn validate_blake3_prefixed(s: &str) -> AppResult<()> {
         ));
     }
     let hex = &s[7..];
-    if hex.len() != 64 || !hex.chars().all(|c| c.is_ascii_hexdigit() && !c.is_ascii_uppercase()) {
+    if hex.len() != 64
+        || !hex
+            .chars()
+            .all(|c| c.is_ascii_hexdigit() && !c.is_ascii_uppercase())
+    {
         return Err(AppError::new(
             "KC_HASH_DECODE_FAILED",
             "hash",

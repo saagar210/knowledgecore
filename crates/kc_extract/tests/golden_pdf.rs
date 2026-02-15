@@ -6,7 +6,8 @@ use kc_extract::DefaultExtractor;
 
 #[test]
 fn golden_pdf_adds_page_marker() {
-    let pdf = extract_pdf_text(b"hello page", &PdfiumConfig { library_path: None }).expect("extract");
+    let pdf =
+        extract_pdf_text(b"hello page", &PdfiumConfig { library_path: None }).expect("extract");
     assert!(pdf.text_with_page_markers.starts_with("[[PAGE:0001]]"));
 }
 
@@ -27,7 +28,10 @@ fn golden_pdf_extractor_hashes_canonical() {
     let pdf_like_body = "a".repeat(900);
     let out = extractor
         .extract_canonical(ExtractInput {
-            doc_id: &DocId("blake3:3333333333333333333333333333333333333333333333333333333333333333".to_string()),
+            doc_id: &DocId(
+                "blake3:3333333333333333333333333333333333333333333333333333333333333333"
+                    .to_string(),
+            ),
             bytes: pdf_like_body.as_bytes(),
             mime: "application/pdf",
             source_kind: "manuals",
@@ -35,7 +39,8 @@ fn golden_pdf_extractor_hashes_canonical() {
         .expect("extract");
 
     assert!(out.canonical_hash.0.starts_with("blake3:"));
-    let toolchain: serde_json::Value = serde_json::from_str(&out.toolchain_json).expect("toolchain json");
+    let toolchain: serde_json::Value =
+        serde_json::from_str(&out.toolchain_json).expect("toolchain json");
     assert!(toolchain.get("pdfium").is_some());
     assert!(toolchain.get("tesseract").is_some());
     assert_eq!(
@@ -50,8 +55,12 @@ fn golden_pdf_extractor_hashes_canonical() {
         .and_then(|x| x.get("traineddata_hashes"))
         .and_then(|x| x.as_array())
         .is_some());
-    let flags: serde_json::Value = serde_json::from_str(&out.extractor_flags_json).expect("flags json");
-    assert_eq!(flags.get("source_kind").and_then(|x| x.as_str()), Some("manuals"));
+    let flags: serde_json::Value =
+        serde_json::from_str(&out.extractor_flags_json).expect("flags json");
+    assert_eq!(
+        flags.get("source_kind").and_then(|x| x.as_str()),
+        Some("manuals")
+    );
 }
 
 #[test]

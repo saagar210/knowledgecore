@@ -205,8 +205,13 @@ impl<E: Embedder> LanceDbVectorIndex<E> {
             ),
         ]));
 
-        let chunk_ids = StringArray::from(rows.iter().map(|r| r.chunk_id.0.clone()).collect::<Vec<_>>());
-        let doc_ids = StringArray::from(rows.iter().map(|r| r.doc_id.0.clone()).collect::<Vec<_>>());
+        let chunk_ids = StringArray::from(
+            rows.iter()
+                .map(|r| r.chunk_id.0.clone())
+                .collect::<Vec<_>>(),
+        );
+        let doc_ids =
+            StringArray::from(rows.iter().map(|r| r.doc_id.0.clone()).collect::<Vec<_>>());
         let ordinals = Int64Array::from(rows.iter().map(|r| r.ordinal).collect::<Vec<_>>());
         let texts = StringArray::from(rows.iter().map(|r| r.text.clone()).collect::<Vec<_>>());
         let vectors = FixedSizeListArray::from_iter_primitive::<Float32Type, _, _>(
@@ -261,17 +266,20 @@ impl<E: Embedder> LanceDbVectorIndex<E> {
             }
 
             let table = db.open_table(TABLE_NAME).execute().await?;
-            let batches = table.query().execute().await?.try_collect::<Vec<_>>().await?;
+            let batches = table
+                .query()
+                .execute()
+                .await?
+                .try_collect::<Vec<_>>()
+                .await?;
             let mut rows = Vec::new();
 
             for batch in batches {
                 let chunk_ids = batch
                     .column_by_name("chunk_id")
                     .and_then(|c| c.as_any().downcast_ref::<StringArray>())
-                    .ok_or_else(|| {
-                        lancedb::Error::Runtime {
-                            message: "chunk_id column missing or invalid".to_string(),
-                        }
+                    .ok_or_else(|| lancedb::Error::Runtime {
+                        message: "chunk_id column missing or invalid".to_string(),
                     })?;
                 let doc_ids = batch
                     .column_by_name("doc_id")
@@ -373,9 +381,9 @@ impl<E: Embedder> VectorIndex for LanceDbVectorIndex<E> {
         scored.sort_by(|a, b| {
             b.3.partial_cmp(&a.3)
                 .unwrap_or(std::cmp::Ordering::Equal)
-                .then(a.1.0.cmp(&b.1.0))
+                .then(a.1 .0.cmp(&b.1 .0))
                 .then(a.2.cmp(&b.2))
-                .then(a.0.0.cmp(&b.0.0))
+                .then(a.0 .0.cmp(&b.0 .0))
         });
 
         Ok(scored

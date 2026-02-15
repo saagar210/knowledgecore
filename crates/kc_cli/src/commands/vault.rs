@@ -6,10 +6,10 @@ use kc_core::rpc_service::{
     vault_encryption_migrate_service, vault_encryption_status_service, vault_lock_service,
     vault_lock_status_service, vault_recovery_escrow_enable_service,
     vault_recovery_escrow_provider_add_service, vault_recovery_escrow_provider_list_service,
-    vault_recovery_escrow_restore_service, vault_recovery_escrow_rotate_service,
-    vault_recovery_escrow_rotate_all_service,
-    vault_recovery_escrow_status_service, vault_recovery_generate_service,
-    vault_recovery_status_service, vault_recovery_verify_service, vault_unlock_service,
+    vault_recovery_escrow_restore_service, vault_recovery_escrow_rotate_all_service,
+    vault_recovery_escrow_rotate_service, vault_recovery_escrow_status_service,
+    vault_recovery_generate_service, vault_recovery_status_service, vault_recovery_verify_service,
+    vault_unlock_service,
 };
 use kc_core::vault::{vault_open, vault_paths};
 use std::path::Path;

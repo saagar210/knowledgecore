@@ -672,16 +672,15 @@ pub fn apply_migrations(conn: &Connection) -> AppResult<()> {
                 )
             })?;
 
-        tx.pragma_update(None, "user_version", 7i64)
-            .map_err(|e| {
-                AppError::new(
-                    "KC_DB_MIGRATION_FAILED",
-                    "db",
-                    "failed to set schema user_version",
-                    false,
-                    serde_json::json!({ "error": e.to_string() }),
-                )
-            })?;
+        tx.pragma_update(None, "user_version", 7i64).map_err(|e| {
+            AppError::new(
+                "KC_DB_MIGRATION_FAILED",
+                "db",
+                "failed to set schema user_version",
+                false,
+                serde_json::json!({ "error": e.to_string() }),
+            )
+        })?;
 
         tx.commit().map_err(|e| {
             AppError::new(
@@ -717,16 +716,15 @@ pub fn apply_migrations(conn: &Connection) -> AppResult<()> {
                 )
             })?;
 
-        tx.pragma_update(None, "user_version", 8i64)
-            .map_err(|e| {
-                AppError::new(
-                    "KC_DB_MIGRATION_FAILED",
-                    "db",
-                    "failed to set schema user_version",
-                    false,
-                    serde_json::json!({ "error": e.to_string() }),
-                )
-            })?;
+        tx.pragma_update(None, "user_version", 8i64).map_err(|e| {
+            AppError::new(
+                "KC_DB_MIGRATION_FAILED",
+                "db",
+                "failed to set schema user_version",
+                false,
+                serde_json::json!({ "error": e.to_string() }),
+            )
+        })?;
 
         tx.commit().map_err(|e| {
             AppError::new(
@@ -751,27 +749,28 @@ pub fn apply_migrations(conn: &Connection) -> AppResult<()> {
             )
         })?;
 
-        tx.execute_batch(include_str!("../migrations/0009_trust_provider_governance.sql"))
-            .map_err(|e| {
-                AppError::new(
-                    "KC_DB_MIGRATION_FAILED",
-                    "db",
-                    "failed to apply migration 0009",
-                    false,
-                    serde_json::json!({ "error": e.to_string() }),
-                )
-            })?;
+        tx.execute_batch(include_str!(
+            "../migrations/0009_trust_provider_governance.sql"
+        ))
+        .map_err(|e| {
+            AppError::new(
+                "KC_DB_MIGRATION_FAILED",
+                "db",
+                "failed to apply migration 0009",
+                false,
+                serde_json::json!({ "error": e.to_string() }),
+            )
+        })?;
 
-        tx.pragma_update(None, "user_version", 9i64)
-            .map_err(|e| {
-                AppError::new(
-                    "KC_DB_MIGRATION_FAILED",
-                    "db",
-                    "failed to set schema user_version",
-                    false,
-                    serde_json::json!({ "error": e.to_string() }),
-                )
-            })?;
+        tx.pragma_update(None, "user_version", 9i64).map_err(|e| {
+            AppError::new(
+                "KC_DB_MIGRATION_FAILED",
+                "db",
+                "failed to set schema user_version",
+                false,
+                serde_json::json!({ "error": e.to_string() }),
+            )
+        })?;
 
         tx.commit().map_err(|e| {
             AppError::new(
@@ -796,27 +795,28 @@ pub fn apply_migrations(conn: &Connection) -> AppResult<()> {
             )
         })?;
 
-        tx.execute_batch(include_str!("../migrations/0010_recovery_escrow_providers_v3.sql"))
-            .map_err(|e| {
-                AppError::new(
-                    "KC_DB_MIGRATION_FAILED",
-                    "db",
-                    "failed to apply migration 0010",
-                    false,
-                    serde_json::json!({ "error": e.to_string() }),
-                )
-            })?;
+        tx.execute_batch(include_str!(
+            "../migrations/0010_recovery_escrow_providers_v3.sql"
+        ))
+        .map_err(|e| {
+            AppError::new(
+                "KC_DB_MIGRATION_FAILED",
+                "db",
+                "failed to apply migration 0010",
+                false,
+                serde_json::json!({ "error": e.to_string() }),
+            )
+        })?;
 
-        tx.pragma_update(None, "user_version", 10i64)
-            .map_err(|e| {
-                AppError::new(
-                    "KC_DB_MIGRATION_FAILED",
-                    "db",
-                    "failed to set schema user_version",
-                    false,
-                    serde_json::json!({ "error": e.to_string() }),
-                )
-            })?;
+        tx.pragma_update(None, "user_version", 10i64).map_err(|e| {
+            AppError::new(
+                "KC_DB_MIGRATION_FAILED",
+                "db",
+                "failed to set schema user_version",
+                false,
+                serde_json::json!({ "error": e.to_string() }),
+            )
+        })?;
 
         tx.commit().map_err(|e| {
             AppError::new(
@@ -841,16 +841,18 @@ pub fn apply_migrations(conn: &Connection) -> AppResult<()> {
             )
         })?;
 
-        tx.execute_batch(include_str!("../migrations/0011_lineage_policy_conditions_v3.sql"))
-            .map_err(|e| {
-                AppError::new(
-                    "KC_DB_MIGRATION_FAILED",
-                    "db",
-                    "failed to apply migration 0011",
-                    false,
-                    serde_json::json!({ "error": e.to_string() }),
-                )
-            })?;
+        tx.execute_batch(include_str!(
+            "../migrations/0011_lineage_policy_conditions_v3.sql"
+        ))
+        .map_err(|e| {
+            AppError::new(
+                "KC_DB_MIGRATION_FAILED",
+                "db",
+                "failed to apply migration 0011",
+                false,
+                serde_json::json!({ "error": e.to_string() }),
+            )
+        })?;
 
         tx.pragma_update(None, "user_version", LATEST_SCHEMA_VERSION)
             .map_err(|e| {

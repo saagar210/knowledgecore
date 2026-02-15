@@ -16,7 +16,12 @@ fn canonical_json_vectors() {
 
     for case in vectors {
         let got = to_canonical_bytes(&case.input).expect("canonical bytes");
-        assert_eq!(String::from_utf8(got).expect("utf8"), case.expected, "{}", case.name);
+        assert_eq!(
+            String::from_utf8(got).expect("utf8"),
+            case.expected,
+            "{}",
+            case.name
+        );
     }
 }
 

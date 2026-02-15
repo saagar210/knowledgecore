@@ -187,18 +187,25 @@ impl RetrievedOnlyAskService {
                 serde_json::json!({ "error": e.to_string(), "table": table }),
             )
         })?;
-        Ok(rows.next().map_err(|e| {
-            AppError::new(
-                "KC_ASK_PROVIDER_UNAVAILABLE",
-                "ask",
-                "failed reading sqlite master query result",
-                true,
-                serde_json::json!({ "error": e.to_string(), "table": table }),
-            )
-        })?.is_some())
+        Ok(rows
+            .next()
+            .map_err(|e| {
+                AppError::new(
+                    "KC_ASK_PROVIDER_UNAVAILABLE",
+                    "ask",
+                    "failed reading sqlite master query result",
+                    true,
+                    serde_json::json!({ "error": e.to_string(), "table": table }),
+                )
+            })?
+            .is_some())
     }
 
-    fn lexical_candidates(conn: &Connection, question: &str, limit: usize) -> AppResult<Vec<LexicalCandidate>> {
+    fn lexical_candidates(
+        conn: &Connection,
+        question: &str,
+        limit: usize,
+    ) -> AppResult<Vec<LexicalCandidate>> {
         let mut candidates = Vec::new();
         let q = question.trim();
         if !q.is_empty() && Self::table_exists(conn, "chunks_fts")? {
@@ -213,8 +220,9 @@ impl RetrievedOnlyAskService {
                         serde_json::json!({ "error": e.to_string() }),
                     )
                 })?;
-            let rows_result =
-                stmt.query_map(rusqlite::params![q, limit as i64], |row| row.get::<_, String>(0));
+            let rows_result = stmt.query_map(rusqlite::params![q, limit as i64], |row| {
+                row.get::<_, String>(0)
+            });
             if let Ok(rows) = rows_result {
                 for (idx, row) in rows.enumerate() {
                     if let Ok(chunk_id) = row {
@@ -360,7 +368,8 @@ impl RetrievedOnlyAskService {
                         serde_json::json!({ "error": e.to_string(), "chunk_id": merged_hit.chunk_id.0 }),
                     )
                 })?;
-            let bytes = object_store.get_bytes(&kc_core::types::ObjectHash(canonical_object_hash))?;
+            let bytes =
+                object_store.get_bytes(&kc_core::types::ObjectHash(canonical_object_hash))?;
             let text = String::from_utf8(bytes).map_err(|e| {
                 AppError::new(
                     "KC_ASK_PROVIDER_UNAVAILABLE",
@@ -419,8 +428,11 @@ impl RetrievedOnlyAskService {
             redaction: serde_json::json!({ "enabled": true }),
         };
 
-        let trace_path =
-            write_trace_log(&req.vault_path.join(&self.trace_dir_name), &trace, &normalized_citations)?;
+        let trace_path = write_trace_log(
+            &req.vault_path.join(&self.trace_dir_name),
+            &trace,
+            &normalized_citations,
+        )?;
 
         Ok(AskResponse {
             answer_text,

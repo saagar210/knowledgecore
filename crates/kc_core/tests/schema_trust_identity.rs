@@ -204,8 +204,8 @@ fn schema_trust_provider_policy_and_revocation_accept_valid_payloads() {
     .expect("policy set");
     let session =
         trust_identity_complete(&conn, "corp", "sub:alice@example.com", 12).expect("complete");
-    let revocation = trust_session_revoke(&conn, &session.session_id, "tester", 13)
-        .expect("session revoke");
+    let revocation =
+        trust_session_revoke(&conn, &session.session_id, "tester", 13).expect("session revoke");
 
     let provider_schema =
         JSONSchema::compile(&identity_provider_schema()).expect("compile provider schema");
@@ -214,9 +214,7 @@ fn schema_trust_provider_policy_and_revocation_accept_valid_payloads() {
     let revocation_schema = JSONSchema::compile(&trust_session_revocation_schema())
         .expect("compile session revocation schema");
 
-    assert!(provider_schema.is_valid(
-        &serde_json::to_value(provider).expect("serialize provider")
-    ));
+    assert!(provider_schema.is_valid(&serde_json::to_value(provider).expect("serialize provider")));
     assert!(policy_schema.is_valid(&serde_json::to_value(policy).expect("serialize policy")));
     assert!(revocation_schema
         .is_valid(&serde_json::to_value(revocation).expect("serialize revocation")));

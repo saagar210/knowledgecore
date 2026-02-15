@@ -135,7 +135,15 @@ pub fn ocr_pdf_via_images(pdf_bytes: &[u8], ocr_cfg: &OcrConfig) -> AppResult<St
     }
 
     let mut pages: Vec<_> = fs::read_dir(dir.path())
-        .map_err(|e| AppError::new("KC_OCR_FAILED", "extract", "failed listing ocr pages", false, serde_json::json!({ "error": e.to_string() })))?
+        .map_err(|e| {
+            AppError::new(
+                "KC_OCR_FAILED",
+                "extract",
+                "failed listing ocr pages",
+                false,
+                serde_json::json!({ "error": e.to_string() }),
+            )
+        })?
         .filter_map(Result::ok)
         .map(|e| e.path())
         .filter(|p| p.extension().and_then(|x| x.to_str()) == Some("png"))

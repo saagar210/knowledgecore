@@ -6,8 +6,8 @@ use kc_core::trust_identity::{
     trust_provider_add, trust_provider_disable, trust_provider_list, verified_author_identity,
 };
 use kc_core::trust_policy::{
-    trust_provider_policy_get, trust_provider_policy_set, trust_provider_policy_set_tenant_template,
-    trust_session_revoke,
+    trust_provider_policy_get, trust_provider_policy_set,
+    trust_provider_policy_set_tenant_template, trust_session_revoke,
 };
 use kc_core::vault::vault_init;
 
@@ -48,7 +48,9 @@ fn trust_identity_start_and_complete_persist_session() {
         .expect("identity complete");
     assert_eq!(completed.provider_id, "default");
     assert_eq!(completed.subject, "bob@example.com");
-    assert!(completed.claim_subset_json.contains("\"sub\":\"bob@example.com\""));
+    assert!(completed
+        .claim_subset_json
+        .contains("\"sub\":\"bob@example.com\""));
     assert!(completed.expires_at_ms > completed.issued_at_ms);
 }
 
@@ -249,7 +251,8 @@ fn trust_provider_policy_serializes_claims_canonically() {
 fn provider_id_from_issuer_is_deterministic() {
     let issuer = "https://tenant.example/oidc/";
     let first = provider_id_from_issuer(issuer).expect("derive provider id");
-    let second = provider_id_from_issuer("https://tenant.example/oidc").expect("derive provider id");
+    let second =
+        provider_id_from_issuer("https://tenant.example/oidc").expect("derive provider id");
     assert_eq!(first, second);
     assert!(first.starts_with("auto-"));
 }

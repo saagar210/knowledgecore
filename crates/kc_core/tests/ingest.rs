@@ -37,7 +37,11 @@ fn ingest_is_idempotent_and_persists_doc_source() {
 
     let doc_id = first.doc_id.0.clone();
     let docs_count: i64 = conn
-        .query_row("SELECT COUNT(*) FROM docs WHERE doc_id=?1", [&doc_id], |r| r.get(0))
+        .query_row(
+            "SELECT COUNT(*) FROM docs WHERE doc_id=?1",
+            [&doc_id],
+            |r| r.get(0),
+        )
         .expect("docs count");
     assert_eq!(docs_count, 1);
 

@@ -45,3 +45,19 @@ fn schema_sync_target_rejects_unknown_scheme() {
     let err = SyncTargetUri::parse("ftp://example/path").expect_err("scheme must fail");
     assert_eq!(err.code, "KC_SYNC_TARGET_UNSUPPORTED");
 }
+
+#[test]
+fn schema_sync_target_rejects_empty_and_blank_paths() {
+    let empty = SyncTargetUri::parse("").expect_err("empty target must fail");
+    assert_eq!(empty.code, "KC_SYNC_TARGET_INVALID");
+
+    let blank = SyncTargetUri::parse("   ").expect_err("blank target must fail");
+    assert_eq!(blank.code, "KC_SYNC_TARGET_INVALID");
+
+    let empty_file = SyncTargetUri::parse("file://").expect_err("empty file uri must fail");
+    assert_eq!(empty_file.code, "KC_SYNC_TARGET_INVALID");
+
+    let blank_file =
+        SyncTargetUri::parse("file://   ").expect_err("blank file uri target must fail");
+    assert_eq!(blank_file.code, "KC_SYNC_TARGET_INVALID");
+}

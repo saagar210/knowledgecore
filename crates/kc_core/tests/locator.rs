@@ -77,7 +77,9 @@ fn locator_hash_mismatch_fails() {
     let locator = LocatorV1 {
         v: 1,
         doc_id,
-        canonical_hash: CanonicalHash("blake3:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa".to_string()),
+        canonical_hash: CanonicalHash(
+            "blake3:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa".to_string(),
+        ),
         range: LocatorRange { start: 0, end: 5 },
         hints: None,
     };
@@ -103,6 +105,7 @@ fn locator_range_oob_fails() {
 
 #[test]
 fn snippet_display_only_strips_markers() {
-    let rendered = render_snippet_display_only("[[PAGE:0001]]\n[[H1:Title]]\nhello\n\n\nworld\n").expect("render");
+    let rendered = render_snippet_display_only("[[PAGE:0001]]\n[[H1:Title]]\nhello\n\n\nworld\n")
+        .expect("render");
     assert_eq!(rendered, "hello\n\nworld");
 }

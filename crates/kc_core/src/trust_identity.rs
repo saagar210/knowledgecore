@@ -87,7 +87,8 @@ fn normalize_issuer(issuer: &str) -> AppResult<String> {
 
 pub fn provider_id_from_issuer(issuer: &str) -> AppResult<String> {
     let normalized = normalize_issuer(issuer)?;
-    let hash = blake3_hex_prefixed(format!("kc.trust.provider.discovery.v1\n{}", normalized).as_bytes());
+    let hash =
+        blake3_hex_prefixed(format!("kc.trust.provider.discovery.v1\n{}", normalized).as_bytes());
     Ok(format!("auto-{}", &hash[7..19]))
 }
 
@@ -133,7 +134,10 @@ fn canonical_json_string(value: serde_json::Value) -> AppResult<String> {
     })
 }
 
-fn load_provider(conn: &Connection, provider_id: &str) -> AppResult<Option<IdentityProviderRecord>> {
+fn load_provider(
+    conn: &Connection,
+    provider_id: &str,
+) -> AppResult<Option<IdentityProviderRecord>> {
     conn.query_row(
         "SELECT provider_id, issuer, audience, jwks_url, enabled, created_at_ms, updated_at_ms
          FROM trust_providers
@@ -635,7 +639,10 @@ pub fn trust_device_enroll(
     })
 }
 
-fn load_certificate(conn: &Connection, cert_id: &str) -> AppResult<Option<DeviceCertificateRecord>> {
+fn load_certificate(
+    conn: &Connection,
+    cert_id: &str,
+) -> AppResult<Option<DeviceCertificateRecord>> {
     conn.query_row(
         "SELECT cert_id, device_id, provider_id, subject, cert_chain_hash, issued_at_ms, expires_at_ms, verified_at_ms, created_at_ms
          FROM device_certificates

@@ -1,4 +1,6 @@
-use kc_core::chunking::{chunk_document, hash_chunking_config, ChunkingConfigV1, MdHtmlChunkCfg, PdfChunkCfg};
+use kc_core::chunking::{
+    chunk_document, hash_chunking_config, ChunkingConfigV1, MdHtmlChunkCfg, PdfChunkCfg,
+};
 use kc_core::types::DocId;
 
 fn cfg() -> ChunkingConfigV1 {
@@ -20,7 +22,9 @@ fn cfg() -> ChunkingConfigV1 {
 fn chunking_golden_md_html_deterministic() {
     let text = "abcdefghijklmnopqrstuvwxyz";
     let chunks = chunk_document(
-        &DocId("blake3:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa".to_string()),
+        &DocId(
+            "blake3:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa".to_string(),
+        ),
         text,
         "text/markdown",
         &cfg(),
@@ -35,7 +39,9 @@ fn chunking_golden_md_html_deterministic() {
 fn chunking_golden_pdf_window_overlap() {
     let text = "abcdefghijklmnopqrstuvwxyz";
     let chunks = chunk_document(
-        &DocId("blake3:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb".to_string()),
+        &DocId(
+            "blake3:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb".to_string(),
+        ),
         text,
         "application/pdf",
         &cfg(),

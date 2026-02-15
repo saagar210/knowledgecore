@@ -124,7 +124,10 @@ impl RecoveryEscrowProvider for GcpRecoveryEscrowProvider {
             provider_ref,
             key_id: format!(
                 "gcpkms:{}/{}/{}/{}",
-                self.config.project_id, self.config.location, self.config.key_ring, self.config.key_name
+                self.config.project_id,
+                self.config.location,
+                self.config.key_ring,
+                self.config.key_name
             ),
             wrapped_at_ms: req.now_ms,
         };

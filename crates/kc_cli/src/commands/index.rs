@@ -85,7 +85,12 @@ pub fn run_rebuild(vault_path: &str) -> AppResult<()> {
     let mut vector_rows: Vec<VectorRow> = Vec::new();
 
     for doc_id in doc_ids {
-        let canonical = String::from_utf8(load_canonical_text(&conn, &object_store, &DocId(doc_id.clone()))?).map_err(|e| {
+        let canonical = String::from_utf8(load_canonical_text(
+            &conn,
+            &object_store,
+            &DocId(doc_id.clone()),
+        )?)
+        .map_err(|e| {
             AppError::new(
                 "KC_FTS_REBUILD_FAILED",
                 "index",

@@ -18,7 +18,11 @@ fn object_store_dedupes_by_content_hash() {
     assert_eq!(store.get_bytes(&h1).expect("get"), payload);
 
     let count: i64 = conn
-        .query_row("SELECT COUNT(*) FROM objects WHERE object_hash=?1", [h1.0], |row| row.get(0))
+        .query_row(
+            "SELECT COUNT(*) FROM objects WHERE object_hash=?1",
+            [h1.0],
+            |row| row.get(0),
+        )
         .expect("count query");
     assert_eq!(count, 1);
 }
@@ -42,14 +46,14 @@ fn object_store_encrypted_round_trip_requires_key() {
     let payload = b"secret-bytes";
     let hash = encrypted_store.put_bytes(&conn, payload, 1).expect("put");
 
-    let raw_path = objects_dir
-        .join(&hash.0[7..9])
-        .join(&hash.0);
+    let raw_path = objects_dir.join(&hash.0[7..9]).join(&hash.0);
     let raw = std::fs::read(raw_path).expect("read raw encrypted object");
     assert!(raw.starts_with(b"KCE1"));
 
     let plain_store = ObjectStore::new(objects_dir.clone());
-    let err = plain_store.get_bytes(&hash).expect_err("read without key should fail");
+    let err = plain_store
+        .get_bytes(&hash)
+        .expect_err("read without key should fail");
     assert_eq!(err.code, "KC_ENCRYPTION_REQUIRED");
 
     let round_trip = encrypted_store.get_bytes(&hash).expect("decrypt with key");

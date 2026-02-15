@@ -12,6 +12,16 @@ pub enum SyncTargetUri {
 
 impl SyncTargetUri {
     pub fn parse(raw: &str) -> AppResult<Self> {
+        if raw.trim().is_empty() {
+            return Err(AppError::new(
+                "KC_SYNC_TARGET_INVALID",
+                "sync",
+                "sync target path is required",
+                false,
+                serde_json::json!({ "target": raw }),
+            ));
+        }
+
         if let Some(rest) = raw.strip_prefix("s3://") {
             let mut parts = rest.splitn(2, '/');
             let bucket = parts.next().unwrap_or_default().trim();
@@ -32,7 +42,7 @@ impl SyncTargetUri {
         }
 
         if let Some(rest) = raw.strip_prefix("file://") {
-            if rest.is_empty() {
+            if rest.trim().is_empty() {
                 return Err(AppError::new(
                     "KC_SYNC_TARGET_INVALID",
                     "sync",
@@ -136,15 +146,16 @@ impl SyncTransport for FsSyncTransport {
                 serde_json::json!({ "error": e.to_string(), "path": self.root }),
             )
         })?;
-        let bytes = crate::canon_json::to_canonical_bytes(&serde_json::to_value(head).map_err(|e| {
-            AppError::new(
-                "KC_SYNC_TARGET_INVALID",
-                "sync",
-                "failed serializing sync head",
-                false,
-                serde_json::json!({ "error": e.to_string() }),
-            )
-        })?)?;
+        let bytes =
+            crate::canon_json::to_canonical_bytes(&serde_json::to_value(head).map_err(|e| {
+                AppError::new(
+                    "KC_SYNC_TARGET_INVALID",
+                    "sync",
+                    "failed serializing sync head",
+                    false,
+                    serde_json::json!({ "error": e.to_string() }),
+                )
+            })?)?;
         std::fs::write(self.root.join("head.json"), bytes).map_err(|e| {
             AppError::new(
                 "KC_SYNC_TARGET_INVALID",

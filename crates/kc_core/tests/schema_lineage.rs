@@ -163,7 +163,8 @@ fn schema_lineage_query_rejects_missing_nodes() {
 
 #[test]
 fn schema_lineage_overlay_entry_accepts_valid_payload() {
-    let schema = JSONSchema::compile(&lineage_overlay_entry_schema()).expect("compile overlay schema");
+    let schema =
+        JSONSchema::compile(&lineage_overlay_entry_schema()).expect("compile overlay schema");
     let payload = serde_json::json!({
       "overlay_id": "blake3:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
       "doc_id": "doc-1",
@@ -179,7 +180,8 @@ fn schema_lineage_overlay_entry_accepts_valid_payload() {
 
 #[test]
 fn schema_lineage_query_v2_rejects_missing_origin() {
-    let schema = JSONSchema::compile(&lineage_response_v2_schema()).expect("compile lineage v2 schema");
+    let schema =
+        JSONSchema::compile(&lineage_response_v2_schema()).expect("compile lineage v2 schema");
     let payload = serde_json::json!({
       "schema_version": 2,
       "seed_doc_id": "doc-1",

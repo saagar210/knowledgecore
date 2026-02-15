@@ -23,7 +23,11 @@ fn effective_ts_ms(path: &Path, fallback_ms: i64) -> i64 {
 }
 
 fn detect_mime(path: &Path) -> &'static str {
-    match path.extension().and_then(|x| x.to_str()).map(|x| x.to_ascii_lowercase()) {
+    match path
+        .extension()
+        .and_then(|x| x.to_str())
+        .map(|x| x.to_ascii_lowercase())
+    {
         Some(ext) if ext == "md" || ext == "markdown" => "text/markdown",
         Some(ext) if ext == "html" || ext == "htm" => "text/html",
         Some(ext) if ext == "pdf" => "application/pdf",

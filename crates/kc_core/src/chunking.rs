@@ -62,7 +62,13 @@ pub fn hash_chunking_config(cfg: &ChunkingConfigV1) -> AppResult<ConfigHash> {
     Ok(ConfigHash(hash_canonical(&value)?))
 }
 
-fn build_chunk_id(doc_id: &DocId, cfg_hash: &ConfigHash, ordinal: i64, start: i64, end: i64) -> ChunkId {
+fn build_chunk_id(
+    doc_id: &DocId,
+    cfg_hash: &ConfigHash,
+    ordinal: i64,
+    start: i64,
+    end: i64,
+) -> ChunkId {
     let raw = format!(
         "kc.chunk.v1\n{}\n{}\n{}\n{}:{}",
         doc_id.0, cfg_hash.0, ordinal, start, end
@@ -70,7 +76,12 @@ fn build_chunk_id(doc_id: &DocId, cfg_hash: &ConfigHash, ordinal: i64, start: i6
     ChunkId(blake3_hex_prefixed(raw.as_bytes()))
 }
 
-pub fn chunk_document(doc_id: &DocId, canonical_text: &str, mime: &str, cfg: &ChunkingConfigV1) -> AppResult<Vec<ChunkRecord>> {
+pub fn chunk_document(
+    doc_id: &DocId,
+    canonical_text: &str,
+    mime: &str,
+    cfg: &ChunkingConfigV1,
+) -> AppResult<Vec<ChunkRecord>> {
     if cfg.v != 1 {
         return Err(AppError::new(
             "KC_CHUNK_CONFIG_INVALID",
@@ -91,7 +102,10 @@ pub fn chunk_document(doc_id: &DocId, canonical_text: &str, mime: &str, cfg: &Ch
 
     if mime == "application/pdf" {
         let window = cfg.pdf.window_chars.max(1) as i64;
-        let overlap = cfg.pdf.overlap_chars.min(cfg.pdf.window_chars.saturating_sub(1)) as i64;
+        let overlap = cfg
+            .pdf
+            .overlap_chars
+            .min(cfg.pdf.window_chars.saturating_sub(1)) as i64;
         let step = (window - overlap).max(1);
         let mut start = 0i64;
         let mut ordinal = 0i64;
