@@ -8,6 +8,7 @@ Cargo.lock
 # Node / Tauri
 **/node_modules/
 **/dist/
+**/tauri-dist/
 
 # Logs
 *.log
