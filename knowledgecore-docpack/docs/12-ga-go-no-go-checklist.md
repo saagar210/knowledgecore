@@ -49,3 +49,10 @@
 - Pilot release decision: `GO (internal only)`
 - Formal decision record location:
   - `/Users/d/Projects/knowledgecore/knowledgecore-docpack/docs/14-ga-decision-record.md`
+
+## C4 Final Gate Rerun Evidence
+| Command | Start (UTC) | End (UTC) | Result | Notes |
+|---|---|---|---|---|
+| `cargo test -p kc_core -p kc_extract -p kc_index -p kc_ask -p kc_cli` | `2026-02-15T07:19:47Z` | `2026-02-15T07:20:09Z` | PASS | full Rust gate green |
+| `pnpm lint && pnpm test && pnpm tauri build` | `2026-02-15T07:20:12Z` | `2026-02-15T07:20:45Z` | PASS | includes macOS bundle outputs |
+| `cargo run -p kc_cli -- bench run --corpus v1` | `2026-02-15T07:20:51Z` | `2026-02-15T07:20:51Z` | PASS | `elapsed_ms=13`, `baseline_ms=10`, `checksum=7311227353339408228` |
