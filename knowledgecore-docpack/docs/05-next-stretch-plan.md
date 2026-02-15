@@ -1,14 +1,15 @@
-# Next Stretch Plan (Post-Z)
+# Next Stretch Plan (Post-AD)
 
 ## Title
-KnowledgeCore Remaining Roadmap: Phases AA, AB, AC, AD
+KnowledgeCore Carry-Forward Roadmap: Phases AF, AG, AH, AI, AJ
 
 ## Summary
-This execution horizon closes the remaining deferred scope after Z3:
-- AA: policy-driven OIDC provider governance automation.
-- AB: recovery escrow provider expansion beyond AWS-first.
-- AC: merge policy expansion beyond `conservative_plus_v2`.
-- AD: lineage governance conditions beyond role-rank precedence.
+This execution horizon closes all known post-AD carry-forward items:
+- AF: trust provider auto-discovery and deterministic tenant policy templates.
+- AG: recovery escrow adapter expansion beyond the `aws`/`gcp`/`azure` baseline.
+- AH: merge policy expansion beyond `conservative_plus_v3`.
+- AI: lineage condition DSL expansion beyond `action` + `doc_id_prefix`.
+- AJ: final consolidation and readiness closure.
 
 ## Global Invariants
 - Local-first remains default; remote adapters are optional.
@@ -18,83 +19,95 @@ This execution horizon closes the remaining deferred scope after Z3:
 - Schema changes must update `SCHEMA_REGISTRY.md` and schema validation tests.
 - Milestones are merge-as-we-go with stop/fix/rerun gates.
 
-## Phase AA — Trust Governance Automation
+## Phase AF — Trust Discovery and Tenant Templates
 
 ### Goal
-Introduce deterministic OIDC provider lifecycle management with explicit policy controls and session revocation support.
+Add deterministic provider discovery and tenant bootstrap templates on top of existing trust governance/session contracts.
 
 ### Scope
-- Provider CRUD and enable/disable lifecycle.
-- Claim requirement policy and max clock-skew controls.
-- Session revocation state and precedence.
-- CLI/RPC/UI operator surfaces for provider governance.
+- Deterministic provider auto-discovery flow.
+- Tenant bootstrap policy templates with deterministic canonicalization.
+- Core/CLI/RPC/UI surfaces for discovery/template operations.
 
 ### Non-goals
-- New trust signature formats.
-- Replacing existing trust enrollment primitives.
+- Non-deterministic provider fallback.
+- UI-side trust policy evaluation.
 
 ### Acceptance
-- Disabled providers cannot complete sessions.
-- Revoked sessions are never selected as active author identities.
-- Provider policy evaluation is deterministic and test-covered.
+- Discovery output ordering is deterministic.
+- Template application yields canonical claims JSON.
+- Existing revocation precedence remains intact.
 
-## Phase AB — Recovery Escrow Expansion
+## Phase AG — Escrow Provider Expansion v4
 
 ### Goal
-Add deterministic multi-provider recovery escrow management with ordered provider descriptors and rotation orchestration.
+Extend recovery escrow to support additional provider classes (for example HSM/private KMS variants) while preserving deterministic export/verifier behavior.
 
 ### Scope
-- Multi-provider escrow configuration model.
-- Provider adapters for AWS, GCP, Azure (runtime-available adapters may remain env-gated).
-- CLI/RPC/UI provider add/list/rotate-all surfaces.
-- Export/verifier alignment for escrow descriptor lists.
+- Catalog-driven provider resolution and ordering.
+- Additional provider adapters and availability checks.
+- Export/verifier schema closure for expanded provider lists.
 
 ### Non-goals
-- External secret persistence in repo-tracked files.
-- Non-deterministic provider fallback ordering.
+- Secret material persistence in repo-tracked files.
+- Non-deterministic provider selection.
 
 ### Acceptance
-- Provider ordering is stable (`aws`, `gcp`, `azure`).
-- Manifest escrow metadata is deterministic and verifier-enforced.
-- Failures map to stable AppError codes.
+- Provider ordering remains deterministic and test-covered.
+- Verifier enforces expanded descriptor invariants deterministically.
+- Unsupported providers map to stable AppError codes.
 
-## Phase AC — Merge Policy v3
+## Phase AH — Merge Policy v4
 
 ### Goal
-Extend sync merge preview/apply policy with explicit RBAC conflict precondition and deterministic decision traces.
+Introduce `conservative_plus_v4` as an opt-in deterministic merge policy beyond v3.
 
 ### Scope
-- New policy `conservative_plus_v3`.
-- Policy selection from CLI/RPC/UI without UI merge logic.
-- Safety matrix tests for overlap, trust, lock, and RBAC conflicts.
+- New merge policy semantics and deterministic reason categories.
+- Replay-stable decision traces.
+- CLI/RPC/UI policy-selection surfacing without UI merge logic.
 
 ### Non-goals
 - Automatic destructive merges.
 - Policy evaluation in UI/Tauri.
 
 ### Acceptance
-- Unsafe merges hard-fail with deterministic reason categories.
-- Replay of identical inputs yields identical merge decisions and traces.
+- Unsafe scenarios hard-fail with deterministic reason categories.
+- Replay of identical inputs yields identical v4 decisions and traces.
 
-## Phase AD — Lineage Condition Governance
+## Phase AI — Lineage Condition DSL v4
 
 ### Goal
-Layer deterministic condition-based policy evaluation over RBAC for lineage overlay mutations, with audit stability.
+Extend lineage condition expressiveness while preserving deny-default and deterministic precedence/audit invariants.
 
 ### Scope
-- Policy condition model (allow/deny) and subject bindings.
-- Deterministic precedence (`priority`, `policy_id`, `subject_id`).
-- CLI/RPC/UI policy management surfaces.
-- Audit event generation and schema hardening.
+- Deterministic condition-key expansion beyond `action` + `doc_id_prefix`.
+- Core policy evaluation and audit serialization updates.
+- CLI/RPC/UI policy-management surface updates.
 
 ### Non-goals
-- Distributed lock consensus.
-- Client-side governance arbitration.
+- Client-side policy arbitration.
+- Distributed/global policy consensus.
 
 ### Acceptance
-- Overlay mutation requires lock + RBAC + condition allow.
-- Explicit deny overrides allow deterministically.
-- Audit ordering and serialization remain stable.
+- Overlay mutation still requires lock + RBAC + policy allow.
+- Deny override remains deterministic.
+- Audit ordering/serialization remains stable.
+
+## Phase AJ — Final Consolidation
+
+### Goal
+Close AF–AI with full gate rerun, bench governance checks, and git-hygiene confirmation.
+
+### Scope
+- Full canonical gates and schema/RPC reruns.
+- Bench gate (`bench run --corpus v1`) twice with baseline policy handling.
+- Final readiness and risk-closure note updates.
+
+### Acceptance
+- All canonical gates pass.
+- Bench policy expectations are documented and satisfied.
+- `master` is clean and no milestone branches remain.
 
 ## Canonical Gates
 - Rust: `cargo test -p kc_core -p kc_extract -p kc_index -p kc_ask -p kc_cli`

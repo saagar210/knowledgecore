@@ -121,3 +121,25 @@ Track baseline, milestone progression, gate evidence, and risk/follow-up closure
 - Deletion fallback used in this environment:
   - `git update-ref -d refs/heads/<branch>`
 - `master` was kept as the only active local branch between milestones.
+
+## Next Horizon (AF–AJ) Initialization
+- This document remains the historical ledger for L–AD completion and now anchors post-AD execution.
+- AF–AJ milestones follow the same merge-as-we-go discipline:
+  - one active `codex/*` branch at a time,
+  - ff-only merge to `master`,
+  - immediate local branch deletion (fallback: `git update-ref -d refs/heads/<branch>`).
+
+## AF–AJ Planned Milestone Ledger
+| Milestone | Branch | Merge Mode | Status | Notes |
+|---|---|---|---|---|
+| AF0 | `codex/af0-post-ad-baseline-hygiene` | ff-only | In progress | docpack and baseline hygiene alignment |
+| AF1 | `codex/af1-trust-discovery-core` | ff-only | Planned | deterministic provider discovery + template core |
+| AF2 | `codex/af2-trust-discovery-surface-schema` | ff-only | Planned | trust discovery/template CLI/RPC/UI + schema closure |
+| AG1 | `codex/ag1-escrow-provider-catalog-core` | ff-only | Planned | catalog-driven escrow provider resolution |
+| AG2 | `codex/ag2-escrow-hsm-private-kms-adapters` | ff-only | Planned | additional escrow adapters (HSM/private KMS variants) |
+| AG3 | `codex/ag3-escrow-export-verifier-closure` | ff-only | Planned | manifest/verifier deterministic closure for expanded providers |
+| AH1 | `codex/ah1-sync-merge-policy-v4-core` | ff-only | Planned | `conservative_plus_v4` core policy and replay rules |
+| AH2 | `codex/ah2-sync-merge-policy-v4-surface-schema` | ff-only | Planned | policy v4 surface + rpc/schema closure |
+| AI1 | `codex/ai1-lineage-condition-dsl-v4-core` | ff-only | Planned | condition DSL expansion with deterministic precedence |
+| AI2 | `codex/ai2-lineage-condition-dsl-v4-surface-schema` | ff-only | Planned | lineage DSL v4 surface + schema closure |
+| AJ1 | `codex/aj1-post-ad-final-consolidation` | ff-only | Planned | full gates + bench x2 + final hygiene closure |

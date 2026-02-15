@@ -88,17 +88,36 @@ Record execution status after completing the post-N3 roadmap through Phases O, P
 ## Carry-Forward Deferred Table (Post-AD)
 | Item | Status | Carry-Forward Target | Notes |
 |---|---|---|---|
-| OIDC provider auto-discovery and tenant bootstrap templates | Deferred | Future trust horizon | Current provider lifecycle is deterministic but manually configured |
-| Escrow adapters beyond `aws`/`gcp`/`azure` | Deferred | Future recovery horizon | Multi-provider baseline is active; additional adapters pending |
-| Merge policies beyond `conservative_plus_v3` | Deferred | Future sync horizon | Current policy family remains explicit opt-in |
-| Extended lineage condition DSL (beyond `action` + `doc_id_prefix`) | Deferred | Future governance horizon | Deterministic v3 condition model is intentionally narrow |
+| OIDC provider auto-discovery and tenant bootstrap templates | Planned | AF | Deterministic discovery + template canonicalization required |
+| Escrow adapters beyond `aws`/`gcp`/`azure` | Planned | AG | Expanded provider catalog requires deterministic ordering + verifier closure |
+| Merge policies beyond `conservative_plus_v3` | Planned | AH | New policy remains explicit opt-in with replay-stability requirements |
+| Extended lineage condition DSL (beyond `action` + `doc_id_prefix`) | Planned | AI | Condition expansion must preserve deny-default and deterministic audit rules |
 
 ## Next Horizon Mapping (Post-AD)
-- AE: final consolidation and readiness packaging for the AA–AD horizon.
-- Future planning target: define post-AD roadmap only from newly identified carry-forward items listed above.
+- AF: trust provider auto-discovery and tenant policy template promotion.
+- AG: escrow provider expansion and export/verifier closure.
+- AH: sync merge policy v4 activation and surface rollout.
+- AI: lineage condition DSL v4 rollout.
+- AJ: final consolidation + readiness packaging for AF–AI.
 
 ## Git Hygiene Note
 - Fast-forward merge mode was used for completed milestones.
 - Local milestone refs were removed after merge; environment fallback used when `git branch -d` was blocked:
   - `git update-ref -d refs/heads/<merged-branch>`
 - `master` remains the only active local branch between milestones.
+
+
+## AF–AJ Milestone Plan Status
+| Milestone | Branch | Status | Notes |
+|---|---|---|---|
+| AF0 | `codex/af0-post-ad-baseline-hygiene` | In progress | baseline hygiene + docpack realignment |
+| AF1 | `codex/af1-trust-discovery-core` | Planned | deterministic discovery/template core |
+| AF2 | `codex/af2-trust-discovery-surface-schema` | Planned | CLI/RPC/UI surfaces + schema closure |
+| AG1 | `codex/ag1-escrow-provider-catalog-core` | Planned | catalog-driven provider resolution |
+| AG2 | `codex/ag2-escrow-hsm-private-kms-adapters` | Planned | additional provider adapters |
+| AG3 | `codex/ag3-escrow-export-verifier-closure` | Planned | manifest/verifier deterministic closure |
+| AH1 | `codex/ah1-sync-merge-policy-v4-core` | Planned | new opt-in v4 merge policy |
+| AH2 | `codex/ah2-sync-merge-policy-v4-surface-schema` | Planned | policy surfacing + rpc/schema tests |
+| AI1 | `codex/ai1-lineage-condition-dsl-v4-core` | Planned | deterministic DSL expansion |
+| AI2 | `codex/ai2-lineage-condition-dsl-v4-surface-schema` | Planned | CLI/RPC/UI schema closure |
+| AJ1 | `codex/aj1-post-ad-final-consolidation` | Planned | all gates + bench x2 + hygiene closure |
