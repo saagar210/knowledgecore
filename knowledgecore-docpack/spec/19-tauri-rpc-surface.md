@@ -100,13 +100,15 @@ Versioned RPC surface v1, envelope schema, and determinism notes.
          - lineage_overlay_add, lineage_overlay_remove, lineage_overlay_list
          - lineage_lock_acquire, lineage_lock_release, lineage_lock_status
          - lineage_role_grant, lineage_role_revoke, lineage_role_list
+         - lineage_policy_add, lineage_policy_bind, lineage_policy_list
+           - `condition_json` is caller-provided JSON and core-canonicalized; supported deterministic condition keys are `action`, `doc_id_prefix`, `doc_id_suffix`, and `subject_id_prefix`
          - lineage_lock_acquire_scope
 
          ### Compatibility note
          - `lineage_query` (v1 response) remains supported during transition.
          - `lineage_query_v2` is the primary method for overlay-aware lineage responses.
          - overlay mutation RPCs require lock-token inputs and lock methods are used to acquire/release per-doc edit leases.
-         - governance workflows are core-authoritative; RPC only transports role/lock-scope intent and results.
+         - governance workflows are core-authoritative; RPC only transports role/policy/lock-scope intent and results.
 
          ## Determinism note
          - now_ms is passed by caller (UI/tests) to make snapshots deterministic.

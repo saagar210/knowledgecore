@@ -47,7 +47,7 @@ fn lineage_scope_lock_status_schema() -> serde_json::Value {
 fn lineage_policy_binding_schema() -> serde_json::Value {
     serde_json::json!({
       "$schema": "https://json-schema.org/draft/2020-12/schema",
-      "$id": "kc://schemas/lineage-policy-binding/v3",
+      "$id": "kc://schemas/lineage-policy-binding/v4",
       "type": "object",
       "required": [
         "subject_id",
@@ -76,7 +76,7 @@ fn lineage_policy_binding_schema() -> serde_json::Value {
 fn lineage_policy_audit_schema() -> serde_json::Value {
     serde_json::json!({
       "$schema": "https://json-schema.org/draft/2020-12/schema",
-      "$id": "kc://schemas/lineage-policy-audit/v3",
+      "$id": "kc://schemas/lineage-policy-audit/v4",
       "type": "object",
       "required": [
         "ts_ms",
@@ -174,7 +174,7 @@ fn schema_lineage_policy_binding_accepts_valid_payload() {
       "policy_name": "allow-overlay",
       "effect": "allow",
       "priority": 200,
-      "condition_json": "{\"action\":\"lineage.overlay.write\"}",
+      "condition_json": "{\"action\":\"lineage.overlay.write\",\"doc_id_suffix\":\"_release\",\"subject_id_prefix\":\"team-\"}",
       "bound_by": "desktop",
       "bound_at_ms": 1710000000000i64
     });
@@ -191,7 +191,7 @@ fn schema_lineage_policy_binding_rejects_unknown_effect() {
       "policy_name": "allow-overlay",
       "effect": "maybe",
       "priority": 200,
-      "condition_json": "{\"action\":\"lineage.overlay.write\"}",
+      "condition_json": "{\"action\":\"lineage.overlay.write\",\"doc_id_suffix\":\"_release\"}",
       "bound_by": "desktop",
       "bound_at_ms": 1710000000000i64
     });

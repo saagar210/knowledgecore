@@ -679,7 +679,7 @@ fn rpc_schema_lineage_policy_requests_validate_shapes() {
         "vault_path": "/tmp/vault",
         "name": "allow-overlay",
         "effect": "allow",
-        "condition_json": "{\"action\":\"lineage.overlay.write\"}",
+        "condition_json": "{\"action\":\"lineage.overlay.write\",\"doc_id_suffix\":\"_release\",\"subject_id_prefix\":\"desktop-\"}",
         "created_by": "desktop",
         "now_ms": 300
     });

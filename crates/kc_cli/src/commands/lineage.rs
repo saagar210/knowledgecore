@@ -390,7 +390,7 @@ mod tests {
             root.to_string_lossy().as_ref(),
             "allow-lineage-cli",
             "allow",
-            r#"{"action":"lineage.overlay.write"}"#,
+            r#"{"subject_id_prefix":"subject-","action":"lineage.overlay.write","doc_id_suffix":"_scope"}"#,
             "cli-test",
             13,
         )
@@ -404,5 +404,18 @@ mod tests {
         )
         .expect("policy bind");
         run_policy_list(root.to_string_lossy().as_ref()).expect("policy list");
+
+        let conn = open_db(&root.join("db/knowledge.sqlite")).expect("open db");
+        let stored_condition: String = conn
+            .query_row(
+                "SELECT condition_json FROM lineage_policies WHERE policy_name='allow-lineage-cli'",
+                [],
+                |row| row.get(0),
+            )
+            .expect("load policy condition_json");
+        assert_eq!(
+            stored_condition,
+            r#"{"action":"lineage.overlay.write","doc_id_suffix":"_scope","subject_id_prefix":"subject-"}"#
+        );
     }
 }

@@ -829,11 +829,15 @@ fn rpc_lineage_v2_overlay_round_trip_is_deterministic() {
         RpcResponse::Err { error } => panic!("lineage role grant failed: {}", error.code),
     }
 
+    let condition_json = format!(
+        "{{\"subject_id_prefix\":\"desktop-\",\"doc_id_suffix\":\"{}\",\"action\":\"lineage.overlay.write\"}}",
+        seed_doc_id
+    );
     let policy_added = lineage_policy_add_rpc(LineagePolicyAddReq {
         vault_path: root.to_string_lossy().to_string(),
         name: "allow-overlay".to_string(),
         effect: "allow".to_string(),
-        condition_json: "{\"action\":\"lineage.overlay.write\"}".to_string(),
+        condition_json,
         created_by: Some("rpc-test".to_string()),
         now_ms: 3,
     });
@@ -841,6 +845,13 @@ fn rpc_lineage_v2_overlay_round_trip_is_deterministic() {
         RpcResponse::Ok { data } => {
             assert_eq!(data.policy.policy_name, "allow-overlay");
             assert_eq!(data.policy.effect, "allow");
+            assert_eq!(
+                data.policy.condition_json,
+                format!(
+                    "{{\"action\":\"lineage.overlay.write\",\"doc_id_suffix\":\"{}\",\"subject_id_prefix\":\"desktop-\"}}",
+                    seed_doc_id
+                )
+            );
         }
         RpcResponse::Err { error } => panic!("lineage policy add failed: {}", error.code),
     }
