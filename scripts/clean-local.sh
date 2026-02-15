@@ -14,6 +14,7 @@ Safe defaults:
   - cleans Cargo dev artifacts
   - prunes release intermediates (deps/build/.fingerprint)
   - prunes tauri-dist output
+  - removes local tooling artifacts (.codex_audit, .git-backups, Cargo.lock)
   - removes .DS_Store files
 
 Options:
@@ -106,6 +107,31 @@ prune_dir_contents() {
   fi
 }
 
+remove_path() {
+  local path="$1"
+  if [[ ! -e "$path" ]]; then
+    return
+  fi
+
+  if ((DRY_RUN)); then
+    if [[ -d "$path" ]]; then
+      echo "[dry-run] would remove $path ($(count_entries "$path") entries)"
+    else
+      echo "[dry-run] would remove $path"
+    fi
+    return
+  fi
+
+  if [[ -d "$path" ]]; then
+    find "$path" -mindepth 1 -delete
+    rmdir "$path" 2>/dev/null || true
+  else
+    find "$path" -maxdepth 0 -delete
+  fi
+
+  echo "removed $path"
+}
+
 run_cargo_clean_dev() {
   if ((DRY_RUN)); then
     cargo clean --dry-run --profile dev
@@ -162,6 +188,10 @@ if ((PRUNE_NODE_MODULES)); then
   prune_dir_contents "node_modules"
   prune_dir_contents "apps/desktop/ui/node_modules"
 fi
+
+remove_path ".codex_audit"
+remove_path ".git-backups"
+remove_path "Cargo.lock"
 
 if ((DRY_RUN)); then
   ds_count="$(find . -type f -name '.DS_Store' 2>/dev/null | wc -l | tr -d ' ')"
