@@ -8,7 +8,11 @@ use kc_core::recovery_escrow::{
 use kc_core::recovery_escrow_aws::{AwsRecoveryEscrowConfig, AwsRecoveryEscrowProvider};
 use kc_core::recovery_escrow_azure::{AzureRecoveryEscrowConfig, AzureRecoveryEscrowProvider};
 use kc_core::recovery_escrow_gcp::{GcpRecoveryEscrowConfig, GcpRecoveryEscrowProvider};
+use kc_core::recovery_escrow_hsm::{HsmRecoveryEscrowConfig, HsmRecoveryEscrowProvider};
 use kc_core::recovery_escrow_local::LocalRecoveryEscrowProvider;
+use kc_core::recovery_escrow_private_kms::{
+    PrivateKmsRecoveryEscrowConfig, PrivateKmsRecoveryEscrowProvider,
+};
 
 #[test]
 fn recovery_escrow_local_round_trip_is_deterministic() {
@@ -116,16 +120,65 @@ fn recovery_escrow_gcp_and_azure_report_unavailable_without_emulation() {
 }
 
 #[test]
+fn recovery_escrow_hsm_and_private_kms_report_unavailable_without_emulation() {
+    std::env::remove_var("KC_RECOVERY_ESCROW_HSM_EMULATE_DIR");
+    std::env::remove_var("KC_RECOVERY_ESCROW_PRIVATE_KMS_EMULATE_DIR");
+
+    let hsm = HsmRecoveryEscrowProvider::new(HsmRecoveryEscrowConfig {
+        cluster: "kc-hsm".to_string(),
+        key_slot: "slot-0".to_string(),
+        secret_prefix: "kc/recovery".to_string(),
+    });
+    let private_kms = PrivateKmsRecoveryEscrowProvider::new(PrivateKmsRecoveryEscrowConfig {
+        endpoint: "https://private-kms.local".to_string(),
+        key_alias: "recovery".to_string(),
+        tenant: "tenant-a".to_string(),
+        secret_prefix: "kc/recovery".to_string(),
+    });
+
+    assert!(!hsm.status().expect("hsm status").available);
+    assert!(!private_kms.status().expect("private_kms status").available);
+
+    let hsm_err = hsm
+        .write(RecoveryEscrowWriteRequest {
+            vault_id: "vault-1",
+            payload_hash: "blake3:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            key_blob: b"blob",
+            now_ms: 1,
+        })
+        .expect_err("hsm write must fail when unavailable");
+    assert_eq!(hsm_err.code, "KC_RECOVERY_ESCROW_UNAVAILABLE");
+
+    let private_kms_err = private_kms
+        .write(RecoveryEscrowWriteRequest {
+            vault_id: "vault-1",
+            payload_hash: "blake3:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            key_blob: b"blob",
+            now_ms: 1,
+        })
+        .expect_err("private_kms write must fail when unavailable");
+    assert_eq!(private_kms_err.code, "KC_RECOVERY_ESCROW_UNAVAILABLE");
+}
+
+#[test]
 fn recovery_escrow_provider_priority_and_ordering_are_deterministic() {
     assert_eq!(
         ESCROW_PROVIDER_PRIORITY,
-        ["aws", "gcp", "azure", "local"]
+        ["aws", "gcp", "azure", "hsm", "local", "private_kms"]
     );
     assert!(provider_priority("aws") < provider_priority("gcp"));
     assert!(provider_priority("gcp") < provider_priority("azure"));
-    assert!(provider_priority("azure") < provider_priority("local"));
+    assert!(provider_priority("azure") < provider_priority("hsm"));
+    assert!(provider_priority("hsm") < provider_priority("local"));
+    assert!(provider_priority("local") < provider_priority("private_kms"));
 
     let mut providers = vec![
+        RecoveryEscrowProviderConfigV3 {
+            provider_id: "private_kms".to_string(),
+            config_ref: "pk".to_string(),
+            enabled: true,
+            updated_at_ms: 6,
+        },
         RecoveryEscrowProviderConfigV3 {
             provider_id: "local".to_string(),
             config_ref: "z".to_string(),
@@ -150,12 +203,27 @@ fn recovery_escrow_provider_priority_and_ordering_are_deterministic() {
             enabled: true,
             updated_at_ms: 2,
         },
+        RecoveryEscrowProviderConfigV3 {
+            provider_id: "hsm".to_string(),
+            config_ref: "h".to_string(),
+            enabled: true,
+            updated_at_ms: 5,
+        },
     ];
     normalize_provider_configs(&mut providers);
     let provider_ids: Vec<String> = providers.into_iter().map(|p| p.provider_id).collect();
-    assert_eq!(provider_ids, vec!["aws", "gcp", "azure", "local"]);
+    assert_eq!(
+        provider_ids,
+        vec!["aws", "gcp", "azure", "hsm", "local", "private_kms"]
+    );
 
     let mut descs = vec![
+        RecoveryEscrowDescriptorV2 {
+            provider: "private_kms".to_string(),
+            provider_ref: "pk".to_string(),
+            key_id: "k6".to_string(),
+            wrapped_at_ms: 6,
+        },
         RecoveryEscrowDescriptorV2 {
             provider: "local".to_string(),
             provider_ref: "c".to_string(),
@@ -180,8 +248,17 @@ fn recovery_escrow_provider_priority_and_ordering_are_deterministic() {
             key_id: "k2".to_string(),
             wrapped_at_ms: 2,
         },
+        RecoveryEscrowDescriptorV2 {
+            provider: "hsm".to_string(),
+            provider_ref: "h".to_string(),
+            key_id: "k5".to_string(),
+            wrapped_at_ms: 5,
+        },
     ];
     normalize_escrow_descriptors(&mut descs);
     let ordered: Vec<String> = descs.into_iter().map(|d| d.provider).collect();
-    assert_eq!(ordered, vec!["aws", "gcp", "azure", "local"]);
+    assert_eq!(
+        ordered,
+        vec!["aws", "gcp", "azure", "hsm", "local", "private_kms"]
+    );
 }

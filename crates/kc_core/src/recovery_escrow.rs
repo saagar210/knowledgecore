@@ -3,7 +3,8 @@ use crate::canon_json::to_canonical_bytes;
 use crate::hashing::blake3_hex_prefixed;
 use serde::{Deserialize, Serialize};
 
-pub const ESCROW_PROVIDER_PRIORITY: [&str; 4] = ["aws", "gcp", "azure", "local"];
+pub const ESCROW_PROVIDER_PRIORITY: [&str; 6] =
+    ["aws", "gcp", "azure", "hsm", "local", "private_kms"];
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct RecoveryEscrowDescriptorV2 {

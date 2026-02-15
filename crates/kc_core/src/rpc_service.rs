@@ -27,7 +27,11 @@ use crate::recovery_escrow::{
 use crate::recovery_escrow_aws::{AwsRecoveryEscrowConfig, AwsRecoveryEscrowProvider};
 use crate::recovery_escrow_azure::{AzureRecoveryEscrowConfig, AzureRecoveryEscrowProvider};
 use crate::recovery_escrow_gcp::{GcpRecoveryEscrowConfig, GcpRecoveryEscrowProvider};
+use crate::recovery_escrow_hsm::{HsmRecoveryEscrowConfig, HsmRecoveryEscrowProvider};
 use crate::recovery_escrow_local::LocalRecoveryEscrowProvider;
+use crate::recovery_escrow_private_kms::{
+    PrivateKmsRecoveryEscrowConfig, PrivateKmsRecoveryEscrowProvider,
+};
 use crate::trust::{
     trust_device_init, trust_device_list, trust_device_verify, TrustedDeviceRecord,
 };
@@ -570,6 +574,53 @@ fn resolve_recovery_escrow_provider(
                 AzureRecoveryEscrowConfig {
                     key_vault_url,
                     key_name,
+                    secret_prefix,
+                },
+            )))
+        }
+        "hsm" => {
+            let cluster = std::env::var("KC_RECOVERY_ESCROW_HSM_CLUSTER")
+                .ok()
+                .filter(|v| !v.trim().is_empty())
+                .unwrap_or_else(|| "kc-local-hsm".to_string());
+            let key_slot = std::env::var("KC_RECOVERY_ESCROW_HSM_KEY_SLOT")
+                .ok()
+                .filter(|v| !v.trim().is_empty())
+                .unwrap_or_else(|| "slot-0".to_string());
+            let secret_prefix = std::env::var("KC_RECOVERY_ESCROW_HSM_SECRET_PREFIX")
+                .ok()
+                .filter(|v| !v.trim().is_empty())
+                .unwrap_or_else(|| format!("kc/recovery/{vault_id}"));
+            Ok(Box::new(HsmRecoveryEscrowProvider::new(
+                HsmRecoveryEscrowConfig {
+                    cluster,
+                    key_slot,
+                    secret_prefix,
+                },
+            )))
+        }
+        "private_kms" => {
+            let endpoint = std::env::var("KC_RECOVERY_ESCROW_PRIVATE_KMS_ENDPOINT")
+                .ok()
+                .filter(|v| !v.trim().is_empty())
+                .unwrap_or_else(|| "https://private-kms.local".to_string());
+            let key_alias = std::env::var("KC_RECOVERY_ESCROW_PRIVATE_KMS_KEY_ALIAS")
+                .ok()
+                .filter(|v| !v.trim().is_empty())
+                .unwrap_or_else(|| "recovery".to_string());
+            let tenant = std::env::var("KC_RECOVERY_ESCROW_PRIVATE_KMS_TENANT")
+                .ok()
+                .filter(|v| !v.trim().is_empty())
+                .unwrap_or_else(|| "default".to_string());
+            let secret_prefix = std::env::var("KC_RECOVERY_ESCROW_PRIVATE_KMS_SECRET_PREFIX")
+                .ok()
+                .filter(|v| !v.trim().is_empty())
+                .unwrap_or_else(|| format!("kc/recovery/{vault_id}"));
+            Ok(Box::new(PrivateKmsRecoveryEscrowProvider::new(
+                PrivateKmsRecoveryEscrowConfig {
+                    endpoint,
+                    key_alias,
+                    tenant,
                     secret_prefix,
                 },
             )))
