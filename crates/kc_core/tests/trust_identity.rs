@@ -5,7 +5,7 @@ use kc_core::trust_identity::{
     trust_identity_start, trust_provider_add, trust_provider_disable, trust_provider_list,
     verified_author_identity,
 };
-use kc_core::trust_policy::{trust_provider_policy_set, trust_session_revoke};
+use kc_core::trust_policy::{trust_provider_policy_get, trust_provider_policy_set, trust_session_revoke};
 use kc_core::vault::vault_init;
 
 fn setup_verified_device_with_identity(
@@ -205,4 +205,39 @@ fn trust_provider_list_is_deterministic() {
     assert_eq!(first, second);
     let ids: Vec<String> = first.into_iter().map(|p| p.provider_id).collect();
     assert_eq!(ids, vec!["alpha".to_string(), "zeta".to_string()]);
+}
+
+#[test]
+fn trust_provider_policy_serializes_claims_canonically() {
+    let temp = tempfile::tempdir().expect("tempdir");
+    let vault_path = temp.path().join("vault");
+    vault_init(&vault_path, "demo", 100).expect("vault init");
+    let conn = open_db(&vault_path.join("db/knowledge.sqlite")).expect("open db");
+
+    trust_provider_add(
+        &conn,
+        "corp",
+        "https://corp.example/oidc",
+        "kc-desktop:corp",
+        "https://corp.example/oidc/jwks",
+        100,
+    )
+    .expect("add provider");
+
+    trust_provider_policy_set(
+        &conn,
+        "corp",
+        500,
+        r#"{"sub":"alice@example.com","iss":"https://corp.example/oidc","aud":"kc-desktop:corp"}"#,
+        101,
+    )
+    .expect("set policy");
+
+    let stored = trust_provider_policy_get(&conn, "corp")
+        .expect("policy lookup")
+        .expect("policy exists");
+    assert_eq!(
+        stored.require_claims_json,
+        r#"{"aud":"kc-desktop:corp","iss":"https://corp.example/oidc","sub":"alice@example.com"}"#
+    );
 }

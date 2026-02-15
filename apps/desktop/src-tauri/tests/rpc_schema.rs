@@ -4,7 +4,8 @@ use apps_desktop_tauri::rpc::{
     LineageQueryReq, LineageQueryV2Req, LineageRoleGrantReq, LineageRoleListReq,
     LineageRoleRevokeReq, SearchQueryReq, SyncMergePreviewReq, SyncPullReq, SyncPushReq,
     SyncStatusReq, TrustDeviceEnrollReq, TrustDeviceListReq, TrustDeviceVerifyChainReq,
-    TrustIdentityCompleteReq, TrustIdentityStartReq, VaultEncryptionEnableReq,
+    TrustIdentityCompleteReq, TrustIdentityStartReq, TrustPolicySetReq, TrustProviderAddReq,
+    TrustProviderDisableReq, TrustProviderListReq, VaultEncryptionEnableReq,
     VaultEncryptionMigrateReq, VaultEncryptionStatusReq, VaultInitReq, VaultLockReq,
     VaultLockStatusReq, VaultRecoveryEscrowEnableReq, VaultRecoveryEscrowRestoreReq,
     VaultRecoveryEscrowRotateReq, VaultRecoveryEscrowStatusReq, VaultRecoveryGenerateReq,
@@ -317,6 +318,70 @@ fn rpc_schema_trust_device_rejects_unknown_fields() {
         "extra": "nope"
     });
     assert!(serde_json::from_value::<TrustDeviceEnrollReq>(invalid).is_err());
+}
+
+#[test]
+fn rpc_schema_trust_provider_requests_validate_shapes() {
+    let add = serde_json::json!({
+        "vault_path": "/tmp/vault",
+        "provider_id": "corp",
+        "issuer": "https://corp.example/oidc",
+        "aud": "kc-desktop:corp",
+        "jwks": "https://corp.example/oidc/jwks",
+        "now_ms": 200
+    });
+    assert!(serde_json::from_value::<TrustProviderAddReq>(add).is_ok());
+
+    let disable = serde_json::json!({
+        "vault_path": "/tmp/vault",
+        "provider_id": "corp",
+        "now_ms": 201
+    });
+    assert!(serde_json::from_value::<TrustProviderDisableReq>(disable).is_ok());
+
+    let list = serde_json::json!({
+        "vault_path": "/tmp/vault"
+    });
+    assert!(serde_json::from_value::<TrustProviderListReq>(list).is_ok());
+
+    let policy_set = serde_json::json!({
+        "vault_path": "/tmp/vault",
+        "provider_id": "corp",
+        "max_clock_skew_ms": 5000,
+        "require_claims_json": "{\"aud\":\"kc-desktop:corp\",\"iss\":\"https://corp.example/oidc\"}",
+        "now_ms": 202
+    });
+    assert!(serde_json::from_value::<TrustPolicySetReq>(policy_set).is_ok());
+}
+
+#[test]
+fn rpc_schema_trust_provider_rejects_unknown_fields_and_missing_now_ms() {
+    let missing_now = serde_json::json!({
+        "vault_path": "/tmp/vault",
+        "provider_id": "corp",
+        "issuer": "https://corp.example/oidc",
+        "aud": "kc-desktop:corp",
+        "jwks": "https://corp.example/oidc/jwks"
+    });
+    assert!(serde_json::from_value::<TrustProviderAddReq>(missing_now).is_err());
+
+    let extra_field = serde_json::json!({
+        "vault_path": "/tmp/vault",
+        "provider_id": "corp",
+        "now_ms": 1,
+        "extra": "nope"
+    });
+    assert!(serde_json::from_value::<TrustProviderDisableReq>(extra_field).is_err());
+
+    let bad_policy = serde_json::json!({
+        "vault_path": "/tmp/vault",
+        "provider_id": "corp",
+        "max_clock_skew_ms": 5000,
+        "require_claims_json": "{}",
+        "now_ms": 202,
+        "extra": "nope"
+    });
+    assert!(serde_json::from_value::<TrustPolicySetReq>(bad_policy).is_err());
 }
 
 #[test]
