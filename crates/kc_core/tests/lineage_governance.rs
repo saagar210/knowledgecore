@@ -1,3 +1,4 @@
+use kc_core::canon_json::to_canonical_bytes;
 use kc_core::db::open_db;
 use kc_core::ingest::ingest_bytes;
 use kc_core::lineage::{lineage_lock_acquire, lineage_overlay_add, lineage_overlay_remove};
@@ -6,7 +7,9 @@ use kc_core::lineage_governance::{
     lineage_lock_scope_status, lineage_permission_decision, lineage_role_grant, lineage_role_list,
     lineage_role_revoke,
 };
-use kc_core::lineage_policy::{lineage_policy_add, lineage_policy_bind};
+use kc_core::lineage_policy::{
+    ensure_lineage_policy_allows, lineage_policy_add, lineage_policy_bind,
+};
 use kc_core::object_store::ObjectStore;
 use kc_core::vault::vault_init;
 use rusqlite::params;
@@ -167,4 +170,135 @@ fn lineage_overlay_mutation_requires_rbac_permission() {
     .expect("overlay add with permission");
     lineage_overlay_remove(&conn, &added.overlay_id, &lock.token, 14)
         .expect("overlay remove with owner permission");
+}
+
+#[test]
+fn lineage_policy_audit_details_are_deterministic_and_canonical() {
+    let root = tempfile::tempdir().expect("tempdir").keep();
+    vault_init(&root, "demo", 1).expect("vault init");
+    let conn = open_db(&root.join("db/knowledge.sqlite")).expect("open db");
+
+    lineage_policy_add(
+        &conn,
+        "allow-doc-prefix",
+        "allow",
+        r#"{"action":"lineage.overlay.write","doc_id_prefix":"doc_allow_"}"#,
+        "tests",
+        10,
+    )
+    .expect("add allow policy");
+    lineage_policy_add(
+        &conn,
+        "deny-doc-prefix",
+        "deny",
+        r#"{"action":"lineage.overlay.write","doc_id_prefix":"doc_deny_"}"#,
+        "tests",
+        11,
+    )
+    .expect("add deny policy");
+    lineage_policy_bind(&conn, "owner-a", "allow-doc-prefix", "tests", 12)
+        .expect("bind allow policy");
+    lineage_policy_bind(&conn, "owner-a", "deny-doc-prefix", "tests", 13)
+        .expect("bind deny policy");
+
+    ensure_lineage_policy_allows(
+        &conn,
+        "owner-a",
+        "lineage.overlay.write",
+        Some("doc_allow_001"),
+        200,
+    )
+    .expect("allow decision");
+
+    let denied = ensure_lineage_policy_allows(
+        &conn,
+        "owner-a",
+        "lineage.overlay.write",
+        Some("doc_deny_001"),
+        201,
+    )
+    .expect_err("deny decision");
+    assert_eq!(denied.code, "KC_LINEAGE_POLICY_DENY_ENFORCED");
+
+    let rows: Vec<(i64, i64, String, String)> = {
+        let mut stmt = conn
+            .prepare(
+                "SELECT ts_ms, allowed, reason, details_json
+                 FROM lineage_policy_audit
+                 ORDER BY ts_ms ASC, audit_id ASC",
+            )
+            .expect("prepare policy audit query");
+        let iter = stmt
+            .query_map([], |row| {
+                Ok((
+                    row.get::<_, i64>(0)?,
+                    row.get::<_, i64>(1)?,
+                    row.get::<_, String>(2)?,
+                    row.get::<_, String>(3)?,
+                ))
+            })
+            .expect("query policy audit rows");
+
+        let mut out = Vec::new();
+        for row in iter {
+            out.push(row.expect("decode policy audit row"));
+        }
+        out
+    };
+
+    assert_eq!(rows.len(), 2);
+    assert_eq!(rows[0].0, 200);
+    assert_eq!(rows[0].1, 1);
+    assert_eq!(rows[0].2, "policy_allow");
+
+    let allow_id: String = conn
+        .query_row(
+            "SELECT policy_id FROM lineage_policies WHERE policy_name='allow-doc-prefix'",
+            [],
+            |row| row.get(0),
+        )
+        .expect("load allow policy id");
+    let expected_allow_details = serde_json::json!({
+        "action": "lineage.overlay.write",
+        "doc_id": "doc_allow_001",
+        "matched_effect": "allow",
+        "matched_policy_id": allow_id,
+        "matched_policy_name": "allow-doc-prefix",
+        "reason": "policy_allow",
+        "subject_id": "owner-a"
+    });
+    assert_eq!(
+        rows[0].3,
+        String::from_utf8(
+            to_canonical_bytes(&expected_allow_details).expect("canonical allow details"),
+        )
+        .expect("utf8 allow details")
+    );
+
+    assert_eq!(rows[1].0, 201);
+    assert_eq!(rows[1].1, 0);
+    assert_eq!(rows[1].2, "policy_deny");
+    let deny_id: String = conn
+        .query_row(
+            "SELECT policy_id FROM lineage_policies WHERE policy_name='deny-doc-prefix'",
+            [],
+            |row| row.get(0),
+        )
+        .expect("load deny policy id");
+    let expected_deny_details = serde_json::json!({
+        "action": "lineage.overlay.write",
+        "doc_id": "doc_deny_001",
+        "matched_effect": "deny",
+        "matched_policy_id": deny_id,
+        "matched_policy_name": "deny-doc-prefix",
+        "reason": "policy_deny",
+        "subject_id": "owner-a"
+    });
+    assert_eq!(
+        rows[1].3,
+        String::from_utf8(
+            to_canonical_bytes(&expected_deny_details).expect("canonical deny details"),
+        )
+        .expect("utf8 deny details")
+    );
 }
