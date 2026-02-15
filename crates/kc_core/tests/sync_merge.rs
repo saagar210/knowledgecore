@@ -1,7 +1,7 @@
 use kc_core::sync_merge::{
     ensure_conservative_merge_safe, ensure_conservative_plus_v2_merge_safe,
-    merge_preview_conservative, merge_preview_with_policy_v2, SyncMergeChangeSetV1,
-    SyncMergeContextV2,
+    ensure_conservative_plus_v3_merge_safe, merge_preview_conservative,
+    merge_preview_with_policy_v2, SyncMergeChangeSetV1, SyncMergeContextV2,
 };
 
 #[test]
@@ -131,6 +131,7 @@ fn sync_merge_preview_v2_supports_disjoint_safe_merge() {
             "overlap.lineage_overlay_ids=0".to_string(),
             "trust_chain_mismatch=false".to_string(),
             "lock_conflict=false".to_string(),
+            "rbac_conflict=false".to_string(),
         ]
     );
 }
@@ -142,6 +143,7 @@ fn sync_merge_preview_v2_flags_trust_and_lock_conflicts_with_specific_codes() {
     let trust_conflict = SyncMergeContextV2 {
         trust_chain_mismatch: true,
         lock_conflict: false,
+        rbac_conflict: false,
     };
     let trust_report =
         merge_preview_with_policy_v2(&local, &remote, &trust_conflict, "conservative_plus_v2", 1)
@@ -157,6 +159,7 @@ fn sync_merge_preview_v2_flags_trust_and_lock_conflicts_with_specific_codes() {
     let lock_conflict = SyncMergeContextV2 {
         trust_chain_mismatch: false,
         lock_conflict: true,
+        rbac_conflict: false,
     };
     let lock_report =
         merge_preview_with_policy_v2(&local, &remote, &lock_conflict, "conservative_plus_v2", 2)
@@ -258,6 +261,7 @@ fn sync_merge_preview_v2_matrix_and_deterministic_ordering() {
             ctx: SyncMergeContextV2 {
                 trust_chain_mismatch: true,
                 lock_conflict: false,
+                rbac_conflict: false,
             },
             expected_safe: false,
             expected_reasons: vec!["trust_chain_mismatch".to_string()],
@@ -275,6 +279,7 @@ fn sync_merge_preview_v2_matrix_and_deterministic_ordering() {
             ctx: SyncMergeContextV2 {
                 trust_chain_mismatch: false,
                 lock_conflict: true,
+                rbac_conflict: false,
             },
             expected_safe: false,
             expected_reasons: vec!["lineage_lock_conflict".to_string()],
@@ -319,4 +324,59 @@ fn sync_merge_preview_v2_matrix_and_deterministic_ordering() {
             }
         }
     }
+}
+
+#[test]
+fn sync_merge_preview_v3_supports_safe_disjoint_and_unsafe_reasons() {
+    let hash_a =
+        "blake3:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa".to_string();
+    let hash_b =
+        "blake3:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb".to_string();
+
+    let safe = merge_preview_with_policy_v2(
+        &SyncMergeChangeSetV1 {
+            object_hashes: vec![hash_a.clone()],
+            lineage_overlay_ids: vec!["overlay-a".to_string()],
+        },
+        &SyncMergeChangeSetV1 {
+            object_hashes: vec![hash_b.clone()],
+            lineage_overlay_ids: vec!["overlay-b".to_string()],
+        },
+        &SyncMergeContextV2::default(),
+        "conservative_plus_v3",
+        2000,
+    )
+    .expect("safe report");
+    assert!(safe.safe);
+    assert_eq!(safe.schema_version, 3);
+    assert_eq!(safe.reasons, vec!["safe_disjoint".to_string()]);
+    assert_eq!(safe.merge_policy, "conservative_plus_v3");
+    assert!(safe
+        .decision_trace
+        .iter()
+        .any(|entry| entry == "rbac_conflict=false"));
+    ensure_conservative_plus_v3_merge_safe(&safe).expect("safe merge");
+
+    let unsafe_rbac = merge_preview_with_policy_v2(
+        &SyncMergeChangeSetV1 {
+            object_hashes: vec![hash_a],
+            lineage_overlay_ids: vec!["overlay-a".to_string()],
+        },
+        &SyncMergeChangeSetV1 {
+            object_hashes: vec![hash_b],
+            lineage_overlay_ids: vec!["overlay-b".to_string()],
+        },
+        &SyncMergeContextV2 {
+            trust_chain_mismatch: false,
+            lock_conflict: false,
+            rbac_conflict: true,
+        },
+        "conservative_plus_v3",
+        2001,
+    )
+    .expect("unsafe rbac report");
+    assert!(!unsafe_rbac.safe);
+    assert_eq!(unsafe_rbac.reasons, vec!["unsafe_rbac".to_string()]);
+    let err = ensure_conservative_plus_v3_merge_safe(&unsafe_rbac).expect_err("rbac unsafe");
+    assert_eq!(err.code, "KC_SYNC_MERGE_POLICY_V3_UNSAFE");
 }
