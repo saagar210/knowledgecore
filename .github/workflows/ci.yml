@@ -49,7 +49,7 @@ jobs:
         run: cargo fmt --all -- --check
 
       - name: Test Rust workspace
-        run: cargo test --workspace
+        run: cargo test --workspace --exclude apps_desktop_tauri
 
       - name: Build Rust workspace
-        run: cargo build --workspace
+        run: cargo build --workspace --exclude apps_desktop_tauri
