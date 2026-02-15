@@ -178,6 +178,70 @@ fn sync_merge_preview_schema_v3() -> serde_json::Value {
     })
 }
 
+fn sync_merge_preview_schema_v4() -> serde_json::Value {
+    serde_json::json!({
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "$id": "kc://schemas/sync-merge-preview/v4",
+      "type": "object",
+      "required": [
+        "schema_version",
+        "merge_policy",
+        "safe",
+        "generated_at_ms",
+        "local",
+        "remote",
+        "overlap",
+        "reasons",
+        "decision_trace"
+      ],
+      "properties": {
+        "schema_version": { "const": 4 },
+        "merge_policy": { "type": "string", "const": "conservative_plus_v4" },
+        "safe": { "type": "boolean" },
+        "generated_at_ms": { "type": "integer" },
+        "local": { "$ref": "#/$defs/change_set" },
+        "remote": { "$ref": "#/$defs/change_set" },
+        "overlap": { "$ref": "#/$defs/change_set" },
+        "reasons": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "enum": [
+              "safe_disjoint_v4",
+              "unsafe_object_overlap_v4",
+              "unsafe_overlay_overlap_v4",
+              "unsafe_trust_chain_v4",
+              "unsafe_lock_scope_v4",
+              "unsafe_rbac_v4"
+            ]
+          }
+        },
+        "decision_trace": {
+          "type": "array",
+          "items": { "type": "string", "minLength": 1 }
+        }
+      },
+      "$defs": {
+        "change_set": {
+          "type": "object",
+          "required": ["object_hashes", "lineage_overlay_ids"],
+          "properties": {
+            "object_hashes": {
+              "type": "array",
+              "items": { "type": "string", "pattern": "^blake3:[0-9a-f]{64}$" }
+            },
+            "lineage_overlay_ids": {
+              "type": "array",
+              "items": { "type": "string", "minLength": 1 }
+            }
+          },
+          "additionalProperties": false
+        }
+      },
+      "additionalProperties": false
+    })
+}
+
 #[test]
 fn schema_sync_merge_preview_accepts_valid_payload() {
     let schema =
@@ -331,6 +395,62 @@ fn schema_sync_merge_preview_v3_rejects_unknown_reason() {
       "overlap": { "object_hashes": [], "lineage_overlay_ids": [] },
       "reasons": ["unknown_reason"],
       "decision_trace": ["policy=conservative_plus_v3"]
+    });
+    assert!(!schema.is_valid(&invalid));
+}
+
+#[test]
+fn schema_sync_merge_preview_v4_accepts_valid_payload() {
+    let schema =
+        JSONSchema::compile(&sync_merge_preview_schema_v4()).expect("compile sync merge v4 schema");
+    let payload = serde_json::json!({
+      "schema_version": 4,
+      "merge_policy": "conservative_plus_v4",
+      "safe": false,
+      "generated_at_ms": 456,
+      "local": {
+        "object_hashes": [
+          "blake3:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        ],
+        "lineage_overlay_ids": ["overlay-a"]
+      },
+      "remote": {
+        "object_hashes": [
+          "blake3:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        ],
+        "lineage_overlay_ids": ["overlay-a"]
+      },
+      "overlap": {
+        "object_hashes": [
+          "blake3:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        ],
+        "lineage_overlay_ids": ["overlay-a"]
+      },
+      "reasons": ["unsafe_object_overlap_v4", "unsafe_overlay_overlap_v4"],
+      "decision_trace": [
+        "policy=conservative_plus_v4",
+        "trust_chain_mismatch=false",
+        "lock_conflict=false",
+        "rbac_conflict=true"
+      ]
+    });
+    assert!(schema.is_valid(&payload));
+}
+
+#[test]
+fn schema_sync_merge_preview_v4_rejects_unknown_reason() {
+    let schema =
+        JSONSchema::compile(&sync_merge_preview_schema_v4()).expect("compile sync merge v4 schema");
+    let invalid = serde_json::json!({
+      "schema_version": 4,
+      "merge_policy": "conservative_plus_v4",
+      "safe": true,
+      "generated_at_ms": 123,
+      "local": { "object_hashes": [], "lineage_overlay_ids": [] },
+      "remote": { "object_hashes": [], "lineage_overlay_ids": [] },
+      "overlap": { "object_hashes": [], "lineage_overlay_ids": [] },
+      "reasons": ["unknown_reason"],
+      "decision_trace": ["policy=conservative_plus_v4"]
     });
     assert!(!schema.is_valid(&invalid));
 }

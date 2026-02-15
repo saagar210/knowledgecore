@@ -6,6 +6,7 @@ use std::collections::BTreeSet;
 const POLICY_CONSERVATIVE_V1: &str = "conservative_v1";
 const POLICY_CONSERVATIVE_PLUS_V2: &str = "conservative_plus_v2";
 const POLICY_CONSERVATIVE_PLUS_V3: &str = "conservative_plus_v3";
+const POLICY_CONSERVATIVE_PLUS_V4: &str = "conservative_plus_v4";
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Default)]
 pub struct SyncMergeChangeSetV1 {
@@ -130,6 +131,9 @@ pub fn merge_preview_with_policy_v2(
         POLICY_CONSERVATIVE_PLUS_V3 => {
             merge_preview_conservative_plus_v3(local, remote, ctx, now_ms)
         }
+        POLICY_CONSERVATIVE_PLUS_V4 => {
+            merge_preview_conservative_plus_v4(local, remote, ctx, now_ms)
+        }
         other => Err(AppError::new(
             "KC_SYNC_MERGE_POLICY_UNSUPPORTED",
             "sync",
@@ -137,7 +141,11 @@ pub fn merge_preview_with_policy_v2(
             false,
             serde_json::json!({
                 "policy": other,
-                "supported": [POLICY_CONSERVATIVE_PLUS_V2, POLICY_CONSERVATIVE_PLUS_V3]
+                "supported": [
+                    POLICY_CONSERVATIVE_PLUS_V2,
+                    POLICY_CONSERVATIVE_PLUS_V3,
+                    POLICY_CONSERVATIVE_PLUS_V4
+                ]
             }),
         )),
     }
@@ -351,6 +359,128 @@ pub fn ensure_conservative_plus_v3_merge_safe(report: &SyncMergePreviewReportV2)
         code,
         "sync",
         "conservative_plus_v3 auto-merge rejected by safety policy",
+        false,
+        serde_json::json!({
+            "schema_version": report.schema_version,
+            "merge_policy": report.merge_policy,
+            "reasons": report.reasons,
+            "overlap": report.overlap,
+            "decision_trace": report.decision_trace,
+        }),
+    ))
+}
+
+pub fn merge_preview_conservative_plus_v4(
+    local: &SyncMergeChangeSetV1,
+    remote: &SyncMergeChangeSetV1,
+    ctx: &SyncMergeContextV2,
+    now_ms: i64,
+) -> AppResult<SyncMergePreviewReportV2> {
+    let local_norm = normalize_change_set(local, "local")?;
+    let remote_norm = normalize_change_set(remote, "remote")?;
+
+    let local_objects: BTreeSet<String> = local_norm.object_hashes.iter().cloned().collect();
+    let remote_objects: BTreeSet<String> = remote_norm.object_hashes.iter().cloned().collect();
+    let overlap_objects: Vec<String> = local_objects
+        .intersection(&remote_objects)
+        .cloned()
+        .collect();
+
+    let local_overlays: BTreeSet<String> = local_norm.lineage_overlay_ids.iter().cloned().collect();
+    let remote_overlays: BTreeSet<String> =
+        remote_norm.lineage_overlay_ids.iter().cloned().collect();
+    let overlap_overlays: Vec<String> = local_overlays
+        .intersection(&remote_overlays)
+        .cloned()
+        .collect();
+
+    let mut reasons = Vec::new();
+    if !overlap_objects.is_empty() {
+        reasons.push("unsafe_object_overlap_v4".to_string());
+    }
+    if !overlap_overlays.is_empty() {
+        reasons.push("unsafe_overlay_overlap_v4".to_string());
+    }
+    if ctx.trust_chain_mismatch {
+        reasons.push("unsafe_trust_chain_v4".to_string());
+    }
+    if ctx.lock_conflict {
+        reasons.push("unsafe_lock_scope_v4".to_string());
+    }
+    if ctx.rbac_conflict {
+        reasons.push("unsafe_rbac_v4".to_string());
+    }
+    if reasons.is_empty() {
+        reasons.push("safe_disjoint_v4".to_string());
+    }
+
+    let decision_trace = vec![
+        format!("policy={}", POLICY_CONSERVATIVE_PLUS_V4),
+        format!("local.object_hashes={}", local_norm.object_hashes.len()),
+        format!(
+            "local.lineage_overlay_ids={}",
+            local_norm.lineage_overlay_ids.len()
+        ),
+        format!("remote.object_hashes={}", remote_norm.object_hashes.len()),
+        format!(
+            "remote.lineage_overlay_ids={}",
+            remote_norm.lineage_overlay_ids.len()
+        ),
+        format!("overlap.object_hashes={}", overlap_objects.len()),
+        format!("overlap.lineage_overlay_ids={}", overlap_overlays.len()),
+        format!("trust_chain_mismatch={}", ctx.trust_chain_mismatch),
+        format!("lock_conflict={}", ctx.lock_conflict),
+        format!("rbac_conflict={}", ctx.rbac_conflict),
+        format!("unsafe_reason_count={}", reasons.len().saturating_sub(1)),
+    ];
+
+    Ok(SyncMergePreviewReportV2 {
+        schema_version: 4,
+        merge_policy: POLICY_CONSERVATIVE_PLUS_V4.to_string(),
+        safe: reasons.len() == 1 && reasons[0] == "safe_disjoint_v4",
+        generated_at_ms: now_ms,
+        local: local_norm,
+        remote: remote_norm,
+        overlap: SyncMergeChangeSetV1 {
+            object_hashes: overlap_objects,
+            lineage_overlay_ids: overlap_overlays,
+        },
+        reasons,
+        decision_trace,
+    })
+}
+
+pub fn ensure_conservative_plus_v4_merge_safe(report: &SyncMergePreviewReportV2) -> AppResult<()> {
+    if report.safe {
+        return Ok(());
+    }
+
+    let code = if report
+        .reasons
+        .iter()
+        .any(|reason| reason == "unsafe_trust_chain_v4")
+    {
+        "KC_SYNC_MERGE_TRUST_CONFLICT"
+    } else if report
+        .reasons
+        .iter()
+        .any(|reason| reason == "unsafe_lock_scope_v4")
+    {
+        "KC_SYNC_MERGE_LOCK_CONFLICT"
+    } else if report
+        .reasons
+        .iter()
+        .any(|reason| reason == "unsafe_rbac_v4")
+    {
+        "KC_SYNC_MERGE_POLICY_V4_UNSAFE"
+    } else {
+        "KC_SYNC_MERGE_NOT_SAFE"
+    };
+
+    Err(AppError::new(
+        code,
+        "sync",
+        "conservative_plus_v4 auto-merge rejected by safety policy",
         false,
         serde_json::json!({
             "schema_version": report.schema_version,
