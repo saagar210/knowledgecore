@@ -26,13 +26,16 @@ import {
 import { loadRelated } from "../src/features/related";
 import { runSearch } from "../src/features/search";
 import {
+  addVaultRecoveryEscrowProvider,
   completeTrustIdentity,
   enrollTrustDevice,
   enableVaultEncryption,
   listTrustDevices,
   generateVaultRecovery,
   loadVaultRecoveryEscrowStatus,
+  listVaultRecoveryEscrowProviders,
   enableVaultRecoveryEscrow,
+  rotateAllVaultRecoveryEscrow,
   rotateVaultRecoveryEscrow,
   restoreVaultRecoveryEscrow,
   lockVault,
@@ -244,6 +247,50 @@ function mockApi(): DesktopRpcApi {
           payload_hash:
             "blake3:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
         }
+      }),
+    vaultRecoveryEscrowProviderAdd: () =>
+      ok({
+        provider: {
+          provider: "aws",
+          priority: 0,
+          config_ref: "kms://alias/kc",
+          enabled: true,
+          provider_available: true,
+          updated_at_ms: 10
+        }
+      }),
+    vaultRecoveryEscrowProviderList: () =>
+      ok({
+        providers: [
+          {
+            provider: "aws",
+            priority: 0,
+            config_ref: "kms://alias/kc",
+            enabled: true,
+            provider_available: true,
+            updated_at_ms: 10
+          }
+        ]
+      }),
+    vaultRecoveryEscrowRotateAll: () =>
+      ok({
+        rotated: [
+          {
+            provider: "aws",
+            bundle_path: "/tmp/recovery/aws",
+            recovery_phrase: "abcd1234-efgh5678-ijkl9012-mnop3456",
+            manifest: {
+              schema_version: 2,
+              vault_id: "v1",
+              created_at_ms: 9,
+              phrase_checksum:
+                "blake3:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+              payload_hash:
+                "blake3:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+            },
+            updated_at_ms: 10
+          }
+        ]
       }),
     vaultRecoveryVerify: () =>
       ok({
@@ -632,7 +679,27 @@ describe("feature controllers", () => {
       })
     ).toMatchObject({ kind: "data" });
     expect(
+      await addVaultRecoveryEscrowProvider(api, {
+        vault_path: "/tmp/v",
+        provider: "aws",
+        config_ref: "kms://alias/kc",
+        now_ms: 6
+      })
+    ).toMatchObject({ kind: "data" });
+    expect(
+      await listVaultRecoveryEscrowProviders(api, {
+        vault_path: "/tmp/v"
+      })
+    ).toMatchObject({ kind: "data" });
+    expect(
       await rotateVaultRecoveryEscrow(api, {
+        vault_path: "/tmp/v",
+        passphrase: "pass",
+        now_ms: 6
+      })
+    ).toMatchObject({ kind: "data" });
+    expect(
+      await rotateAllVaultRecoveryEscrow(api, {
         vault_path: "/tmp/v",
         passphrase: "pass",
         now_ms: 6

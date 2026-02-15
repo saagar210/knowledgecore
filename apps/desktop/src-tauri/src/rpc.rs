@@ -452,6 +452,63 @@ pub struct VaultRecoveryEscrowRestoreRes {
 
 #[derive(Debug, Deserialize)]
 #[serde(deny_unknown_fields)]
+pub struct VaultRecoveryEscrowProviderAddReq {
+    pub vault_path: String,
+    pub provider: String,
+    pub config_ref: String,
+    pub now_ms: i64,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct VaultRecoveryEscrowProviderListReq {
+    pub vault_path: String,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct VaultRecoveryEscrowProviderItemRes {
+    pub provider: String,
+    pub priority: i64,
+    pub config_ref: String,
+    pub enabled: bool,
+    pub provider_available: bool,
+    pub updated_at_ms: i64,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct VaultRecoveryEscrowProviderAddRes {
+    pub provider: VaultRecoveryEscrowProviderItemRes,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct VaultRecoveryEscrowProviderListRes {
+    pub providers: Vec<VaultRecoveryEscrowProviderItemRes>,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct VaultRecoveryEscrowRotateAllReq {
+    pub vault_path: String,
+    pub passphrase: String,
+    pub now_ms: i64,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct VaultRecoveryEscrowRotateAllItemRes {
+    pub provider: String,
+    pub bundle_path: String,
+    pub recovery_phrase: String,
+    pub manifest: RecoveryManifestRes,
+    pub updated_at_ms: i64,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct VaultRecoveryEscrowRotateAllRes {
+    pub rotated: Vec<VaultRecoveryEscrowRotateAllItemRes>,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct IngestScanFolderReq {
     pub vault_path: String,
     pub scan_root: String,
@@ -1145,6 +1202,19 @@ fn map_recovery_escrow_status(
     }
 }
 
+fn map_recovery_escrow_provider_item(
+    item: kc_core::rpc_service::VaultRecoveryEscrowProviderItem,
+) -> VaultRecoveryEscrowProviderItemRes {
+    VaultRecoveryEscrowProviderItemRes {
+        provider: item.provider,
+        priority: item.priority,
+        config_ref: item.config_ref,
+        enabled: item.enabled,
+        provider_available: item.provider_available,
+        updated_at_ms: item.updated_at_ms,
+    }
+}
+
 fn map_lock_status(status: kc_core::rpc_service::VaultDbLockStatus) -> VaultLockStatusRes {
     VaultLockStatusRes {
         db_encryption_enabled: status.db_encryption_enabled,
@@ -1322,6 +1392,63 @@ pub fn vault_recovery_escrow_restore_rpc(
             bundle_path: out.bundle_path.display().to_string(),
             restored_bytes: out.restored_bytes,
             manifest: map_recovery_manifest(out.manifest),
+        }),
+        Err(error) => RpcResponse::err(error),
+    }
+}
+
+pub fn vault_recovery_escrow_provider_add_rpc(
+    req: VaultRecoveryEscrowProviderAddReq,
+) -> RpcResponse<VaultRecoveryEscrowProviderAddRes> {
+    match rpc_service::vault_recovery_escrow_provider_add_service(
+        std::path::Path::new(&req.vault_path),
+        &req.provider,
+        &req.config_ref,
+        req.now_ms,
+    ) {
+        Ok(provider) => RpcResponse::ok(VaultRecoveryEscrowProviderAddRes {
+            provider: map_recovery_escrow_provider_item(provider),
+        }),
+        Err(error) => RpcResponse::err(error),
+    }
+}
+
+pub fn vault_recovery_escrow_provider_list_rpc(
+    req: VaultRecoveryEscrowProviderListReq,
+) -> RpcResponse<VaultRecoveryEscrowProviderListRes> {
+    match rpc_service::vault_recovery_escrow_provider_list_service(std::path::Path::new(
+        &req.vault_path,
+    )) {
+        Ok(providers) => RpcResponse::ok(VaultRecoveryEscrowProviderListRes {
+            providers: providers
+                .into_iter()
+                .map(map_recovery_escrow_provider_item)
+                .collect(),
+        }),
+        Err(error) => RpcResponse::err(error),
+    }
+}
+
+pub fn vault_recovery_escrow_rotate_all_rpc(
+    req: VaultRecoveryEscrowRotateAllReq,
+) -> RpcResponse<VaultRecoveryEscrowRotateAllRes> {
+    match rpc_service::vault_recovery_escrow_rotate_all_service(
+        std::path::Path::new(&req.vault_path),
+        &req.passphrase,
+        req.now_ms,
+    ) {
+        Ok(out) => RpcResponse::ok(VaultRecoveryEscrowRotateAllRes {
+            rotated: out
+                .rotated
+                .into_iter()
+                .map(|item| VaultRecoveryEscrowRotateAllItemRes {
+                    provider: item.provider,
+                    bundle_path: item.bundle_path.display().to_string(),
+                    recovery_phrase: item.recovery_phrase,
+                    manifest: map_recovery_manifest(item.manifest),
+                    updated_at_ms: item.updated_at_ms,
+                })
+                .collect(),
         }),
         Err(error) => RpcResponse::err(error),
     }

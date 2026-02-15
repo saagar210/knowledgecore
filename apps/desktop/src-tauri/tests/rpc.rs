@@ -10,7 +10,9 @@ use apps_desktop_tauri::rpc::{
     trust_identity_start_rpc, vault_encryption_enable_rpc, vault_encryption_migrate_rpc,
     vault_encryption_status_rpc, vault_init_rpc, vault_lock_rpc, vault_lock_status_rpc,
     vault_open_rpc, vault_recovery_escrow_enable_rpc, vault_recovery_escrow_restore_rpc,
-    vault_recovery_escrow_rotate_rpc, vault_recovery_escrow_status_rpc,
+    vault_recovery_escrow_rotate_all_rpc, vault_recovery_escrow_rotate_rpc,
+    vault_recovery_escrow_provider_add_rpc, vault_recovery_escrow_provider_list_rpc,
+    vault_recovery_escrow_status_rpc,
     vault_recovery_generate_rpc, vault_recovery_status_rpc, vault_recovery_verify_rpc,
     vault_unlock_rpc, IngestInboxStartReq, IngestInboxStopReq, JobsListReq, LineageLockAcquireReq,
     LineageLockAcquireScopeReq, LineageLockReleaseReq, LineageLockStatusReq, LineageOverlayAddReq,
@@ -20,8 +22,10 @@ use apps_desktop_tauri::rpc::{
     TrustDeviceListReq, TrustDeviceVerifyChainReq, TrustIdentityCompleteReq, TrustIdentityStartReq,
     VaultEncryptionEnableReq, VaultEncryptionMigrateReq, VaultEncryptionStatusReq, VaultInitReq,
     VaultLockReq, VaultLockStatusReq, VaultOpenReq, VaultRecoveryEscrowEnableReq,
-    VaultRecoveryEscrowRestoreReq, VaultRecoveryEscrowRotateReq, VaultRecoveryEscrowStatusReq,
-    VaultRecoveryGenerateReq, VaultRecoveryStatusReq, VaultRecoveryVerifyReq, VaultUnlockReq,
+    VaultRecoveryEscrowProviderAddReq, VaultRecoveryEscrowProviderListReq,
+    VaultRecoveryEscrowRestoreReq, VaultRecoveryEscrowRotateAllReq, VaultRecoveryEscrowRotateReq,
+    VaultRecoveryEscrowStatusReq, VaultRecoveryGenerateReq, VaultRecoveryStatusReq,
+    VaultRecoveryVerifyReq, VaultUnlockReq,
 };
 use kc_core::app_error::AppError;
 use std::sync::{Mutex, OnceLock};
@@ -380,6 +384,30 @@ fn rpc_vault_recovery_escrow_enable_rotate_restore_round_trip() {
         RpcResponse::Err { error } => panic!("escrow enable failed: {}", error.code),
     }
 
+    let provider_added = vault_recovery_escrow_provider_add_rpc(VaultRecoveryEscrowProviderAddReq {
+        vault_path: root.to_string_lossy().to_string(),
+        provider: "aws".to_string(),
+        config_ref: "kms://alias/kc-test".to_string(),
+        now_ms: 2,
+    });
+    match provider_added {
+        RpcResponse::Ok { data } => {
+            assert_eq!(data.provider.provider, "aws");
+            assert!(data.provider.enabled);
+        }
+        RpcResponse::Err { error } => panic!("escrow provider add failed: {}", error.code),
+    }
+
+    let providers = vault_recovery_escrow_provider_list_rpc(VaultRecoveryEscrowProviderListReq {
+        vault_path: root.to_string_lossy().to_string(),
+    });
+    match providers {
+        RpcResponse::Ok { data } => {
+            assert!(data.providers.iter().any(|item| item.provider == "aws"));
+        }
+        RpcResponse::Err { error } => panic!("escrow provider list failed: {}", error.code),
+    }
+
     let rotated = vault_recovery_escrow_rotate_rpc(VaultRecoveryEscrowRotateReq {
         vault_path: root.to_string_lossy().to_string(),
         passphrase: "vault-passphrase".to_string(),
@@ -404,6 +432,19 @@ fn rpc_vault_recovery_escrow_enable_rotate_restore_round_trip() {
             assert!(data.restored_bytes > 0);
         }
         RpcResponse::Err { error } => panic!("escrow restore failed: {}", error.code),
+    }
+
+    let rotated_all = vault_recovery_escrow_rotate_all_rpc(VaultRecoveryEscrowRotateAllReq {
+        vault_path: root.to_string_lossy().to_string(),
+        passphrase: "vault-passphrase".to_string(),
+        now_ms: 5,
+    });
+    match rotated_all {
+        RpcResponse::Ok { data } => {
+            assert!(!data.rotated.is_empty());
+            assert_eq!(data.rotated[0].provider, "aws");
+        }
+        RpcResponse::Err { error } => panic!("escrow rotate-all failed: {}", error.code),
     }
 
     std::env::remove_var("KC_RECOVERY_ESCROW_AWS_EMULATE_DIR");

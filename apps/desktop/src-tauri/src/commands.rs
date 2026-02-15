@@ -159,6 +159,27 @@ pub fn vault_recovery_escrow_restore(
 }
 
 #[tauri::command]
+pub fn vault_recovery_escrow_provider_add(
+    req: rpc::VaultRecoveryEscrowProviderAddReq,
+) -> rpc::RpcResponse<rpc::VaultRecoveryEscrowProviderAddRes> {
+    rpc::vault_recovery_escrow_provider_add_rpc(req)
+}
+
+#[tauri::command]
+pub fn vault_recovery_escrow_provider_list(
+    req: rpc::VaultRecoveryEscrowProviderListReq,
+) -> rpc::RpcResponse<rpc::VaultRecoveryEscrowProviderListRes> {
+    rpc::vault_recovery_escrow_provider_list_rpc(req)
+}
+
+#[tauri::command]
+pub fn vault_recovery_escrow_rotate_all(
+    req: rpc::VaultRecoveryEscrowRotateAllReq,
+) -> rpc::RpcResponse<rpc::VaultRecoveryEscrowRotateAllRes> {
+    rpc::vault_recovery_escrow_rotate_all_rpc(req)
+}
+
+#[tauri::command]
 pub fn ingest_scan_folder(
     req: rpc::IngestScanFolderReq,
 ) -> rpc::RpcResponse<rpc::IngestScanFolderRes> {

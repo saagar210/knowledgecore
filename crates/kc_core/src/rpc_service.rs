@@ -114,6 +114,30 @@ pub struct VaultRecoveryEscrowStatus {
 }
 
 #[derive(Debug, Clone)]
+pub struct VaultRecoveryEscrowProviderItem {
+    pub provider: String,
+    pub priority: i64,
+    pub config_ref: String,
+    pub enabled: bool,
+    pub provider_available: bool,
+    pub updated_at_ms: i64,
+}
+
+#[derive(Debug, Clone)]
+pub struct VaultRecoveryEscrowRotateAllItem {
+    pub provider: String,
+    pub bundle_path: PathBuf,
+    pub recovery_phrase: String,
+    pub manifest: RecoveryManifestV2,
+    pub updated_at_ms: i64,
+}
+
+#[derive(Debug, Clone)]
+pub struct VaultRecoveryEscrowRotateAllResult {
+    pub rotated: Vec<VaultRecoveryEscrowRotateAllItem>,
+}
+
+#[derive(Debug, Clone)]
 pub struct VaultRecoveryEscrowRotateResult {
     pub status: VaultRecoveryEscrowStatus,
     pub bundle_path: PathBuf,
@@ -200,6 +224,15 @@ struct RecoveryEscrowConfigRow {
     provider_id: String,
     enabled: bool,
     descriptor_json: String,
+    updated_at_ms: i64,
+}
+
+#[derive(Debug, Clone)]
+struct RecoveryEscrowProviderConfigRowV3 {
+    provider_id: String,
+    provider_priority: i64,
+    config_ref: String,
+    enabled: bool,
     updated_at_ms: i64,
 }
 
@@ -316,6 +349,104 @@ fn upsert_recovery_escrow_config(
         )
     })?;
     Ok(())
+}
+
+fn upsert_recovery_escrow_provider_config_v3(
+    conn: &rusqlite::Connection,
+    provider_id: &str,
+    config_ref: &str,
+    enabled: bool,
+    updated_at_ms: i64,
+) -> AppResult<()> {
+    conn.execute(
+        "INSERT INTO recovery_escrow_provider_configs(
+            provider_id,
+            provider_priority,
+            config_ref,
+            enabled,
+            updated_at_ms
+         )
+         VALUES(
+           ?1,
+           CASE ?1
+             WHEN 'aws' THEN 0
+             WHEN 'gcp' THEN 1
+             WHEN 'azure' THEN 2
+             ELSE 9
+           END,
+           ?2,
+           ?3,
+           ?4
+         )
+         ON CONFLICT(provider_id)
+         DO UPDATE SET
+           provider_priority = excluded.provider_priority,
+           config_ref = excluded.config_ref,
+           enabled = excluded.enabled,
+           updated_at_ms = excluded.updated_at_ms",
+        rusqlite::params![provider_id, config_ref, if enabled { 1 } else { 0 }, updated_at_ms],
+    )
+    .map_err(|e| {
+        AppError::new(
+            "KC_RECOVERY_ESCROW_WRITE_FAILED",
+            "recovery",
+            "failed upserting v3 recovery escrow provider config",
+            false,
+            serde_json::json!({ "error": e.to_string(), "provider": provider_id }),
+        )
+    })?;
+    Ok(())
+}
+
+fn list_recovery_escrow_provider_configs_v3(
+    conn: &rusqlite::Connection,
+) -> AppResult<Vec<RecoveryEscrowProviderConfigRowV3>> {
+    let mut stmt = conn
+        .prepare(
+            "SELECT provider_id, provider_priority, config_ref, enabled, updated_at_ms
+             FROM recovery_escrow_provider_configs
+             ORDER BY provider_priority ASC, provider_id ASC",
+        )
+        .map_err(|e| {
+            AppError::new(
+                "KC_RECOVERY_ESCROW_UNAVAILABLE",
+                "recovery",
+                "failed preparing v3 recovery escrow provider config query",
+                false,
+                serde_json::json!({ "error": e.to_string() }),
+            )
+        })?;
+    let rows = stmt.query_map([], |row| {
+        Ok(RecoveryEscrowProviderConfigRowV3 {
+            provider_id: row.get(0)?,
+            provider_priority: row.get(1)?,
+            config_ref: row.get(2)?,
+            enabled: row.get::<_, i64>(3)? != 0,
+            updated_at_ms: row.get(4)?,
+        })
+    })
+    .map_err(|e| {
+        AppError::new(
+            "KC_RECOVERY_ESCROW_UNAVAILABLE",
+            "recovery",
+            "failed querying v3 recovery escrow provider configs",
+            false,
+            serde_json::json!({ "error": e.to_string() }),
+        )
+    })?;
+    let mut out = Vec::new();
+    for row in rows {
+        out.push(row.map_err(|e| {
+            AppError::new(
+                "KC_RECOVERY_ESCROW_UNAVAILABLE",
+                "recovery",
+                "failed decoding v3 recovery escrow provider config row",
+                false,
+                serde_json::json!({ "error": e.to_string() }),
+            )
+        })?);
+    }
+    Ok(out)
 }
 
 fn append_recovery_escrow_event(
@@ -468,6 +599,23 @@ fn recovery_escrow_status_from_config(
         provider_available: status.available,
         updated_at_ms: Some(config.updated_at_ms),
         details_json: config.descriptor_json,
+    })
+}
+
+fn recovery_escrow_provider_item_from_row(
+    vault_path: &Path,
+    vault_id: &str,
+    row: &RecoveryEscrowProviderConfigRowV3,
+) -> AppResult<VaultRecoveryEscrowProviderItem> {
+    let provider = resolve_recovery_escrow_provider(&row.provider_id, vault_path, vault_id)?;
+    let status = provider.status()?;
+    Ok(VaultRecoveryEscrowProviderItem {
+        provider: row.provider_id.clone(),
+        priority: row.provider_priority,
+        config_ref: row.config_ref.clone(),
+        enabled: row.enabled,
+        provider_available: status.available,
+        updated_at_ms: row.updated_at_ms,
     })
 }
 
@@ -1310,6 +1458,221 @@ pub fn vault_recovery_escrow_enable_service(
         }),
     )?;
     vault_recovery_escrow_status_service(vault_path)
+}
+
+pub fn vault_recovery_escrow_provider_add_service(
+    vault_path: &Path,
+    provider_id: &str,
+    config_ref: &str,
+    now_ms: i64,
+) -> AppResult<VaultRecoveryEscrowProviderItem> {
+    if config_ref.trim().is_empty() {
+        return Err(AppError::new(
+            "KC_RECOVERY_ESCROW_WRITE_FAILED",
+            "recovery",
+            "config_ref is required",
+            false,
+            serde_json::json!({ "provider": provider_id }),
+        ));
+    }
+
+    let vault = vault_open(vault_path)?;
+    let conn = open_db(&vault_path.join(vault.db.relative_path.clone()))?;
+    let provider = resolve_recovery_escrow_provider(provider_id, vault_path, &vault.vault_id)?;
+    let provider_status = provider.status()?;
+    if !provider_status.configured {
+        return Err(AppError::new(
+            "KC_RECOVERY_ESCROW_AUTH_FAILED",
+            "recovery",
+            "recovery escrow provider is not configured",
+            false,
+            serde_json::json!({ "provider": provider_id, "details": provider_status.details_json }),
+        ));
+    }
+
+    upsert_recovery_escrow_provider_config_v3(&conn, provider_id, config_ref, true, now_ms)?;
+    // Keep existing v2 config table in sync for compatibility surfaces.
+    upsert_recovery_escrow_config(
+        &conn,
+        provider_id,
+        true,
+        &serde_json::to_string(&serde_json::json!({
+            "config_ref": config_ref
+        }))
+        .map_err(|e| {
+            AppError::new(
+                "KC_RECOVERY_ESCROW_WRITE_FAILED",
+                "recovery",
+                "failed serializing recovery escrow provider config_ref",
+                false,
+                serde_json::json!({ "error": e.to_string(), "provider": provider_id }),
+            )
+        })?,
+        now_ms,
+    )?;
+    append_recovery_escrow_event(
+        &conn,
+        provider_id,
+        "provider_add",
+        now_ms,
+        &serde_json::json!({
+            "config_ref": config_ref,
+            "available": provider_status.available
+        }),
+    )?;
+
+    let mut items = vault_recovery_escrow_provider_list_service(vault_path)?;
+    items.retain(|item| item.provider == provider_id);
+    items.into_iter().next().ok_or_else(|| {
+        AppError::new(
+            "KC_RECOVERY_ESCROW_WRITE_FAILED",
+            "recovery",
+            "provider config missing after add",
+            false,
+            serde_json::json!({ "provider": provider_id }),
+        )
+    })
+}
+
+pub fn vault_recovery_escrow_provider_list_service(
+    vault_path: &Path,
+) -> AppResult<Vec<VaultRecoveryEscrowProviderItem>> {
+    let vault = vault_open(vault_path)?;
+    let conn = open_db(&vault_path.join(vault.db.relative_path.clone()))?;
+    let rows = list_recovery_escrow_provider_configs_v3(&conn)?;
+    let mut out = Vec::new();
+    for row in rows {
+        out.push(recovery_escrow_provider_item_from_row(
+            vault_path,
+            &vault.vault_id,
+            &row,
+        )?);
+    }
+    Ok(out)
+}
+
+pub fn vault_recovery_escrow_rotate_all_service(
+    vault_path: &Path,
+    passphrase: &str,
+    now_ms: i64,
+) -> AppResult<VaultRecoveryEscrowRotateAllResult> {
+    if passphrase.trim().is_empty() {
+        return Err(AppError::new(
+            "KC_ENCRYPTION_REQUIRED",
+            "recovery",
+            "passphrase is required for escrow rotate-all",
+            false,
+            serde_json::json!({}),
+        ));
+    }
+
+    let vault = vault_open(vault_path)?;
+    let conn = open_db(&vault_path.join(vault.db.relative_path.clone()))?;
+    let providers = list_recovery_escrow_provider_configs_v3(&conn)?
+        .into_iter()
+        .filter(|row| row.enabled)
+        .collect::<Vec<_>>();
+    if providers.is_empty() {
+        return Err(AppError::new(
+            "KC_RECOVERY_ESCROW_ROTATION_CONFLICT",
+            "recovery",
+            "no enabled escrow providers configured for rotate-all",
+            false,
+            serde_json::json!({}),
+        ));
+    }
+
+    let output_root = vault_path.join("recovery-escrow-bundles");
+    let mut rotated = Vec::new();
+    for (idx, provider_cfg) in providers.into_iter().enumerate() {
+        let provider_now_ms = now_ms + idx as i64;
+        let provider = resolve_recovery_escrow_provider(
+            &provider_cfg.provider_id,
+            vault_path,
+            &vault.vault_id,
+        )?;
+        let provider_status = provider.status()?;
+        if !provider_status.available {
+            return Err(AppError::new(
+                "KC_RECOVERY_ESCROW_ROTATION_CONFLICT",
+                "recovery",
+                "escrow provider unavailable during rotate-all",
+                false,
+                serde_json::json!({
+                    "provider": provider_cfg.provider_id,
+                    "details": provider_status.details_json
+                }),
+            ));
+        }
+
+        let provider_output = output_root.join(&provider_cfg.provider_id);
+        let generated =
+            generate_recovery_bundle(&vault.vault_id, &provider_output, passphrase, provider_now_ms)?;
+        let blob_path = generated.bundle_path.join("key_blob.enc");
+        let key_blob = fs::read(&blob_path).map_err(|e| {
+            AppError::new(
+                "KC_RECOVERY_ESCROW_WRITE_FAILED",
+                "recovery",
+                "failed reading generated recovery key blob for rotate-all",
+                false,
+                serde_json::json!({ "error": e.to_string(), "path": blob_path }),
+            )
+        })?;
+        let descriptor = provider.write(RecoveryEscrowWriteRequest {
+            vault_id: &vault.vault_id,
+            payload_hash: &generated.manifest.payload_hash,
+            key_blob: &key_blob,
+            now_ms: provider_now_ms,
+        })?;
+        let mut manifest = generated.manifest.clone();
+        manifest.escrow = Some(descriptor.clone());
+        write_recovery_manifest(&generated.bundle_path, &manifest)?;
+
+        let descriptor_json = serde_json::to_string(&descriptor).map_err(|e| {
+            AppError::new(
+                "KC_RECOVERY_ESCROW_WRITE_FAILED",
+                "recovery",
+                "failed serializing rotate-all descriptor",
+                false,
+                serde_json::json!({ "error": e.to_string(), "provider": provider_cfg.provider_id }),
+            )
+        })?;
+        upsert_recovery_escrow_config(
+            &conn,
+            &provider_cfg.provider_id,
+            true,
+            &descriptor_json,
+            provider_now_ms,
+        )?;
+        upsert_recovery_escrow_provider_config_v3(
+            &conn,
+            &provider_cfg.provider_id,
+            &provider_cfg.config_ref,
+            true,
+            provider_now_ms,
+        )?;
+        append_recovery_escrow_event(
+            &conn,
+            &provider_cfg.provider_id,
+            "rotate_all",
+            provider_now_ms,
+            &serde_json::json!({
+                "bundle_path": generated.bundle_path,
+                "payload_hash": manifest.payload_hash
+            }),
+        )?;
+        write_recovery_state_file(vault_path, &generated.bundle_path)?;
+
+        rotated.push(VaultRecoveryEscrowRotateAllItem {
+            provider: provider_cfg.provider_id,
+            bundle_path: generated.bundle_path,
+            recovery_phrase: generated.recovery_phrase,
+            manifest,
+            updated_at_ms: provider_now_ms,
+        });
+    }
+
+    Ok(VaultRecoveryEscrowRotateAllResult { rotated })
 }
 
 pub fn vault_recovery_escrow_rotate_service(

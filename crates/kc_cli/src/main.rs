@@ -21,6 +21,7 @@ use cli::{
     LineageLockCmd, LineageOverlayCmd, LineageRoleCmd, SyncCmd, TrustCmd, TrustDeviceCmd,
     TrustIdentityCmd, TrustPolicyCmd, TrustProviderCmd,
     VaultCmd, VaultDbEncryptCmd, VaultEncryptCmd, VaultRecoveryCmd, VaultRecoveryEscrowCmd,
+    VaultRecoveryEscrowProviderCmd,
 };
 use kc_core::vault::{vault_init, vault_open};
 
@@ -95,6 +96,22 @@ fn main() {
                     VaultRecoveryEscrowCmd::Status { vault_path } => {
                         commands::vault::run_recovery_escrow_status(&vault_path)
                     }
+                    VaultRecoveryEscrowCmd::Provider { cmd } => match cmd {
+                        VaultRecoveryEscrowProviderCmd::Add {
+                            vault_path,
+                            provider,
+                            config_ref,
+                            now_ms: now_ms_opt,
+                        } => commands::vault::run_recovery_escrow_provider_add(
+                            &vault_path,
+                            &provider,
+                            &config_ref,
+                            now_ms_opt.unwrap_or_else(now_ms),
+                        ),
+                        VaultRecoveryEscrowProviderCmd::List { vault_path } => {
+                            commands::vault::run_recovery_escrow_provider_list(&vault_path)
+                        }
+                    },
                     VaultRecoveryEscrowCmd::Enable {
                         vault_path,
                         provider,
@@ -109,6 +126,15 @@ fn main() {
                         passphrase_env,
                         now_ms: now_ms_opt,
                     } => commands::vault::run_recovery_escrow_rotate(
+                        &vault_path,
+                        &passphrase_env,
+                        now_ms_opt.unwrap_or_else(now_ms),
+                    ),
+                    VaultRecoveryEscrowCmd::RotateAll {
+                        vault_path,
+                        passphrase_env,
+                        now_ms: now_ms_opt,
+                    } => commands::vault::run_recovery_escrow_rotate_all(
                         &vault_path,
                         &passphrase_env,
                         now_ms_opt.unwrap_or_else(now_ms),

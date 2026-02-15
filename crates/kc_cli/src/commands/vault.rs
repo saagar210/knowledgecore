@@ -5,7 +5,9 @@ use kc_core::rpc_service::{
     vault_db_encrypt_status_service, vault_encryption_enable_service,
     vault_encryption_migrate_service, vault_encryption_status_service, vault_lock_service,
     vault_lock_status_service, vault_recovery_escrow_enable_service,
+    vault_recovery_escrow_provider_add_service, vault_recovery_escrow_provider_list_service,
     vault_recovery_escrow_restore_service, vault_recovery_escrow_rotate_service,
+    vault_recovery_escrow_rotate_all_service,
     vault_recovery_escrow_status_service, vault_recovery_generate_service,
     vault_recovery_status_service, vault_recovery_verify_service, vault_unlock_service,
 };
@@ -420,6 +422,84 @@ pub fn run_recovery_escrow_restore(
                 "updated_at_ms": out.status.updated_at_ms,
                 "details_json": out.status.details_json,
             }
+        }))
+        .unwrap_or_else(|_| "{}".to_string())
+    );
+    Ok(())
+}
+
+pub fn run_recovery_escrow_provider_add(
+    vault_path: &str,
+    provider: &str,
+    config_ref: &str,
+    now_ms: i64,
+) -> AppResult<()> {
+    let item = vault_recovery_escrow_provider_add_service(
+        Path::new(vault_path),
+        provider,
+        config_ref,
+        now_ms,
+    )?;
+    println!(
+        "{}",
+        serde_json::to_string_pretty(&serde_json::json!({
+            "status": "ok",
+            "provider": {
+                "provider": item.provider,
+                "priority": item.priority,
+                "config_ref": item.config_ref,
+                "enabled": item.enabled,
+                "provider_available": item.provider_available,
+                "updated_at_ms": item.updated_at_ms
+            }
+        }))
+        .unwrap_or_else(|_| "{}".to_string())
+    );
+    Ok(())
+}
+
+pub fn run_recovery_escrow_provider_list(vault_path: &str) -> AppResult<()> {
+    let providers = vault_recovery_escrow_provider_list_service(Path::new(vault_path))?;
+    println!(
+        "{}",
+        serde_json::to_string_pretty(&serde_json::json!({
+            "status": "ok",
+            "providers": providers.into_iter().map(|item| serde_json::json!({
+                "provider": item.provider,
+                "priority": item.priority,
+                "config_ref": item.config_ref,
+                "enabled": item.enabled,
+                "provider_available": item.provider_available,
+                "updated_at_ms": item.updated_at_ms
+            })).collect::<Vec<_>>()
+        }))
+        .unwrap_or_else(|_| "{}".to_string())
+    );
+    Ok(())
+}
+
+pub fn run_recovery_escrow_rotate_all(
+    vault_path: &str,
+    passphrase_env: &str,
+    now_ms_override: i64,
+) -> AppResult<()> {
+    let passphrase = passphrase_from_env(passphrase_env)?;
+    let out = vault_recovery_escrow_rotate_all_service(
+        Path::new(vault_path),
+        &passphrase,
+        now_ms_override,
+    )?;
+    println!(
+        "{}",
+        serde_json::to_string_pretty(&serde_json::json!({
+            "status": "ok",
+            "rotated": out.rotated.into_iter().map(|item| serde_json::json!({
+                "provider": item.provider,
+                "bundle_path": item.bundle_path,
+                "recovery_phrase": item.recovery_phrase,
+                "manifest": item.manifest,
+                "updated_at_ms": item.updated_at_ms
+            })).collect::<Vec<_>>()
         }))
         .unwrap_or_else(|_| "{}".to_string())
     );

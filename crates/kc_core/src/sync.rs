@@ -18,10 +18,16 @@ use std::collections::BTreeSet;
 use std::fs;
 use std::io::Cursor;
 use std::path::{Path, PathBuf};
+use std::sync::atomic::{AtomicU64, Ordering};
 
 const TRUST_MODEL_PASSPHRASE_V1: &str = "passphrase_v1";
 const S3_LOCK_KEY: &str = "locks/write.lock";
 const S3_LOCK_TTL_MS: i64 = 60_000;
+static SYNC_TEMP_COUNTER: AtomicU64 = AtomicU64::new(0);
+
+fn next_sync_temp_suffix() -> u64 {
+    SYNC_TEMP_COUNTER.fetch_add(1, Ordering::Relaxed)
+}
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SyncTrustV1 {
@@ -556,10 +562,11 @@ fn extract_change_set_from_s3_snapshot(
         )
     })?;
     let unpack_dir = std::env::temp_dir().join(format!(
-        "kc_sync_merge_unpack_{}_{}_{}",
+        "kc_sync_merge_unpack_{}_{}_{}_{}",
         std::process::id(),
         snapshot_id.replace(':', "_"),
-        now_ms
+        now_ms,
+        next_sync_temp_suffix()
     ));
     if unpack_dir.exists() {
         fs::remove_dir_all(&unpack_dir).map_err(|e| {
@@ -575,8 +582,12 @@ fn extract_change_set_from_s3_snapshot(
 }
 
 fn build_local_snapshot(vault_path: &Path, now_ms: i64) -> AppResult<(PathBuf, String)> {
-    let staging_root =
-        std::env::temp_dir().join(format!("kc_sync_export_{}_{}", std::process::id(), now_ms));
+    let staging_root = std::env::temp_dir().join(format!(
+        "kc_sync_export_{}_{}_{}",
+        std::process::id(),
+        now_ms,
+        next_sync_temp_suffix()
+    ));
     fs::create_dir_all(&staging_root).map_err(|e| {
         sync_error(
             "KC_SYNC_STATE_FAILED",
@@ -603,9 +614,10 @@ fn build_local_snapshot_zip(
     now_ms: i64,
 ) -> AppResult<(PathBuf, PathBuf, String)> {
     let staging_root = std::env::temp_dir().join(format!(
-        "kc_sync_export_zip_{}_{}",
+        "kc_sync_export_zip_{}_{}_{}",
         std::process::id(),
-        now_ms
+        now_ms,
+        next_sync_temp_suffix()
     ));
     fs::create_dir_all(&staging_root).map_err(|e| {
         sync_error(

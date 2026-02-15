@@ -7,9 +7,11 @@ use apps_desktop_tauri::rpc::{
     TrustIdentityCompleteReq, TrustIdentityStartReq, TrustPolicySetReq, TrustProviderAddReq,
     TrustProviderDisableReq, TrustProviderListReq, VaultEncryptionEnableReq,
     VaultEncryptionMigrateReq, VaultEncryptionStatusReq, VaultInitReq, VaultLockReq,
-    VaultLockStatusReq, VaultRecoveryEscrowEnableReq, VaultRecoveryEscrowRestoreReq,
-    VaultRecoveryEscrowRotateReq, VaultRecoveryEscrowStatusReq, VaultRecoveryGenerateReq,
-    VaultRecoveryStatusReq, VaultRecoveryVerifyReq, VaultUnlockReq,
+    VaultLockStatusReq, VaultRecoveryEscrowEnableReq, VaultRecoveryEscrowProviderAddReq,
+    VaultRecoveryEscrowProviderListReq, VaultRecoveryEscrowRestoreReq,
+    VaultRecoveryEscrowRotateAllReq, VaultRecoveryEscrowRotateReq,
+    VaultRecoveryEscrowStatusReq, VaultRecoveryGenerateReq, VaultRecoveryStatusReq,
+    VaultRecoveryVerifyReq, VaultUnlockReq,
 };
 
 #[test]
@@ -160,6 +162,32 @@ fn rpc_schema_recovery_requests_validate_shapes() {
         "now_ms": 102
     });
     assert!(serde_json::from_value::<VaultRecoveryEscrowRestoreReq>(escrow_restore).is_ok());
+
+    let escrow_provider_add = serde_json::json!({
+        "vault_path": "/tmp/vault",
+        "provider": "aws",
+        "config_ref": "kms://alias/kc",
+        "now_ms": 103
+    });
+    assert!(
+        serde_json::from_value::<VaultRecoveryEscrowProviderAddReq>(escrow_provider_add).is_ok()
+    );
+
+    let escrow_provider_list = serde_json::json!({
+        "vault_path": "/tmp/vault"
+    });
+    assert!(
+        serde_json::from_value::<VaultRecoveryEscrowProviderListReq>(escrow_provider_list).is_ok()
+    );
+
+    let escrow_rotate_all = serde_json::json!({
+        "vault_path": "/tmp/vault",
+        "passphrase": "secret",
+        "now_ms": 104
+    });
+    assert!(
+        serde_json::from_value::<VaultRecoveryEscrowRotateAllReq>(escrow_rotate_all).is_ok()
+    );
 }
 
 #[test]
@@ -177,6 +205,16 @@ fn rpc_schema_recovery_rejects_unknown_fields() {
         "extra": "nope"
     });
     assert!(serde_json::from_value::<VaultRecoveryEscrowEnableReq>(invalid_escrow).is_err());
+
+    let invalid_provider_add = serde_json::json!({
+        "vault_path": "/tmp/vault",
+        "provider": "aws",
+        "config_ref": "kms://alias/kc",
+        "extra": "nope"
+    });
+    assert!(
+        serde_json::from_value::<VaultRecoveryEscrowProviderAddReq>(invalid_provider_add).is_err()
+    );
 }
 
 #[test]
