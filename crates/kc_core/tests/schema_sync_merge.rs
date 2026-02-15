@@ -1,4 +1,4 @@
-use jsonschema::JSONSchema;
+use jsonschema::validator_for;
 
 fn sync_merge_preview_schema() -> serde_json::Value {
     serde_json::json!({
@@ -244,8 +244,7 @@ fn sync_merge_preview_schema_v4() -> serde_json::Value {
 
 #[test]
 fn schema_sync_merge_preview_accepts_valid_payload() {
-    let schema =
-        JSONSchema::compile(&sync_merge_preview_schema()).expect("compile sync merge schema");
+    let schema = validator_for(&sync_merge_preview_schema()).expect("compile sync merge schema");
     let payload = serde_json::json!({
       "schema_version": 1,
       "merge_policy": "conservative_v1",
@@ -274,8 +273,7 @@ fn schema_sync_merge_preview_accepts_valid_payload() {
 
 #[test]
 fn schema_sync_merge_preview_rejects_unknown_reason() {
-    let schema =
-        JSONSchema::compile(&sync_merge_preview_schema()).expect("compile sync merge schema");
+    let schema = validator_for(&sync_merge_preview_schema()).expect("compile sync merge schema");
     let invalid = serde_json::json!({
       "schema_version": 1,
       "merge_policy": "conservative_v1",
@@ -292,7 +290,7 @@ fn schema_sync_merge_preview_rejects_unknown_reason() {
 #[test]
 fn schema_sync_merge_preview_v2_accepts_valid_payload() {
     let schema =
-        JSONSchema::compile(&sync_merge_preview_schema_v2()).expect("compile sync merge v2 schema");
+        validator_for(&sync_merge_preview_schema_v2()).expect("compile sync merge v2 schema");
     let payload = serde_json::json!({
       "schema_version": 2,
       "merge_policy": "conservative_plus_v2",
@@ -328,7 +326,7 @@ fn schema_sync_merge_preview_v2_accepts_valid_payload() {
 #[test]
 fn schema_sync_merge_preview_v2_rejects_unknown_reason() {
     let schema =
-        JSONSchema::compile(&sync_merge_preview_schema_v2()).expect("compile sync merge v2 schema");
+        validator_for(&sync_merge_preview_schema_v2()).expect("compile sync merge v2 schema");
     let invalid = serde_json::json!({
       "schema_version": 2,
       "merge_policy": "conservative_plus_v2",
@@ -346,7 +344,7 @@ fn schema_sync_merge_preview_v2_rejects_unknown_reason() {
 #[test]
 fn schema_sync_merge_preview_v3_accepts_valid_payload() {
     let schema =
-        JSONSchema::compile(&sync_merge_preview_schema_v3()).expect("compile sync merge v3 schema");
+        validator_for(&sync_merge_preview_schema_v3()).expect("compile sync merge v3 schema");
     let payload = serde_json::json!({
       "schema_version": 3,
       "merge_policy": "conservative_plus_v3",
@@ -384,7 +382,7 @@ fn schema_sync_merge_preview_v3_accepts_valid_payload() {
 #[test]
 fn schema_sync_merge_preview_v3_rejects_unknown_reason() {
     let schema =
-        JSONSchema::compile(&sync_merge_preview_schema_v3()).expect("compile sync merge v3 schema");
+        validator_for(&sync_merge_preview_schema_v3()).expect("compile sync merge v3 schema");
     let invalid = serde_json::json!({
       "schema_version": 3,
       "merge_policy": "conservative_plus_v3",
@@ -402,7 +400,7 @@ fn schema_sync_merge_preview_v3_rejects_unknown_reason() {
 #[test]
 fn schema_sync_merge_preview_v4_accepts_valid_payload() {
     let schema =
-        JSONSchema::compile(&sync_merge_preview_schema_v4()).expect("compile sync merge v4 schema");
+        validator_for(&sync_merge_preview_schema_v4()).expect("compile sync merge v4 schema");
     let payload = serde_json::json!({
       "schema_version": 4,
       "merge_policy": "conservative_plus_v4",
@@ -440,7 +438,7 @@ fn schema_sync_merge_preview_v4_accepts_valid_payload() {
 #[test]
 fn schema_sync_merge_preview_v4_rejects_unknown_reason() {
     let schema =
-        JSONSchema::compile(&sync_merge_preview_schema_v4()).expect("compile sync merge v4 schema");
+        validator_for(&sync_merge_preview_schema_v4()).expect("compile sync merge v4 schema");
     let invalid = serde_json::json!({
       "schema_version": 4,
       "merge_policy": "conservative_plus_v4",

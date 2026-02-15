@@ -2095,7 +2095,7 @@ pub fn sync_pull_target_with_mode(
 mod tests {
     use super::unpack_zip_snapshot;
     use std::io::Write;
-    use zip::write::FileOptions;
+    use zip::write::SimpleFileOptions;
 
     fn zip_bytes(entries: &[(&str, &[u8])]) -> Vec<u8> {
         let mut bytes = std::io::Cursor::new(Vec::new());
@@ -2105,7 +2105,8 @@ mod tests {
                 writer
                     .start_file(
                         name,
-                        FileOptions::default().compression_method(zip::CompressionMethod::Stored),
+                        SimpleFileOptions::default()
+                            .compression_method(zip::CompressionMethod::Stored),
                     )
                     .expect("start file");
                 writer.write_all(payload).expect("write zip entry");

@@ -43,7 +43,7 @@ fn create_deterministic_zip(bundle_dir: &Path, zip_path: &Path) -> AppResult<()>
 
     for file_path in files {
         let rel = rel_for_path(bundle_dir, &file_path)?;
-        let options = zip::write::FileOptions::default()
+        let options = zip::write::SimpleFileOptions::default()
             .compression_method(zip::CompressionMethod::Stored)
             .last_modified_time(zip_fixed_time())
             .unix_permissions(0o644);

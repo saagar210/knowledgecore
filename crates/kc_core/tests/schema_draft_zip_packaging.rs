@@ -1,4 +1,4 @@
-use jsonschema::JSONSchema;
+use jsonschema::validator_for;
 
 fn draft_zip_schema() -> serde_json::Value {
     serde_json::json!({
@@ -29,7 +29,7 @@ fn draft_zip_schema() -> serde_json::Value {
 
 #[test]
 fn schema_draft_zip_packaging_accepts_representative_payload() {
-    let schema = JSONSchema::compile(&draft_zip_schema()).expect("compile draft zip schema");
+    let schema = validator_for(&draft_zip_schema()).expect("compile draft zip schema");
     let value = serde_json::json!({
       "schema_version": 1,
       "status": "draft",
@@ -45,7 +45,7 @@ fn schema_draft_zip_packaging_accepts_representative_payload() {
 
 #[test]
 fn schema_draft_zip_packaging_rejects_wrong_activation_phase() {
-    let schema = JSONSchema::compile(&draft_zip_schema()).expect("compile draft zip schema");
+    let schema = validator_for(&draft_zip_schema()).expect("compile draft zip schema");
     let invalid = serde_json::json!({
       "schema_version": 1,
       "status": "draft",

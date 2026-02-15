@@ -1,4 +1,4 @@
-use jsonschema::JSONSchema;
+use jsonschema::validator_for;
 use kc_cli::verifier::{CheckedCounts, VerifyErrorEntry, VerifyReportV1};
 use serde_json::json;
 
@@ -48,7 +48,7 @@ fn verifier_report_schema() -> serde_json::Value {
 
 #[test]
 fn schema_verifier_report_accepts_valid_payload() {
-    let schema = JSONSchema::compile(&verifier_report_schema()).expect("compile verifier schema");
+    let schema = validator_for(&verifier_report_schema()).expect("compile verifier schema");
     let report = VerifyReportV1 {
         report_version: 1,
         status: "ok".to_string(),
@@ -71,7 +71,7 @@ fn schema_verifier_report_accepts_valid_payload() {
 
 #[test]
 fn schema_verifier_report_rejects_missing_checked() {
-    let schema = JSONSchema::compile(&verifier_report_schema()).expect("compile verifier schema");
+    let schema = validator_for(&verifier_report_schema()).expect("compile verifier schema");
     let invalid = json!({
       "report_version": 1,
       "status": "failed",
@@ -84,7 +84,7 @@ fn schema_verifier_report_rejects_missing_checked() {
 
 #[test]
 fn schema_verifier_report_accepts_recovery_escrow_metadata_error() {
-    let schema = JSONSchema::compile(&verifier_report_schema()).expect("compile verifier schema");
+    let schema = validator_for(&verifier_report_schema()).expect("compile verifier schema");
     let report = json!({
       "report_version": 1,
       "status": "failed",

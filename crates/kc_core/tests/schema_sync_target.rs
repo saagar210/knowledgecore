@@ -1,4 +1,4 @@
-use jsonschema::JSONSchema;
+use jsonschema::validator_for;
 use kc_core::sync_transport::SyncTargetUri;
 
 fn sync_target_schema() -> serde_json::Value {
@@ -31,7 +31,7 @@ fn sync_target_schema() -> serde_json::Value {
 
 #[test]
 fn schema_sync_target_accepts_file_and_s3() {
-    let schema = JSONSchema::compile(&sync_target_schema()).expect("compile schema");
+    let schema = validator_for(&sync_target_schema()).expect("compile schema");
     let file = serde_json::to_value(SyncTargetUri::parse("/tmp/sync").expect("parse file"))
         .expect("serialize file");
     let s3 = serde_json::to_value(SyncTargetUri::parse("s3://demo-bucket/kc").expect("parse s3"))

@@ -1,4 +1,4 @@
-use jsonschema::JSONSchema;
+use jsonschema::validator_for;
 
 fn lineage_role_binding_schema() -> serde_json::Value {
     serde_json::json!({
@@ -108,7 +108,7 @@ fn lineage_policy_audit_schema() -> serde_json::Value {
 #[test]
 fn schema_lineage_role_binding_accepts_valid_payload() {
     let schema =
-        JSONSchema::compile(&lineage_role_binding_schema()).expect("compile role binding schema");
+        validator_for(&lineage_role_binding_schema()).expect("compile role binding schema");
     let payload = serde_json::json!({
       "subject_id": "alice",
       "role_name": "editor",
@@ -122,7 +122,7 @@ fn schema_lineage_role_binding_accepts_valid_payload() {
 #[test]
 fn schema_lineage_role_binding_rejects_missing_rank() {
     let schema =
-        JSONSchema::compile(&lineage_role_binding_schema()).expect("compile role binding schema");
+        validator_for(&lineage_role_binding_schema()).expect("compile role binding schema");
     let payload = serde_json::json!({
       "subject_id": "alice",
       "role_name": "editor",
@@ -134,8 +134,8 @@ fn schema_lineage_role_binding_rejects_missing_rank() {
 
 #[test]
 fn schema_lineage_scope_lock_status_accepts_valid_payload() {
-    let schema = JSONSchema::compile(&lineage_scope_lock_status_schema())
-        .expect("compile scope status schema");
+    let schema =
+        validator_for(&lineage_scope_lock_status_schema()).expect("compile scope status schema");
     let payload = serde_json::json!({
       "scope_kind": "doc",
       "scope_value": "doc-1",
@@ -150,8 +150,8 @@ fn schema_lineage_scope_lock_status_accepts_valid_payload() {
 
 #[test]
 fn schema_lineage_scope_lock_status_rejects_unknown_scope_kind() {
-    let schema = JSONSchema::compile(&lineage_scope_lock_status_schema())
-        .expect("compile scope status schema");
+    let schema =
+        validator_for(&lineage_scope_lock_status_schema()).expect("compile scope status schema");
     let payload = serde_json::json!({
       "scope_kind": "global",
       "scope_value": "doc-1",
@@ -166,7 +166,7 @@ fn schema_lineage_scope_lock_status_rejects_unknown_scope_kind() {
 
 #[test]
 fn schema_lineage_policy_binding_accepts_valid_payload() {
-    let schema = JSONSchema::compile(&lineage_policy_binding_schema())
+    let schema = validator_for(&lineage_policy_binding_schema())
         .expect("compile lineage policy binding schema");
     let payload = serde_json::json!({
       "subject_id": "alice",
@@ -183,7 +183,7 @@ fn schema_lineage_policy_binding_accepts_valid_payload() {
 
 #[test]
 fn schema_lineage_policy_binding_rejects_unknown_effect() {
-    let schema = JSONSchema::compile(&lineage_policy_binding_schema())
+    let schema = validator_for(&lineage_policy_binding_schema())
         .expect("compile lineage policy binding schema");
     let payload = serde_json::json!({
       "subject_id": "alice",
@@ -200,8 +200,8 @@ fn schema_lineage_policy_binding_rejects_unknown_effect() {
 
 #[test]
 fn schema_lineage_policy_audit_accepts_valid_payload() {
-    let schema = JSONSchema::compile(&lineage_policy_audit_schema())
-        .expect("compile lineage policy audit schema");
+    let schema =
+        validator_for(&lineage_policy_audit_schema()).expect("compile lineage policy audit schema");
     let payload = serde_json::json!({
       "ts_ms": 1710000000000i64,
       "subject_id": "alice",
@@ -217,8 +217,8 @@ fn schema_lineage_policy_audit_accepts_valid_payload() {
 
 #[test]
 fn schema_lineage_policy_audit_rejects_unknown_reason() {
-    let schema = JSONSchema::compile(&lineage_policy_audit_schema())
-        .expect("compile lineage policy audit schema");
+    let schema =
+        validator_for(&lineage_policy_audit_schema()).expect("compile lineage policy audit schema");
     let payload = serde_json::json!({
       "ts_ms": 1710000000000i64,
       "subject_id": "alice",

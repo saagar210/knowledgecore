@@ -1,4 +1,4 @@
-use jsonschema::JSONSchema;
+use jsonschema::validator_for;
 
 fn lineage_lock_schema() -> serde_json::Value {
     serde_json::json!({
@@ -37,7 +37,7 @@ fn lineage_lock_status_schema() -> serde_json::Value {
 
 #[test]
 fn schema_lineage_lock_accepts_valid_payload() {
-    let schema = JSONSchema::compile(&lineage_lock_schema()).expect("compile lineage lock schema");
+    let schema = validator_for(&lineage_lock_schema()).expect("compile lineage lock schema");
     let payload = serde_json::json!({
       "doc_id": "doc-1",
       "owner": "tester",
@@ -50,8 +50,8 @@ fn schema_lineage_lock_accepts_valid_payload() {
 
 #[test]
 fn schema_lineage_lock_status_accepts_valid_payload() {
-    let schema = JSONSchema::compile(&lineage_lock_status_schema())
-        .expect("compile lineage lock status schema");
+    let schema =
+        validator_for(&lineage_lock_status_schema()).expect("compile lineage lock status schema");
     let payload = serde_json::json!({
       "doc_id": "doc-1",
       "held": true,
@@ -65,7 +65,7 @@ fn schema_lineage_lock_status_accepts_valid_payload() {
 
 #[test]
 fn schema_lineage_lock_rejects_missing_token() {
-    let schema = JSONSchema::compile(&lineage_lock_schema()).expect("compile lineage lock schema");
+    let schema = validator_for(&lineage_lock_schema()).expect("compile lineage lock schema");
     let invalid = serde_json::json!({
       "doc_id": "doc-1",
       "owner": "tester",

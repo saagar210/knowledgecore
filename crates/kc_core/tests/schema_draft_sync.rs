@@ -1,4 +1,4 @@
-use jsonschema::JSONSchema;
+use jsonschema::validator_for;
 
 fn draft_sync_schema() -> serde_json::Value {
     serde_json::json!({
@@ -46,7 +46,7 @@ fn draft_sync_schema() -> serde_json::Value {
 
 #[test]
 fn schema_draft_sync_accepts_representative_payload() {
-    let schema = JSONSchema::compile(&draft_sync_schema()).expect("compile draft sync schema");
+    let schema = validator_for(&draft_sync_schema()).expect("compile draft sync schema");
     let value = serde_json::json!({
       "schema_version": 1,
       "status": "draft",
@@ -71,7 +71,7 @@ fn schema_draft_sync_accepts_representative_payload() {
 
 #[test]
 fn schema_draft_sync_rejects_bad_hash_shape() {
-    let schema = JSONSchema::compile(&draft_sync_schema()).expect("compile draft sync schema");
+    let schema = validator_for(&draft_sync_schema()).expect("compile draft sync schema");
     let invalid = serde_json::json!({
       "schema_version": 1,
       "status": "draft",

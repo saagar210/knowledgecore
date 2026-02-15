@@ -1,4 +1,4 @@
-use jsonschema::JSONSchema;
+use jsonschema::validator_for;
 use kc_core::app_error::AppError;
 use serde_json::json;
 
@@ -29,7 +29,7 @@ fn app_error_schema() -> serde_json::Value {
 
 #[test]
 fn schema_app_error_accepts_valid_payload() {
-    let schema = JSONSchema::compile(&app_error_schema()).expect("compile app_error schema");
+    let schema = validator_for(&app_error_schema()).expect("compile app_error schema");
     let value = serde_json::to_value(AppError::new(
         "KC_VAULT_INIT_FAILED",
         "vault",
@@ -44,7 +44,7 @@ fn schema_app_error_accepts_valid_payload() {
 
 #[test]
 fn schema_app_error_rejects_missing_code() {
-    let schema = JSONSchema::compile(&app_error_schema()).expect("compile app_error schema");
+    let schema = validator_for(&app_error_schema()).expect("compile app_error schema");
     let invalid = json!({
       "schema_version": 1,
       "category": "vault",

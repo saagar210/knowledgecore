@@ -1,4 +1,4 @@
-use jsonschema::JSONSchema;
+use jsonschema::validator_for;
 use kc_core::app_error::{AppError, AppResult};
 use kc_core::hashing::blake3_hex_prefixed;
 use kc_core::recovery_escrow::{provider_priority, supported_provider_ids};
@@ -245,7 +245,7 @@ pub fn verify_sync_head_payload(sync_head_json: &[u8]) -> AppResult<()> {
             serde_json::json!({ "error": e.to_string() }),
         )
     })?;
-    let schema = JSONSchema::compile(&sync_head_schema()).map_err(|e| {
+    let schema = validator_for(&sync_head_schema()).map_err(|e| {
         AppError::new(
             "KC_VERIFY_FAILED",
             "verify",
@@ -254,15 +254,15 @@ pub fn verify_sync_head_payload(sync_head_json: &[u8]) -> AppResult<()> {
             serde_json::json!({ "error": e.to_string() }),
         )
     })?;
-    if let Some(first_error) = schema.validate(&payload).err().and_then(|mut e| e.next()) {
+    if let Err(first_error) = schema.validate(&payload) {
         return Err(AppError::new(
             "KC_VERIFY_FAILED",
             "verify",
             "sync head payload failed schema validation",
             false,
             serde_json::json!({
-                "instance_path": first_error.instance_path.to_string(),
-                "schema_path": first_error.schema_path.to_string(),
+                "instance_path": first_error.instance_path().to_string(),
+                "schema_path": first_error.schema_path().to_string(),
                 "error": first_error.to_string(),
             }),
         ));
@@ -558,7 +558,7 @@ fn verify_folder_bundle(
         }
     };
 
-    let schema = JSONSchema::compile(&manifest_schema()).map_err(|e| {
+    let schema = validator_for(&manifest_schema()).map_err(|e| {
         AppError::new(
             "KC_VERIFY_FAILED",
             "verify",
@@ -567,14 +567,13 @@ fn verify_folder_bundle(
             serde_json::json!({ "error": e.to_string() }),
         )
     })?;
-    let mut validation_errors = schema.validate(&manifest).err().into_iter().flatten();
-    if let Some(first_error) = validation_errors.next() {
+    if let Err(first_error) = schema.validate(&manifest) {
         return Ok(report_for(
             21,
             vec![VerifyErrorEntry {
                 code: "MANIFEST_SCHEMA_INVALID".to_string(),
-                path: first_error.instance_path.to_string(),
-                expected: Some(first_error.schema_path.to_string()),
+                path: first_error.instance_path().to_string(),
+                expected: Some(first_error.schema_path().to_string()),
                 actual: Some(first_error.to_string()),
             }],
             CheckedCounts {
@@ -969,21 +968,32 @@ fn verify_zip_bundle(bundle_zip: &Path) -> AppResult<(i64, VerifyReportV1)> {
             });
         }
 
-        if !is_zip_time_normalized(entry.last_modified()) {
-            zip_errors.push(VerifyErrorEntry {
-                code: "ZIP_METADATA_INVALID".to_string(),
-                path: name.clone(),
-                expected: Some("mtime=1980-01-01T00:00:00Z".to_string()),
-                actual: Some(format!(
-                    "mtime={:04}-{:02}-{:02}T{:02}:{:02}:{:02}Z",
-                    entry.last_modified().year(),
-                    entry.last_modified().month(),
-                    entry.last_modified().day(),
-                    entry.last_modified().hour(),
-                    entry.last_modified().minute(),
-                    entry.last_modified().second()
-                )),
-            });
+        match entry.last_modified() {
+            Some(dt) if is_zip_time_normalized(dt) => {}
+            Some(dt) => {
+                zip_errors.push(VerifyErrorEntry {
+                    code: "ZIP_METADATA_INVALID".to_string(),
+                    path: name.clone(),
+                    expected: Some("mtime=1980-01-01T00:00:00Z".to_string()),
+                    actual: Some(format!(
+                        "mtime={:04}-{:02}-{:02}T{:02}:{:02}:{:02}Z",
+                        dt.year(),
+                        dt.month(),
+                        dt.day(),
+                        dt.hour(),
+                        dt.minute(),
+                        dt.second()
+                    )),
+                });
+            }
+            None => {
+                zip_errors.push(VerifyErrorEntry {
+                    code: "ZIP_METADATA_INVALID".to_string(),
+                    path: name.clone(),
+                    expected: Some("mtime=1980-01-01T00:00:00Z".to_string()),
+                    actual: Some("mtime=missing".to_string()),
+                });
+            }
         }
 
         let mode = entry.unix_mode().unwrap_or(0o644) & 0o777;

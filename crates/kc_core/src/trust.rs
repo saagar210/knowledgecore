@@ -119,7 +119,7 @@ pub fn trust_device_init(
     now_ms: i64,
 ) -> AppResult<TrustedDeviceRecord> {
     let mut seed = [0u8; 32];
-    getrandom::getrandom(&mut seed).map_err(|e| {
+    getrandom::fill(&mut seed).map_err(|e| {
         trust_error(
             "KC_SYNC_AUTH_FAILED",
             "failed generating device keypair entropy",

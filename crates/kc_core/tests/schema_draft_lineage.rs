@@ -1,4 +1,4 @@
-use jsonschema::JSONSchema;
+use jsonschema::validator_for;
 
 fn draft_lineage_schema() -> serde_json::Value {
     serde_json::json!({
@@ -45,8 +45,7 @@ fn draft_lineage_schema() -> serde_json::Value {
 
 #[test]
 fn schema_draft_lineage_accepts_representative_payload() {
-    let schema =
-        JSONSchema::compile(&draft_lineage_schema()).expect("compile draft lineage schema");
+    let schema = validator_for(&draft_lineage_schema()).expect("compile draft lineage schema");
     let value = serde_json::json!({
       "schema_version": 1,
       "status": "draft",
@@ -65,8 +64,7 @@ fn schema_draft_lineage_accepts_representative_payload() {
 
 #[test]
 fn schema_draft_lineage_rejects_missing_edges() {
-    let schema =
-        JSONSchema::compile(&draft_lineage_schema()).expect("compile draft lineage schema");
+    let schema = validator_for(&draft_lineage_schema()).expect("compile draft lineage schema");
     let invalid = serde_json::json!({
       "schema_version": 1,
       "status": "draft",

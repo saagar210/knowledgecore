@@ -1,4 +1,4 @@
-use jsonschema::JSONSchema;
+use jsonschema::validator_for;
 use kc_core::db::open_db;
 use kc_core::trust::{trust_device_init, trust_device_verify};
 use kc_core::trust_identity::{
@@ -165,11 +165,9 @@ fn schema_trust_identity_accepts_valid_payloads() {
     let verified_chain =
         trust_device_verify_chain(&conn, &verified_device.device_id, 105).expect("verify chain");
 
-    let start_schema = JSONSchema::compile(&identity_start_schema()).expect("compile start schema");
-    let session_schema =
-        JSONSchema::compile(&identity_session_schema()).expect("compile session schema");
-    let cert_schema =
-        JSONSchema::compile(&device_certificate_schema()).expect("compile cert schema");
+    let start_schema = validator_for(&identity_start_schema()).expect("compile start schema");
+    let session_schema = validator_for(&identity_session_schema()).expect("compile session schema");
+    let cert_schema = validator_for(&device_certificate_schema()).expect("compile cert schema");
 
     assert!(start_schema.is_valid(&serde_json::to_value(started).expect("serialize start")));
     assert!(session_schema.is_valid(&serde_json::to_value(completed).expect("serialize session")));
@@ -208,10 +206,10 @@ fn schema_trust_provider_policy_and_revocation_accept_valid_payloads() {
         trust_session_revoke(&conn, &session.session_id, "tester", 13).expect("session revoke");
 
     let provider_schema =
-        JSONSchema::compile(&identity_provider_schema()).expect("compile provider schema");
-    let policy_schema = JSONSchema::compile(&trust_provider_policy_schema())
-        .expect("compile provider policy schema");
-    let revocation_schema = JSONSchema::compile(&trust_session_revocation_schema())
+        validator_for(&identity_provider_schema()).expect("compile provider schema");
+    let policy_schema =
+        validator_for(&trust_provider_policy_schema()).expect("compile provider policy schema");
+    let revocation_schema = validator_for(&trust_session_revocation_schema())
         .expect("compile session revocation schema");
 
     assert!(provider_schema.is_valid(&serde_json::to_value(provider).expect("serialize provider")));
@@ -222,7 +220,7 @@ fn schema_trust_provider_policy_and_revocation_accept_valid_payloads() {
 
 #[test]
 fn schema_device_certificate_rejects_missing_chain_hash() {
-    let schema = JSONSchema::compile(&device_certificate_schema()).expect("compile cert schema");
+    let schema = validator_for(&device_certificate_schema()).expect("compile cert schema");
     let invalid = serde_json::json!({
       "cert_id": "11111111-1111-1111-1111-111111111111",
       "device_id": "22222222-2222-2222-2222-222222222222",
@@ -238,8 +236,8 @@ fn schema_device_certificate_rejects_missing_chain_hash() {
 
 #[test]
 fn schema_trust_provider_policy_rejects_negative_clock_skew() {
-    let schema = JSONSchema::compile(&trust_provider_policy_schema())
-        .expect("compile provider policy schema");
+    let schema =
+        validator_for(&trust_provider_policy_schema()).expect("compile provider policy schema");
     let invalid = serde_json::json!({
       "provider_id": "corp",
       "max_clock_skew_ms": -1,

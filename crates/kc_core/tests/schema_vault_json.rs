@@ -1,4 +1,4 @@
-use jsonschema::JSONSchema;
+use jsonschema::validator_for;
 use kc_core::vault::vault_init;
 
 fn vault_json_v3_schema() -> serde_json::Value {
@@ -82,7 +82,7 @@ fn schema_vault_json_accepts_generated_v3_payload() {
     let root = tempfile::tempdir().expect("tempdir").keep();
     let created = vault_init(&root, "demo", 123).expect("vault init");
     let value = serde_json::to_value(created).expect("serialize vault json");
-    let schema = JSONSchema::compile(&vault_json_v3_schema()).expect("compile vault schema");
+    let schema = validator_for(&vault_json_v3_schema()).expect("compile vault schema");
     assert!(schema.is_valid(&value));
 }
 
@@ -109,6 +109,6 @@ fn schema_vault_json_rejects_missing_db_encryption_block() {
         "key_reference": null
       }
     });
-    let schema = JSONSchema::compile(&vault_json_v3_schema()).expect("compile vault schema");
+    let schema = validator_for(&vault_json_v3_schema()).expect("compile vault schema");
     assert!(!schema.is_valid(&invalid));
 }

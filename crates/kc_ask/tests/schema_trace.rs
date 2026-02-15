@@ -1,4 +1,4 @@
-use jsonschema::JSONSchema;
+use jsonschema::validator_for;
 use kc_ask::{AskRequest, RetrievedOnlyAskService};
 use kc_core::locator::{LocatorRange, LocatorV1};
 use kc_core::types::{CanonicalHash, DocId};
@@ -68,13 +68,13 @@ fn schema_trace_accepts_written_trace() {
     let value: serde_json::Value =
         serde_json::from_slice(&std::fs::read(out.trace_path).expect("read trace"))
             .expect("parse trace");
-    let schema = JSONSchema::compile(&trace_schema()).expect("compile trace schema");
+    let schema = validator_for(&trace_schema()).expect("compile trace schema");
     assert!(schema.is_valid(&value));
 }
 
 #[test]
 fn schema_trace_rejects_non_uuid_ids() {
-    let schema = JSONSchema::compile(&trace_schema()).expect("compile trace schema");
+    let schema = validator_for(&trace_schema()).expect("compile trace schema");
     let invalid = serde_json::json!({
       "schema_version": 1,
       "trace_id": "not-a-uuid",

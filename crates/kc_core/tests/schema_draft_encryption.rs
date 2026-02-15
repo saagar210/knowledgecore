@@ -1,4 +1,4 @@
-use jsonschema::JSONSchema;
+use jsonschema::validator_for;
 
 fn draft_encryption_schema() -> serde_json::Value {
     serde_json::json!({
@@ -39,7 +39,7 @@ fn draft_encryption_schema() -> serde_json::Value {
 #[test]
 fn schema_draft_encryption_accepts_representative_payload() {
     let schema =
-        JSONSchema::compile(&draft_encryption_schema()).expect("compile draft encryption schema");
+        validator_for(&draft_encryption_schema()).expect("compile draft encryption schema");
     let value = serde_json::json!({
       "schema_version": 1,
       "status": "draft",
@@ -61,7 +61,7 @@ fn schema_draft_encryption_accepts_representative_payload() {
 #[test]
 fn schema_draft_encryption_rejects_missing_kdf() {
     let schema =
-        JSONSchema::compile(&draft_encryption_schema()).expect("compile draft encryption schema");
+        validator_for(&draft_encryption_schema()).expect("compile draft encryption schema");
     let invalid = serde_json::json!({
       "schema_version": 1,
       "status": "draft",

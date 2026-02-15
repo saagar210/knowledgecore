@@ -1,4 +1,4 @@
-use jsonschema::JSONSchema;
+use jsonschema::validator_for;
 
 fn sync_head_schema() -> serde_json::Value {
     serde_json::json!({
@@ -89,7 +89,7 @@ fn sync_conflict_schema() -> serde_json::Value {
 
 #[test]
 fn schema_sync_head_accepts_valid_payload() {
-    let schema = JSONSchema::compile(&sync_head_schema()).expect("compile sync head schema");
+    let schema = validator_for(&sync_head_schema()).expect("compile sync head schema");
     let payload = serde_json::json!({
       "schema_version": 3,
       "snapshot_id": "blake3:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
@@ -111,7 +111,7 @@ fn schema_sync_head_accepts_valid_payload() {
 
 #[test]
 fn schema_sync_head_v2_rejects_missing_trust() {
-    let schema = JSONSchema::compile(&sync_head_schema()).expect("compile sync head schema");
+    let schema = validator_for(&sync_head_schema()).expect("compile sync head schema");
     let invalid = serde_json::json!({
       "schema_version": 2,
       "snapshot_id": "blake3:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
@@ -123,7 +123,7 @@ fn schema_sync_head_v2_rejects_missing_trust() {
 
 #[test]
 fn schema_sync_head_v3_rejects_missing_author_chain_fields() {
-    let schema = JSONSchema::compile(&sync_head_schema()).expect("compile sync head schema");
+    let schema = validator_for(&sync_head_schema()).expect("compile sync head schema");
     let invalid = serde_json::json!({
       "schema_version": 3,
       "snapshot_id": "blake3:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
@@ -143,8 +143,7 @@ fn schema_sync_head_v3_rejects_missing_author_chain_fields() {
 
 #[test]
 fn schema_sync_conflict_rejects_missing_kind() {
-    let schema =
-        JSONSchema::compile(&sync_conflict_schema()).expect("compile sync conflict schema");
+    let schema = validator_for(&sync_conflict_schema()).expect("compile sync conflict schema");
     let invalid = serde_json::json!({
       "schema_version": 1,
       "vault_id": "vault-id",

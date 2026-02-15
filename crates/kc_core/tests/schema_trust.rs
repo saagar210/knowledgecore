@@ -1,4 +1,4 @@
-use jsonschema::JSONSchema;
+use jsonschema::validator_for;
 use kc_core::trust::{trust_device_init, trust_device_verify};
 use kc_core::{db::open_db, vault::vault_init};
 
@@ -56,15 +56,14 @@ fn schema_trusted_device_accepts_init_and_verify_payloads() {
     let verify = trust_device_verify(&conn, &init.device_id, &init.fingerprint, "tester", 101)
         .expect("verify trust device");
 
-    let schema =
-        JSONSchema::compile(&trusted_device_schema()).expect("compile trusted_device schema");
+    let schema = validator_for(&trusted_device_schema()).expect("compile trusted_device schema");
     assert!(schema.is_valid(&serde_json::to_value(init).expect("serialize init")));
     assert!(schema.is_valid(&serde_json::to_value(verify).expect("serialize verify")));
 }
 
 #[test]
 fn schema_trust_event_rejects_missing_details_json() {
-    let schema = JSONSchema::compile(&trust_event_schema()).expect("compile trust_event schema");
+    let schema = validator_for(&trust_event_schema()).expect("compile trust_event schema");
     let invalid = serde_json::json!({
       "event_id": 1,
       "device_id": "abc",

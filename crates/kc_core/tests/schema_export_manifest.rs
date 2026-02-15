@@ -1,4 +1,4 @@
-use jsonschema::JSONSchema;
+use jsonschema::validator_for;
 use kc_core::db::open_db;
 use kc_core::export::{export_bundle, ExportOptions};
 use kc_core::vault::vault_init;
@@ -165,13 +165,13 @@ fn schema_export_manifest_accepts_generated_manifest() {
     )
     .expect("parse manifest");
 
-    let schema = JSONSchema::compile(&export_manifest_schema()).expect("compile schema");
+    let schema = validator_for(&export_manifest_schema()).expect("compile schema");
     assert!(schema.is_valid(&value));
 }
 
 #[test]
 fn schema_export_manifest_rejects_bad_hash() {
-    let schema = JSONSchema::compile(&export_manifest_schema()).expect("compile schema");
+    let schema = validator_for(&export_manifest_schema()).expect("compile schema");
     let invalid = serde_json::json!({
       "manifest_version": 1,
       "vault_id": "123e4567-e89b-12d3-a456-426614174000",
@@ -222,7 +222,7 @@ fn schema_export_manifest_rejects_bad_hash() {
 
 #[test]
 fn schema_export_manifest_rejects_non_uuid_vault_id() {
-    let schema = JSONSchema::compile(&export_manifest_schema()).expect("compile schema");
+    let schema = validator_for(&export_manifest_schema()).expect("compile schema");
     let invalid = serde_json::json!({
       "manifest_version": 1,
       "vault_id": "not-a-uuid",

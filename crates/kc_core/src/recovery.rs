@@ -82,7 +82,7 @@ fn phrase_checksum(vault_id: &str, phrase: &str) -> String {
 
 fn random_phrase() -> AppResult<String> {
     let mut bytes = [0u8; 16];
-    getrandom::getrandom(&mut bytes).map_err(|e| {
+    getrandom::fill(&mut bytes).map_err(|e| {
         recovery_error(
             "KC_RECOVERY_BUNDLE_INVALID",
             "failed generating recovery phrase entropy",

@@ -1,4 +1,4 @@
-use jsonschema::JSONSchema;
+use jsonschema::validator_for;
 use kc_core::recovery::generate_recovery_bundle;
 use kc_core::vault::vault_init;
 
@@ -58,13 +58,13 @@ fn schema_recovery_manifest_accepts_generated_payload() {
         generate_recovery_bundle(&vault.vault_id, &root.join("out"), "vault-passphrase", 100)
             .expect("generate recovery");
     let value = serde_json::to_value(generated.manifest).expect("manifest value");
-    let schema = JSONSchema::compile(&recovery_manifest_schema()).expect("compile schema");
+    let schema = validator_for(&recovery_manifest_schema()).expect("compile schema");
     assert!(schema.is_valid(&value));
 }
 
 #[test]
 fn schema_recovery_manifest_rejects_missing_payload_hash() {
-    let schema = JSONSchema::compile(&recovery_manifest_schema()).expect("compile schema");
+    let schema = validator_for(&recovery_manifest_schema()).expect("compile schema");
     let invalid = serde_json::json!({
       "schema_version": 1,
       "vault_id": "vault-id",
@@ -76,7 +76,7 @@ fn schema_recovery_manifest_rejects_missing_payload_hash() {
 
 #[test]
 fn schema_recovery_manifest_rejects_invalid_escrow_descriptor() {
-    let schema = JSONSchema::compile(&recovery_manifest_schema()).expect("compile schema");
+    let schema = validator_for(&recovery_manifest_schema()).expect("compile schema");
     let invalid = serde_json::json!({
       "schema_version": 2,
       "vault_id": "vault-id",
@@ -94,7 +94,7 @@ fn schema_recovery_manifest_rejects_invalid_escrow_descriptor() {
 
 #[test]
 fn schema_recovery_manifest_accepts_descriptors_array_payload() {
-    let schema = JSONSchema::compile(&recovery_manifest_schema()).expect("compile schema");
+    let schema = validator_for(&recovery_manifest_schema()).expect("compile schema");
     let value = serde_json::json!({
       "schema_version": 2,
       "vault_id": "vault-id",

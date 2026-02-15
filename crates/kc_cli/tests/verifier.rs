@@ -562,7 +562,7 @@ fn verifier_accepts_deterministic_zip_bundle() {
     let zip_file = std::fs::File::create(&zip_path).expect("create zip");
     let mut writer = zip::ZipWriter::new(zip_file);
     let fixed = zip::DateTime::from_date_and_time(1980, 1, 1, 0, 0, 0).expect("fixed");
-    let options = zip::write::FileOptions::default()
+    let options = zip::write::SimpleFileOptions::default()
         .compression_method(zip::CompressionMethod::Stored)
         .last_modified_time(fixed)
         .unix_permissions(0o644);
