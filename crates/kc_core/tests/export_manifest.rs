@@ -108,6 +108,13 @@ fn export_manifest_has_deterministic_object_order() {
         recovery_escrow.get("provider").and_then(|v| v.as_str()),
         Some("none")
     );
+    assert_eq!(
+        recovery_escrow
+            .get("providers")
+            .and_then(|v| v.as_array())
+            .map(|v| v.len()),
+        Some(0)
+    );
     assert!(recovery_escrow
         .get("updated_at_ms")
         .expect("updated_at_ms")
@@ -116,6 +123,13 @@ fn export_manifest_has_deterministic_object_order() {
         .get("descriptor")
         .expect("descriptor")
         .is_null());
+    assert_eq!(
+        recovery_escrow
+            .get("escrow_descriptors")
+            .and_then(|v| v.as_array())
+            .map(|v| v.len()),
+        Some(0)
+    );
     assert_eq!(
         manifest
             .get("packaging")
@@ -204,6 +218,17 @@ fn export_manifest_includes_recovery_escrow_descriptor_when_enabled() {
         ],
     )
     .expect("insert escrow config");
+    conn.execute(
+        "INSERT INTO recovery_escrow_configs (provider_id, enabled, descriptor_json, updated_at_ms)
+         VALUES (?1, ?2, ?3, ?4)",
+        rusqlite::params![
+            "gcp",
+            1,
+            r#"{"provider":"gcp","provider_ref":"secret://vault/gcp","key_id":"gcp-kms://demo","wrapped_at_ms":2100}"#,
+            2100i64
+        ],
+    )
+    .expect("insert escrow config gcp");
 
     let bundle = export_bundle(
         &vault_root,
@@ -229,13 +254,24 @@ fn export_manifest_includes_recovery_escrow_descriptor_when_enabled() {
     );
     assert_eq!(
         recovery_escrow.get("provider").and_then(|v| v.as_str()),
-        Some("aws")
+        Some("multi")
     );
     assert_eq!(
         recovery_escrow
             .get("updated_at_ms")
             .and_then(|v| v.as_i64()),
-        Some(2000)
+        Some(2100)
+    );
+    assert_eq!(
+        recovery_escrow
+            .get("providers")
+            .and_then(|v| v.as_array())
+            .map(|items| items
+                .iter()
+                .filter_map(|x| x.as_str())
+                .map(str::to_string)
+                .collect::<Vec<_>>()),
+        Some(vec!["aws".to_string(), "gcp".to_string()])
     );
     assert_eq!(
         recovery_escrow
@@ -243,6 +279,19 @@ fn export_manifest_includes_recovery_escrow_descriptor_when_enabled() {
             .and_then(|v| v.get("provider"))
             .and_then(|v| v.as_str()),
         Some("aws")
+    );
+    let descriptors = recovery_escrow
+        .get("escrow_descriptors")
+        .and_then(|v| v.as_array())
+        .expect("escrow_descriptors array");
+    assert_eq!(descriptors.len(), 2);
+    assert_eq!(
+        descriptors[0].get("provider").and_then(|v| v.as_str()),
+        Some("aws")
+    );
+    assert_eq!(
+        descriptors[1].get("provider").and_then(|v| v.as_str()),
+        Some("gcp")
     );
 }
 

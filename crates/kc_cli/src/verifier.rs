@@ -122,10 +122,28 @@ fn manifest_schema() -> Value {
           "properties": {
             "enabled": { "type": "boolean" },
             "provider": { "type": "string", "minLength": 1 },
+            "providers": {
+              "type": "array",
+              "items": { "type": "string", "minLength": 1 }
+            },
             "updated_at_ms": { "type": ["integer", "null"] },
             "descriptor": {
               "type": ["object", "null"],
               "additionalProperties": true
+            },
+            "escrow_descriptors": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "required": ["provider", "provider_ref", "key_id", "wrapped_at_ms"],
+                "properties": {
+                  "provider": { "type": "string", "minLength": 1 },
+                  "provider_ref": { "type": "string", "minLength": 1 },
+                  "key_id": { "type": "string", "minLength": 1 },
+                  "wrapped_at_ms": { "type": "integer" }
+                },
+                "additionalProperties": false
+              }
             }
           },
           "additionalProperties": false
@@ -262,6 +280,8 @@ fn verify_recovery_escrow_metadata(manifest: &Value) -> Option<VerifyErrorEntry>
     let provider = block.get("provider").and_then(|x| x.as_str())?;
     let updated = block.get("updated_at_ms")?;
     let descriptor = block.get("descriptor")?;
+    let providers_raw = block.get("providers").and_then(|x| x.as_array());
+    let descriptors_raw = block.get("escrow_descriptors").and_then(|x| x.as_array());
 
     let mismatch = |path: &str, expected: &str, actual: String| VerifyErrorEntry {
         code: "RECOVERY_ESCROW_METADATA_MISMATCH".to_string(),
@@ -270,8 +290,15 @@ fn verify_recovery_escrow_metadata(manifest: &Value) -> Option<VerifyErrorEntry>
         actual: Some(actual),
     };
 
+    let provider_priority = |value: &str| match value {
+        "aws" => 0,
+        "gcp" => 1,
+        "azure" => 2,
+        _ => 9,
+    };
+
     if enabled {
-        if provider == "none" || provider.is_empty() {
+        if provider.is_empty() {
             return Some(mismatch(
                 "recovery_escrow/provider",
                 "non-empty provider id when enabled=true",
@@ -285,6 +312,130 @@ fn verify_recovery_escrow_metadata(manifest: &Value) -> Option<VerifyErrorEntry>
                 updated.to_string(),
             ));
         }
+        let normalized_providers = providers_raw
+            .cloned()
+            .unwrap_or_else(|| {
+                if let Some(primary) = descriptor.get("provider").cloned() {
+                    vec![primary]
+                } else {
+                    Vec::new()
+                }
+            })
+            .iter()
+            .filter_map(|v| v.as_str())
+            .map(ToString::to_string)
+            .collect::<Vec<_>>();
+        let providers_to_check = providers_raw.cloned().unwrap_or_default();
+        if !providers_to_check.is_empty() && normalized_providers.len() != providers_to_check.len()
+        {
+            return Some(mismatch(
+                "recovery_escrow/providers",
+                "all providers entries are strings",
+                serde_json::Value::Array(providers_to_check).to_string(),
+            ));
+        }
+        if normalized_providers.is_empty() {
+            return Some(mismatch(
+                "recovery_escrow/providers",
+                "non-empty providers array when enabled=true",
+                "[]".to_string(),
+            ));
+        }
+        let mut expected_provider_order = normalized_providers.clone();
+        expected_provider_order.sort_by(|a, b| {
+            provider_priority(a)
+                .cmp(&provider_priority(b))
+                .then_with(|| a.cmp(b))
+        });
+        expected_provider_order.dedup();
+        if providers_raw.is_some() && normalized_providers != expected_provider_order {
+            return Some(mismatch(
+                "recovery_escrow/providers",
+                "providers sorted by priority then provider id with dedupe",
+                serde_json::to_string(&normalized_providers).unwrap_or_default(),
+            ));
+        }
+
+        let source_descriptors = descriptors_raw
+            .cloned()
+            .unwrap_or_else(|| vec![descriptor.clone()]);
+        if source_descriptors.is_empty() {
+            return Some(mismatch(
+                "recovery_escrow/escrow_descriptors",
+                "non-empty escrow_descriptors array when enabled=true",
+                "[]".to_string(),
+            ));
+        }
+        let mut normalized_descriptors = Vec::new();
+        for entry in &source_descriptors {
+            let Some(entry_obj) = entry.as_object() else {
+                return Some(mismatch(
+                    "recovery_escrow/escrow_descriptors",
+                    "object entries in escrow_descriptors",
+                    entry.to_string(),
+                ));
+            };
+            let Some(desc_provider) = entry_obj.get("provider").and_then(|x| x.as_str()) else {
+                return Some(mismatch(
+                    "recovery_escrow/escrow_descriptors/provider",
+                    "descriptor provider string",
+                    entry.to_string(),
+                ));
+            };
+            if !expected_provider_order.contains(&desc_provider.to_string()) {
+                return Some(mismatch(
+                    "recovery_escrow/escrow_descriptors/provider",
+                    "descriptor provider present in providers list",
+                    desc_provider.to_string(),
+                ));
+            }
+            let Some(provider_ref) = entry_obj.get("provider_ref").and_then(|x| x.as_str()) else {
+                return Some(mismatch(
+                    "recovery_escrow/escrow_descriptors/provider_ref",
+                    "descriptor provider_ref string",
+                    entry.to_string(),
+                ));
+            };
+            let Some(key_id) = entry_obj.get("key_id").and_then(|x| x.as_str()) else {
+                return Some(mismatch(
+                    "recovery_escrow/escrow_descriptors/key_id",
+                    "descriptor key_id string",
+                    entry.to_string(),
+                ));
+            };
+            let Some(wrapped_at_ms) = entry_obj.get("wrapped_at_ms").and_then(|x| x.as_i64())
+            else {
+                return Some(mismatch(
+                    "recovery_escrow/escrow_descriptors/wrapped_at_ms",
+                    "descriptor wrapped_at_ms integer",
+                    entry.to_string(),
+                ));
+            };
+            normalized_descriptors.push((
+                desc_provider.to_string(),
+                provider_ref.to_string(),
+                key_id.to_string(),
+                wrapped_at_ms,
+                entry.clone(),
+            ));
+        }
+        let mut expected_descriptors = normalized_descriptors.clone();
+        expected_descriptors.sort_by(|a, b| {
+            provider_priority(&a.0)
+                .cmp(&provider_priority(&b.0))
+                .then_with(|| a.0.cmp(&b.0))
+                .then_with(|| a.1.cmp(&b.1))
+                .then_with(|| a.2.cmp(&b.2))
+                .then_with(|| a.3.cmp(&b.3))
+        });
+        if descriptors_raw.is_some() && normalized_descriptors != expected_descriptors {
+            return Some(mismatch(
+                "recovery_escrow/escrow_descriptors",
+                "escrow_descriptors sorted by provider priority then provider_ref",
+                serde_json::Value::Array(source_descriptors).to_string(),
+            ));
+        }
+
         if !descriptor.is_object() {
             return Some(mismatch(
                 "recovery_escrow/descriptor",
@@ -292,14 +443,26 @@ fn verify_recovery_escrow_metadata(manifest: &Value) -> Option<VerifyErrorEntry>
                 descriptor.to_string(),
             ));
         }
-        if let Some(desc_provider) = descriptor.get("provider").and_then(|x| x.as_str()) {
-            if desc_provider != provider {
-                return Some(mismatch(
-                    "recovery_escrow/descriptor/provider",
-                    provider,
-                    desc_provider.to_string(),
-                ));
-            }
+        let primary_descriptor = expected_descriptors.first().map(|x| &x.4)?;
+        if descriptor != primary_descriptor {
+            return Some(mismatch(
+                "recovery_escrow/descriptor",
+                "descriptor matches first escrow_descriptors entry",
+                descriptor.to_string(),
+            ));
+        }
+
+        let expected_provider_value = if expected_provider_order.len() == 1 {
+            expected_provider_order[0].clone()
+        } else {
+            "multi".to_string()
+        };
+        if provider != expected_provider_value {
+            return Some(mismatch(
+                "recovery_escrow/provider",
+                &expected_provider_value,
+                provider.to_string(),
+            ));
         }
         return None;
     }
@@ -310,6 +473,15 @@ fn verify_recovery_escrow_metadata(manifest: &Value) -> Option<VerifyErrorEntry>
             "none when enabled=false",
             provider.to_string(),
         ));
+    }
+    if let Some(providers) = providers_raw {
+        if !providers.is_empty() {
+            return Some(mismatch(
+                "recovery_escrow/providers",
+                "empty array when enabled=false",
+                serde_json::Value::Array(providers.clone()).to_string(),
+            ));
+        }
     }
     if !updated.is_null() {
         return Some(mismatch(
@@ -324,6 +496,15 @@ fn verify_recovery_escrow_metadata(manifest: &Value) -> Option<VerifyErrorEntry>
             "null when enabled=false",
             descriptor.to_string(),
         ));
+    }
+    if let Some(escrow_descriptors) = descriptors_raw {
+        if !escrow_descriptors.is_empty() {
+            return Some(mismatch(
+                "recovery_escrow/escrow_descriptors",
+                "empty array when enabled=false",
+                serde_json::Value::Array(escrow_descriptors.clone()).to_string(),
+            ));
+        }
     }
 
     None

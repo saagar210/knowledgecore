@@ -81,3 +81,23 @@ fn schema_verifier_report_rejects_missing_checked() {
 
     assert!(!schema.is_valid(&invalid));
 }
+
+#[test]
+fn schema_verifier_report_accepts_recovery_escrow_metadata_error() {
+    let schema = JSONSchema::compile(&verifier_report_schema()).expect("compile verifier schema");
+    let report = json!({
+      "report_version": 1,
+      "status": "failed",
+      "exit_code": 21,
+      "errors": [
+        {
+          "code": "RECOVERY_ESCROW_METADATA_MISMATCH",
+          "path": "recovery_escrow/escrow_descriptors",
+          "expected": "sorted descriptors",
+          "actual": "[{\"provider\":\"gcp\"}]"
+        }
+      ],
+      "checked": { "objects": 3, "indexes": 1 }
+    });
+    assert!(schema.is_valid(&report));
+}

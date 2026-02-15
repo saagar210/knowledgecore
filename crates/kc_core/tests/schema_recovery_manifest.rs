@@ -30,6 +30,20 @@ fn recovery_manifest_schema() -> serde_json::Value {
             "wrapped_at_ms": { "type": "integer" }
           },
           "additionalProperties": false
+        },
+        "escrow_descriptors": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["provider", "provider_ref", "key_id", "wrapped_at_ms"],
+            "properties": {
+              "provider": { "type": "string", "minLength": 1 },
+              "provider_ref": { "type": "string", "minLength": 1 },
+              "key_id": { "type": "string", "minLength": 1 },
+              "wrapped_at_ms": { "type": "integer" }
+            },
+            "additionalProperties": false
+          }
         }
       },
       "additionalProperties": false
@@ -76,4 +90,31 @@ fn schema_recovery_manifest_rejects_invalid_escrow_descriptor() {
       }
     });
     assert!(!schema.is_valid(&invalid));
+}
+
+#[test]
+fn schema_recovery_manifest_accepts_descriptors_array_payload() {
+    let schema = JSONSchema::compile(&recovery_manifest_schema()).expect("compile schema");
+    let value = serde_json::json!({
+      "schema_version": 2,
+      "vault_id": "vault-id",
+      "created_at_ms": 300,
+      "phrase_checksum": "blake3:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "payload_hash": "blake3:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+      "escrow_descriptors": [
+        {
+          "provider": "aws",
+          "provider_ref": "secret://vault/aws",
+          "key_id": "kms://aws/demo",
+          "wrapped_at_ms": 300
+        },
+        {
+          "provider": "gcp",
+          "provider_ref": "secret://vault/gcp",
+          "key_id": "kms://gcp/demo",
+          "wrapped_at_ms": 301
+        }
+      ]
+    });
+    assert!(schema.is_valid(&value));
 }

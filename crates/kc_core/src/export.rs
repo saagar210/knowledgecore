@@ -2,6 +2,9 @@ use crate::app_error::{AppError, AppResult};
 use crate::canon_json::to_canonical_bytes;
 use crate::chunking::{default_chunking_config_v1, hash_chunking_config};
 use crate::hashing::blake3_hex_prefixed;
+use crate::recovery_escrow::{
+    normalize_escrow_descriptors, provider_priority, RecoveryEscrowDescriptorV2,
+};
 use crate::vault::{vault_open, vault_paths};
 use serde::{Deserialize, Serialize};
 use std::fs;
@@ -106,8 +109,7 @@ fn recovery_escrow_export_block(conn: &rusqlite::Connection) -> AppResult<serde_
         .prepare(
             "SELECT provider_id, enabled, descriptor_json, updated_at_ms
              FROM recovery_escrow_configs
-             ORDER BY updated_at_ms DESC, provider_id DESC
-             LIMIT 1",
+             ORDER BY provider_id ASC",
         )
         .map_err(|e| {
             AppError::new(
@@ -119,95 +121,144 @@ fn recovery_escrow_export_block(conn: &rusqlite::Connection) -> AppResult<serde_
             )
         })?;
 
-    let mut rows = stmt.query([]).map_err(|e| {
-        AppError::new(
-            "KC_EXPORT_FAILED",
-            "export",
-            "failed querying recovery escrow export row",
-            false,
-            serde_json::json!({ "error": e.to_string() }),
-        )
-    })?;
+    let rows = stmt
+        .query_map([], |row| {
+            Ok((
+                row.get::<_, String>(0)?,
+                row.get::<_, i64>(1)? != 0,
+                row.get::<_, String>(2)?,
+                row.get::<_, i64>(3)?,
+            ))
+        })
+        .map_err(|e| {
+            AppError::new(
+                "KC_EXPORT_FAILED",
+                "export",
+                "failed querying recovery escrow export rows",
+                false,
+                serde_json::json!({ "error": e.to_string() }),
+            )
+        })?;
 
-    let Some(row) = rows.next().map_err(|e| {
-        AppError::new(
-            "KC_EXPORT_FAILED",
-            "export",
-            "failed iterating recovery escrow export row",
-            false,
-            serde_json::json!({ "error": e.to_string() }),
-        )
-    })?
-    else {
+    let mut descriptors = Vec::new();
+    let mut providers = Vec::new();
+    let mut updated_at_ms: Option<i64> = None;
+    for row in rows {
+        let (provider_id, enabled, descriptor_json, provider_updated_at_ms) = row.map_err(|e| {
+            AppError::new(
+                "KC_EXPORT_FAILED",
+                "export",
+                "failed decoding recovery escrow export row",
+                false,
+                serde_json::json!({ "error": e.to_string() }),
+            )
+        })?;
+        if !enabled {
+            continue;
+        }
+
+        let descriptor_value = serde_json::from_str::<serde_json::Value>(&descriptor_json)
+            .map_err(|e| {
+                AppError::new(
+                    "KC_EXPORT_FAILED",
+                    "export",
+                    "failed parsing recovery escrow descriptor json",
+                    false,
+                    serde_json::json!({ "error": e.to_string(), "provider": provider_id }),
+                )
+            })?;
+        let Some(descriptor_obj) = descriptor_value.as_object() else {
+            continue;
+        };
+        let has_descriptor_shape = descriptor_obj.contains_key("provider")
+            && descriptor_obj.contains_key("provider_ref")
+            && descriptor_obj.contains_key("key_id")
+            && descriptor_obj.contains_key("wrapped_at_ms");
+        if !has_descriptor_shape {
+            // Provider-level config rows can exist before any escrow write has produced
+            // a concrete descriptor. Those rows are intentionally omitted.
+            continue;
+        }
+        let descriptor = serde_json::from_value::<RecoveryEscrowDescriptorV2>(descriptor_value)
+            .map_err(|e| {
+                AppError::new(
+                    "KC_EXPORT_FAILED",
+                    "export",
+                    "failed decoding recovery escrow descriptor json",
+                    false,
+                    serde_json::json!({ "error": e.to_string(), "provider": provider_id }),
+                )
+            })?;
+        if descriptor.provider != provider_id {
+            return Err(AppError::new(
+                "KC_EXPORT_FAILED",
+                "export",
+                "recovery escrow descriptor provider does not match provider id",
+                false,
+                serde_json::json!({
+                    "provider_id": provider_id,
+                    "descriptor_provider": descriptor.provider
+                }),
+            ));
+        }
+
+        providers.push(provider_id);
+        descriptors.push(descriptor);
+        updated_at_ms = Some(updated_at_ms.map_or(provider_updated_at_ms, |current| {
+            current.max(provider_updated_at_ms)
+        }));
+    }
+
+    if descriptors.is_empty() {
         return Ok(serde_json::json!({
             "enabled": false,
             "provider": "none",
+            "providers": [],
             "updated_at_ms": serde_json::Value::Null,
-            "descriptor": serde_json::Value::Null
+            "descriptor": serde_json::Value::Null,
+            "escrow_descriptors": []
         }));
-    };
-
-    let provider_id: String = row.get(0).map_err(|e| {
-        AppError::new(
-            "KC_EXPORT_FAILED",
-            "export",
-            "failed decoding recovery escrow provider id",
-            false,
-            serde_json::json!({ "error": e.to_string() }),
-        )
-    })?;
-    let enabled = row.get::<_, i64>(1).map(|v| v != 0).map_err(|e| {
-        AppError::new(
-            "KC_EXPORT_FAILED",
-            "export",
-            "failed decoding recovery escrow enabled flag",
-            false,
-            serde_json::json!({ "error": e.to_string() }),
-        )
-    })?;
-    let descriptor_json: String = row.get(2).map_err(|e| {
-        AppError::new(
-            "KC_EXPORT_FAILED",
-            "export",
-            "failed decoding recovery escrow descriptor json",
-            false,
-            serde_json::json!({ "error": e.to_string() }),
-        )
-    })?;
-    let updated_at_ms: i64 = row.get(3).map_err(|e| {
-        AppError::new(
-            "KC_EXPORT_FAILED",
-            "export",
-            "failed decoding recovery escrow update timestamp",
-            false,
-            serde_json::json!({ "error": e.to_string() }),
-        )
-    })?;
-
-    let descriptor = serde_json::from_str::<serde_json::Value>(&descriptor_json).map_err(|e| {
-        AppError::new(
-            "KC_EXPORT_FAILED",
-            "export",
-            "failed parsing recovery escrow descriptor json",
-            false,
-            serde_json::json!({ "error": e.to_string() }),
-        )
-    })?;
-    if !descriptor.is_object() {
-        return Err(AppError::new(
-            "KC_EXPORT_FAILED",
-            "export",
-            "recovery escrow descriptor must be a JSON object",
-            false,
-            serde_json::json!({ "provider": provider_id }),
-        ));
     }
 
+    normalize_escrow_descriptors(&mut descriptors);
+    providers.sort_by(|a, b| {
+        provider_priority(a)
+            .cmp(&provider_priority(b))
+            .then_with(|| a.cmp(b))
+    });
+    providers.dedup();
+
+    let primary_provider = if providers.len() == 1 {
+        providers[0].clone()
+    } else {
+        "multi".to_string()
+    };
+    let primary_descriptor = serde_json::to_value(&descriptors[0]).map_err(|e| {
+        AppError::new(
+            "KC_EXPORT_FAILED",
+            "export",
+            "failed serializing primary recovery escrow descriptor",
+            false,
+            serde_json::json!({ "error": e.to_string() }),
+        )
+    })?;
+    let descriptors_value = serde_json::to_value(&descriptors).map_err(|e| {
+        AppError::new(
+            "KC_EXPORT_FAILED",
+            "export",
+            "failed serializing recovery escrow descriptor list",
+            false,
+            serde_json::json!({ "error": e.to_string() }),
+        )
+    })?;
+
     Ok(serde_json::json!({
-        "enabled": enabled,
-        "provider": provider_id,
+        "enabled": true,
+        "provider": primary_provider,
+        "providers": providers,
         "updated_at_ms": updated_at_ms,
-        "descriptor": if enabled { descriptor } else { serde_json::Value::Null }
+        "descriptor": primary_descriptor,
+        "escrow_descriptors": descriptors_value
     }))
 }
 

@@ -59,14 +59,32 @@ fn export_manifest_schema() -> serde_json::Value {
         },
         "recovery_escrow": {
           "type": "object",
-          "required": ["enabled", "provider", "updated_at_ms", "descriptor"],
+          "required": ["enabled", "provider", "providers", "updated_at_ms", "descriptor", "escrow_descriptors"],
           "properties": {
             "enabled": { "type": "boolean" },
             "provider": { "type": "string", "minLength": 1 },
+            "providers": {
+              "type": "array",
+              "items": { "type": "string", "minLength": 1 }
+            },
             "updated_at_ms": { "type": ["integer", "null"] },
             "descriptor": {
               "type": ["object", "null"],
               "additionalProperties": true
+            },
+            "escrow_descriptors": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "required": ["provider", "provider_ref", "key_id", "wrapped_at_ms"],
+                "properties": {
+                  "provider": { "type": "string", "minLength": 1 },
+                  "provider_ref": { "type": "string", "minLength": 1 },
+                  "key_id": { "type": "string", "minLength": 1 },
+                  "wrapped_at_ms": { "type": "integer" }
+                },
+                "additionalProperties": false
+              }
             }
           },
           "additionalProperties": false
@@ -181,8 +199,10 @@ fn schema_export_manifest_rejects_bad_hash() {
       "recovery_escrow": {
         "enabled": false,
         "provider": "none",
+        "providers": [],
         "updated_at_ms": null,
-        "descriptor": null
+        "descriptor": null,
+        "escrow_descriptors": []
       },
       "packaging": {
         "format": "folder",
@@ -230,8 +250,10 @@ fn schema_export_manifest_rejects_non_uuid_vault_id() {
       "recovery_escrow": {
         "enabled": false,
         "provider": "none",
+        "providers": [],
         "updated_at_ms": null,
-        "descriptor": null
+        "descriptor": null,
+        "escrow_descriptors": []
       },
       "packaging": {
         "format": "folder",

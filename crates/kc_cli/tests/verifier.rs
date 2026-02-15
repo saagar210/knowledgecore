@@ -34,8 +34,10 @@ fn base_manifest(db_hash: String) -> serde_json::Value {
         "recovery_escrow": {
             "enabled": false,
             "provider": "none",
+            "providers": [],
             "updated_at_ms": serde_json::Value::Null,
-            "descriptor": serde_json::Value::Null
+            "descriptor": serde_json::Value::Null,
+            "escrow_descriptors": []
         },
         "packaging": {
             "format": "folder",
@@ -360,8 +362,10 @@ fn verifier_reports_recovery_escrow_metadata_mismatch() {
     manifest["recovery_escrow"] = serde_json::json!({
         "enabled": false,
         "provider": "aws",
+        "providers": [],
         "updated_at_ms": serde_json::Value::Null,
-        "descriptor": serde_json::Value::Null
+        "descriptor": serde_json::Value::Null,
+        "escrow_descriptors": []
     });
     write_manifest(&bundle, &manifest);
 
@@ -369,6 +373,50 @@ fn verifier_reports_recovery_escrow_metadata_mismatch() {
     assert_eq!(code, 21);
     assert!(report.errors.iter().any(|e| {
         e.code == "RECOVERY_ESCROW_METADATA_MISMATCH" && e.path == "recovery_escrow/provider"
+    }));
+}
+
+#[test]
+fn verifier_reports_recovery_escrow_descriptor_order_mismatch() {
+    let root = tempfile::tempdir().expect("tempdir").keep();
+    let bundle = root.join("bundle_escrow_order");
+    std::fs::create_dir_all(bundle.join("db")).expect("mkdir db");
+    std::fs::write(bundle.join("db/knowledge.sqlite"), b"db").expect("write db");
+
+    let mut manifest = base_manifest(blake3_hex_prefixed(b"db"));
+    manifest["recovery_escrow"] = serde_json::json!({
+        "enabled": true,
+        "provider": "multi",
+        "providers": ["aws", "gcp"],
+        "updated_at_ms": 2000,
+        "descriptor": {
+            "provider": "gcp",
+            "provider_ref": "gcp://b",
+            "key_id": "gcp-kms",
+            "wrapped_at_ms": 2000
+        },
+        "escrow_descriptors": [
+            {
+                "provider": "gcp",
+                "provider_ref": "gcp://b",
+                "key_id": "gcp-kms",
+                "wrapped_at_ms": 2000
+            },
+            {
+                "provider": "aws",
+                "provider_ref": "aws://a",
+                "key_id": "aws-kms",
+                "wrapped_at_ms": 1900
+            }
+        ]
+    });
+    write_manifest(&bundle, &manifest);
+
+    let (code, report) = verify_bundle(&bundle).expect("verify");
+    assert_eq!(code, 21);
+    assert!(report.errors.iter().any(|e| {
+        e.code == "RECOVERY_ESCROW_METADATA_MISMATCH"
+            && e.path == "recovery_escrow/escrow_descriptors"
     }));
 }
 
