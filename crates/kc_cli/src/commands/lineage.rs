@@ -214,6 +214,7 @@ mod tests {
     use kc_core::lineage_governance::{
         lineage_lock_scope_status, lineage_role_grant, lineage_role_list,
     };
+    use kc_core::lineage_policy::{lineage_policy_add, lineage_policy_bind};
     use kc_core::object_store::ObjectStore;
     use kc_core::vault::vault_init;
 
@@ -240,6 +241,17 @@ mod tests {
         let doc_node = format!("doc:{}", doc_id);
         let chunk_node = "chunk:cli-overlay";
         lineage_role_grant(&conn, "cli-test", "editor", "test-harness", 2).expect("grant role");
+        lineage_policy_add(
+            &conn,
+            "allow-overlay-cli",
+            "allow",
+            r#"{"action":"lineage.overlay.write"}"#,
+            "test-harness",
+            2,
+        )
+        .expect("add policy");
+        lineage_policy_bind(&conn, "cli-test", "allow-overlay-cli", "test-harness", 2)
+            .expect("bind policy");
         let lock = lineage_lock_acquire(&conn, &doc_id, "cli-test", 2).expect("acquire lock");
         let lock_token = lock.token.clone();
         drop(conn);

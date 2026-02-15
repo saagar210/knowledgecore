@@ -1,6 +1,7 @@
 use kc_core::db::open_db;
 use kc_core::ingest::ingest_bytes;
 use kc_core::lineage_governance::lineage_role_grant;
+use kc_core::lineage_policy::{lineage_policy_add, lineage_policy_bind};
 use kc_core::lineage::{
     lineage_lock_acquire, lineage_lock_release, lineage_lock_status, lineage_overlay_add,
     lineage_overlay_list,
@@ -22,6 +23,26 @@ fn seed_doc(conn: &rusqlite::Connection, vault_root: &std::path::Path) -> String
     )
     .expect("ingest");
     ingested.doc_id.0
+}
+
+fn grant_overlay_policy(conn: &rusqlite::Connection, subject_id: &str, now_ms: i64) {
+    lineage_policy_add(
+        conn,
+        "allow-overlay-lock-tests",
+        "allow",
+        r#"{"action":"lineage.overlay.write"}"#,
+        "test-harness",
+        now_ms,
+    )
+    .expect("add overlay policy");
+    lineage_policy_bind(
+        conn,
+        subject_id,
+        "allow-overlay-lock-tests",
+        "test-harness",
+        now_ms,
+    )
+    .expect("bind overlay policy");
 }
 
 #[test]
@@ -85,6 +106,7 @@ fn lineage_overlay_mutation_requires_valid_lock_token() {
 
     let lock = lineage_lock_acquire(&conn, &doc_id, "tester", 100).expect("acquire lock");
     lineage_role_grant(&conn, "tester", "editor", "test-harness", 100).expect("grant editor");
+    grant_overlay_policy(&conn, "tester", 100);
     let _added = lineage_overlay_add(
         &conn,
         &doc_id,
@@ -110,6 +132,7 @@ fn lineage_overlay_mutation_rejects_expired_lock() {
     let doc_node = format!("doc:{}", doc_id);
     let lock = lineage_lock_acquire(&conn, &doc_id, "tester", 100).expect("acquire lock");
     lineage_role_grant(&conn, "tester", "editor", "test-harness", 100).expect("grant editor");
+    grant_overlay_policy(&conn, "tester", 100);
 
     let err = lineage_overlay_add(
         &conn,

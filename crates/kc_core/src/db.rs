@@ -6,7 +6,7 @@ use std::fs;
 use std::path::{Path, PathBuf};
 use std::sync::{Mutex, OnceLock};
 
-const LATEST_SCHEMA_VERSION: i64 = 10;
+const LATEST_SCHEMA_VERSION: i64 = 11;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum DbMigrationOutcome {
@@ -802,6 +802,51 @@ pub fn apply_migrations(conn: &Connection) -> AppResult<()> {
                     "KC_DB_MIGRATION_FAILED",
                     "db",
                     "failed to apply migration 0010",
+                    false,
+                    serde_json::json!({ "error": e.to_string() }),
+                )
+            })?;
+
+        tx.pragma_update(None, "user_version", 10i64)
+            .map_err(|e| {
+                AppError::new(
+                    "KC_DB_MIGRATION_FAILED",
+                    "db",
+                    "failed to set schema user_version",
+                    false,
+                    serde_json::json!({ "error": e.to_string() }),
+                )
+            })?;
+
+        tx.commit().map_err(|e| {
+            AppError::new(
+                "KC_DB_MIGRATION_FAILED",
+                "db",
+                "failed to commit migration transaction",
+                false,
+                serde_json::json!({ "error": e.to_string() }),
+            )
+        })?;
+    }
+
+    let current_after_v10 = schema_version(conn)?;
+    if current_after_v10 < 11 {
+        let tx = conn.unchecked_transaction().map_err(|e| {
+            AppError::new(
+                "KC_DB_MIGRATION_FAILED",
+                "db",
+                "failed to begin migration transaction",
+                false,
+                serde_json::json!({ "error": e.to_string() }),
+            )
+        })?;
+
+        tx.execute_batch(include_str!("../migrations/0011_lineage_policy_conditions_v3.sql"))
+            .map_err(|e| {
+                AppError::new(
+                    "KC_DB_MIGRATION_FAILED",
+                    "db",
+                    "failed to apply migration 0011",
                     false,
                     serde_json::json!({ "error": e.to_string() }),
                 )

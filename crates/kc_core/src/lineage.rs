@@ -1,6 +1,7 @@
 use crate::app_error::{AppError, AppResult};
 use crate::hashing::blake3_hex_prefixed;
 use crate::lineage_governance::ensure_lineage_permission;
+use crate::lineage_policy::ensure_lineage_policy_allows;
 use rusqlite::{params, Connection};
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, BTreeSet};
@@ -819,6 +820,13 @@ pub fn lineage_overlay_add(
     )?;
     let _lock = require_valid_lock(conn, doc_id, lock_token, created_at_ms)?;
     ensure_lineage_permission(conn, created_by, "lineage.overlay.write", Some(doc_id))?;
+    ensure_lineage_policy_allows(
+        conn,
+        created_by,
+        "lineage.overlay.write",
+        Some(doc_id),
+        created_at_ms,
+    )?;
     let overlay_id = overlay_id_for(doc_id, from_node_id, to_node_id, relation, evidence);
     let inserted = conn.execute(
         "INSERT INTO lineage_overlays(
@@ -899,6 +907,13 @@ pub fn lineage_overlay_remove(
     };
     let lock = require_valid_lock(conn, &doc_id, lock_token, now_ms)?;
     ensure_lineage_permission(conn, &lock.owner, "lineage.overlay.write", Some(&doc_id))?;
+    ensure_lineage_policy_allows(
+        conn,
+        &lock.owner,
+        "lineage.overlay.write",
+        Some(&doc_id),
+        now_ms,
+    )?;
 
     let removed = conn
         .execute(

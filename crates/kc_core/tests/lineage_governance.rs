@@ -6,6 +6,7 @@ use kc_core::lineage_governance::{
     lineage_lock_scope_status, lineage_permission_decision, lineage_role_grant, lineage_role_list,
     lineage_role_revoke,
 };
+use kc_core::lineage_policy::{lineage_policy_add, lineage_policy_bind};
 use kc_core::object_store::ObjectStore;
 use kc_core::vault::vault_init;
 use rusqlite::params;
@@ -141,6 +142,17 @@ fn lineage_overlay_mutation_requires_rbac_permission() {
     assert_eq!(denied.code, "KC_LINEAGE_PERMISSION_DENIED");
 
     lineage_role_grant(&conn, "owner-a", "editor", "tests", 12).expect("grant editor");
+    lineage_policy_add(
+        &conn,
+        "allow-overlay-governance",
+        "allow",
+        r#"{"action":"lineage.overlay.write"}"#,
+        "tests",
+        12,
+    )
+    .expect("add allow policy");
+    lineage_policy_bind(&conn, "owner-a", "allow-overlay-governance", "tests", 12)
+        .expect("bind allow policy");
     let added = lineage_overlay_add(
         &conn,
         &doc_id,
