@@ -10,7 +10,7 @@ kc_cli = { path = "../../../crates/kc_cli" }
 kc_core = { path = "../../../crates/kc_core" }
 serde.workspace = true
 serde_json.workspace = true
-tauri = { version = "2.10.2", features = [] }
+tauri = { version = "2.10.2", features = ["custom-protocol"] }
 
 [dev-dependencies]
 tempfile = "3.23"
