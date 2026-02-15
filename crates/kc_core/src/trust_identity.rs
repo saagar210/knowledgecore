@@ -1,6 +1,7 @@
 use crate::app_error::{AppError, AppResult};
 use crate::canon_json::to_canonical_bytes;
 use crate::hashing::blake3_hex_prefixed;
+use crate::trust_policy::ensure_session_policy_allows;
 use rusqlite::{params, Connection, OptionalExtension};
 use serde::{Deserialize, Serialize};
 
@@ -11,8 +12,10 @@ pub struct IdentityProviderRecord {
     pub provider_id: String,
     pub issuer: String,
     pub audience: String,
+    pub jwks_url: String,
     pub enabled: bool,
     pub created_at_ms: i64,
+    pub updated_at_ms: i64,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
@@ -66,6 +69,10 @@ fn default_audience(provider_id: &str) -> String {
     format!("kc-desktop:{}", provider_id)
 }
 
+fn default_jwks_url(provider_id: &str) -> String {
+    format!("{}/.well-known/jwks.json", default_issuer(provider_id))
+}
+
 fn canonical_json_string(value: serde_json::Value) -> AppResult<String> {
     let bytes = to_canonical_bytes(&value)?;
     String::from_utf8(bytes).map_err(|e| {
@@ -79,8 +86,8 @@ fn canonical_json_string(value: serde_json::Value) -> AppResult<String> {
 
 fn load_provider(conn: &Connection, provider_id: &str) -> AppResult<Option<IdentityProviderRecord>> {
     conn.query_row(
-        "SELECT provider_id, issuer, audience, enabled, created_at_ms
-         FROM identity_providers
+        "SELECT provider_id, issuer, audience, jwks_url, enabled, created_at_ms, updated_at_ms
+         FROM trust_providers
          WHERE provider_id=?1",
         [provider_id],
         |row| {
@@ -88,18 +95,45 @@ fn load_provider(conn: &Connection, provider_id: &str) -> AppResult<Option<Ident
                 provider_id: row.get(0)?,
                 issuer: row.get(1)?,
                 audience: row.get(2)?,
-                enabled: row.get::<_, i64>(3)? != 0,
-                created_at_ms: row.get(4)?,
+                jwks_url: row.get(3)?,
+                enabled: row.get::<_, i64>(4)? != 0,
+                created_at_ms: row.get(5)?,
+                updated_at_ms: row.get(6)?,
             })
         },
     )
     .optional()
-    .map_err(|e| {
-        identity_error(
-            "KC_TRUST_OIDC_PROVIDER_UNAVAILABLE",
-            "failed reading identity provider",
-            serde_json::json!({ "error": e.to_string(), "provider_id": provider_id }),
+    .or_else(|e| {
+        // Compatibility fallback for vaults that still only have the legacy table.
+        conn.query_row(
+            "SELECT provider_id, issuer, audience, enabled, created_at_ms
+             FROM identity_providers
+             WHERE provider_id=?1",
+            [provider_id],
+            |row| {
+                Ok(IdentityProviderRecord {
+                    provider_id: row.get(0)?,
+                    issuer: row.get(1)?,
+                    audience: row.get(2)?,
+                    jwks_url: format!("{}/.well-known/jwks.json", row.get::<_, String>(1)?),
+                    enabled: row.get::<_, i64>(3)? != 0,
+                    created_at_ms: row.get(4)?,
+                    updated_at_ms: row.get(4)?,
+                })
+            },
         )
+        .optional()
+        .map_err(|fallback_err| {
+            identity_error(
+                "KC_TRUST_OIDC_PROVIDER_UNAVAILABLE",
+                "failed reading identity provider",
+                serde_json::json!({
+                    "error": fallback_err.to_string(),
+                    "fallback_error": e.to_string(),
+                    "provider_id": provider_id
+                }),
+            )
+        })
     })
 }
 
@@ -110,6 +144,24 @@ pub fn upsert_identity_provider(
     audience: &str,
     now_ms: i64,
 ) -> AppResult<IdentityProviderRecord> {
+    upsert_identity_provider_with_jwks(
+        conn,
+        provider_id,
+        issuer,
+        audience,
+        &default_jwks_url(provider_id),
+        now_ms,
+    )
+}
+
+pub fn upsert_identity_provider_with_jwks(
+    conn: &Connection,
+    provider_id: &str,
+    issuer: &str,
+    audience: &str,
+    jwks_url: &str,
+    now_ms: i64,
+) -> AppResult<IdentityProviderRecord> {
     if provider_id.trim().is_empty() {
         return Err(identity_error(
             "KC_TRUST_OIDC_PROVIDER_UNAVAILABLE",
@@ -118,6 +170,26 @@ pub fn upsert_identity_provider(
         ));
     }
 
+    conn.execute(
+        "INSERT INTO trust_providers(provider_id, issuer, audience, jwks_url, enabled, created_at_ms, updated_at_ms)
+         VALUES(?1, ?2, ?3, ?4, 1, ?5, ?5)
+         ON CONFLICT(provider_id) DO UPDATE SET
+           issuer=excluded.issuer,
+           audience=excluded.audience,
+           jwks_url=excluded.jwks_url,
+           enabled=1,
+           updated_at_ms=excluded.updated_at_ms",
+        params![provider_id, issuer, audience, jwks_url, now_ms],
+    )
+    .map_err(|e| {
+        identity_error(
+            "KC_TRUST_OIDC_PROVIDER_UNAVAILABLE",
+            "failed writing trust provider",
+            serde_json::json!({ "error": e.to_string(), "provider_id": provider_id }),
+        )
+    })?;
+
+    // Keep legacy table in sync for compatibility.
     conn.execute(
         "INSERT INTO identity_providers(provider_id, issuer, audience, enabled, created_at_ms)
          VALUES(?1, ?2, ?3, 1, ?4)
@@ -141,6 +213,117 @@ pub fn upsert_identity_provider(
     })
 }
 
+pub fn trust_provider_add(
+    conn: &Connection,
+    provider_id: &str,
+    issuer: &str,
+    audience: &str,
+    jwks_url: &str,
+    now_ms: i64,
+) -> AppResult<IdentityProviderRecord> {
+    if issuer.trim().is_empty() || audience.trim().is_empty() || jwks_url.trim().is_empty() {
+        return Err(identity_error(
+            "KC_TRUST_PROVIDER_POLICY_INVALID",
+            "issuer, audience, and jwks_url are required",
+            serde_json::json!({
+                "provider_id": provider_id,
+                "issuer": issuer,
+                "audience": audience,
+                "jwks_url": jwks_url
+            }),
+        ));
+    }
+    upsert_identity_provider_with_jwks(conn, provider_id, issuer, audience, jwks_url, now_ms)
+}
+
+pub fn trust_provider_disable(
+    conn: &Connection,
+    provider_id: &str,
+    now_ms: i64,
+) -> AppResult<IdentityProviderRecord> {
+    let provider = load_provider(conn, provider_id)?.ok_or_else(|| {
+        identity_error(
+            "KC_TRUST_OIDC_PROVIDER_UNAVAILABLE",
+            "identity provider is not registered",
+            serde_json::json!({ "provider_id": provider_id }),
+        )
+    })?;
+
+    conn.execute(
+        "UPDATE trust_providers SET enabled=0, updated_at_ms=?2 WHERE provider_id=?1",
+        params![provider_id, now_ms],
+    )
+    .map_err(|e| {
+        identity_error(
+            "KC_TRUST_PROVIDER_DISABLED",
+            "failed disabling trust provider",
+            serde_json::json!({ "error": e.to_string(), "provider_id": provider_id }),
+        )
+    })?;
+    conn.execute(
+        "UPDATE identity_providers SET enabled=0 WHERE provider_id=?1",
+        params![provider_id],
+    )
+    .map_err(|e| {
+        identity_error(
+            "KC_TRUST_PROVIDER_DISABLED",
+            "failed disabling legacy identity provider",
+            serde_json::json!({ "error": e.to_string(), "provider_id": provider_id }),
+        )
+    })?;
+
+    let mut out = provider;
+    out.enabled = false;
+    out.updated_at_ms = now_ms;
+    Ok(out)
+}
+
+pub fn trust_provider_list(conn: &Connection) -> AppResult<Vec<IdentityProviderRecord>> {
+    let mut stmt = conn
+        .prepare(
+            "SELECT provider_id, issuer, audience, jwks_url, enabled, created_at_ms, updated_at_ms
+             FROM trust_providers
+             ORDER BY provider_id ASC",
+        )
+        .map_err(|e| {
+            identity_error(
+                "KC_TRUST_OIDC_PROVIDER_UNAVAILABLE",
+                "failed preparing trust provider list query",
+                serde_json::json!({ "error": e.to_string() }),
+            )
+        })?;
+    let rows = stmt
+        .query_map([], |row| {
+            Ok(IdentityProviderRecord {
+                provider_id: row.get(0)?,
+                issuer: row.get(1)?,
+                audience: row.get(2)?,
+                jwks_url: row.get(3)?,
+                enabled: row.get::<_, i64>(4)? != 0,
+                created_at_ms: row.get(5)?,
+                updated_at_ms: row.get(6)?,
+            })
+        })
+        .map_err(|e| {
+            identity_error(
+                "KC_TRUST_OIDC_PROVIDER_UNAVAILABLE",
+                "failed querying trust provider list",
+                serde_json::json!({ "error": e.to_string() }),
+            )
+        })?;
+    let mut out = Vec::new();
+    for row in rows {
+        out.push(row.map_err(|e| {
+            identity_error(
+                "KC_TRUST_OIDC_PROVIDER_UNAVAILABLE",
+                "failed decoding trust provider row",
+                serde_json::json!({ "error": e.to_string() }),
+            )
+        })?);
+    }
+    Ok(out)
+}
+
 pub fn trust_identity_start(
     conn: &Connection,
     provider_id: &str,
@@ -159,7 +342,7 @@ pub fn trust_identity_start(
 
     if !provider.enabled {
         return Err(identity_error(
-            "KC_TRUST_OIDC_PROVIDER_UNAVAILABLE",
+            "KC_TRUST_PROVIDER_DISABLED",
             "identity provider is disabled",
             serde_json::json!({ "provider_id": provider_id }),
         ));
@@ -208,7 +391,7 @@ pub fn trust_identity_complete(
     })?;
     if !provider.enabled {
         return Err(identity_error(
-            "KC_TRUST_OIDC_PROVIDER_UNAVAILABLE",
+            "KC_TRUST_PROVIDER_DISABLED",
             "identity provider is disabled",
             serde_json::json!({ "provider_id": provider_id }),
         ));
@@ -254,6 +437,16 @@ pub fn trust_identity_complete(
         )
     })?;
 
+    ensure_session_policy_allows(
+        conn,
+        &provider.provider_id,
+        &session_id,
+        &claim_subset_json,
+        issued_at_ms,
+        expires_at_ms,
+        now_ms,
+    )?;
+
     Ok(IdentitySessionRecord {
         session_id,
         provider_id: provider.provider_id,
@@ -267,10 +460,15 @@ pub fn trust_identity_complete(
 
 fn latest_session_subject(conn: &Connection, provider_id: &str, now_ms: i64) -> AppResult<String> {
     conn.query_row(
-        "SELECT subject
-         FROM identity_sessions
-         WHERE provider_id=?1 AND expires_at_ms>=?2
-         ORDER BY created_at_ms DESC, session_id DESC
+        "SELECT s.subject
+         FROM identity_sessions s
+         JOIN trust_providers p ON p.provider_id=s.provider_id
+         LEFT JOIN trust_session_revocations r ON r.session_id=s.session_id
+         WHERE s.provider_id=?1
+           AND s.expires_at_ms>=?2
+           AND p.enabled=1
+           AND r.session_id IS NULL
+         ORDER BY s.created_at_ms DESC, s.session_id DESC
          LIMIT 1",
         params![provider_id, now_ms],
         |row| row.get::<_, String>(0),

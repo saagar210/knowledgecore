@@ -26,6 +26,7 @@ pub mod sync_s3;
 pub mod sync_transport;
 pub mod trust;
 pub mod trust_identity;
+pub mod trust_policy;
 pub mod types;
 pub mod vault;
 
