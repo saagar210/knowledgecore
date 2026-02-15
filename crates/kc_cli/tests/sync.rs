@@ -220,6 +220,28 @@ fn cli_sync_merge_preview_and_conservative_pull_work() {
     assert!(preview_stdout.contains("\"safe\": true"));
     assert!(preview_stdout.contains("\"merge_policy\": \"conservative_plus_v2\""));
 
+    let merge_preview_v3 = Command::new(bin)
+        .args([
+            "sync",
+            "merge-preview",
+            vault_a.to_string_lossy().as_ref(),
+            sync_target.to_string_lossy().as_ref(),
+            "--policy",
+            "conservative_plus_v3",
+            "--now-ms",
+            "300",
+        ])
+        .output()
+        .expect("run merge preview v3");
+    assert!(
+        merge_preview_v3.status.success(),
+        "merge preview v3 stderr: {}",
+        String::from_utf8_lossy(&merge_preview_v3.stderr)
+    );
+    let preview_v3_stdout = String::from_utf8(merge_preview_v3.stdout).expect("preview v3 utf8");
+    assert!(preview_v3_stdout.contains("\"merge_policy\": \"conservative_plus_v3\""));
+    assert!(preview_v3_stdout.contains("\"safe_disjoint\""));
+
     let conflict_pull = Command::new(bin)
         .args([
             "sync",
@@ -253,5 +275,24 @@ fn cli_sync_merge_preview_and_conservative_pull_work() {
         merged_pull.status.success(),
         "merged pull stderr: {}",
         String::from_utf8_lossy(&merged_pull.stderr)
+    );
+
+    let merged_pull_v3 = Command::new(bin)
+        .args([
+            "sync",
+            "pull",
+            vault_a.to_string_lossy().as_ref(),
+            sync_target.to_string_lossy().as_ref(),
+            "--auto-merge",
+            "conservative_plus_v3",
+            "--now-ms",
+            "303",
+        ])
+        .output()
+        .expect("run pull with conservative_plus_v3 auto merge");
+    assert!(
+        merged_pull_v3.status.success(),
+        "merged pull v3 stderr: {}",
+        String::from_utf8_lossy(&merged_pull_v3.stderr)
     );
 }

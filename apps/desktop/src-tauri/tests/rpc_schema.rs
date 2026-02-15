@@ -9,9 +9,8 @@ use apps_desktop_tauri::rpc::{
     VaultEncryptionMigrateReq, VaultEncryptionStatusReq, VaultInitReq, VaultLockReq,
     VaultLockStatusReq, VaultRecoveryEscrowEnableReq, VaultRecoveryEscrowProviderAddReq,
     VaultRecoveryEscrowProviderListReq, VaultRecoveryEscrowRestoreReq,
-    VaultRecoveryEscrowRotateAllReq, VaultRecoveryEscrowRotateReq,
-    VaultRecoveryEscrowStatusReq, VaultRecoveryGenerateReq, VaultRecoveryStatusReq,
-    VaultRecoveryVerifyReq, VaultUnlockReq,
+    VaultRecoveryEscrowRotateAllReq, VaultRecoveryEscrowRotateReq, VaultRecoveryEscrowStatusReq,
+    VaultRecoveryGenerateReq, VaultRecoveryStatusReq, VaultRecoveryVerifyReq, VaultUnlockReq,
 };
 
 #[test]
@@ -185,9 +184,7 @@ fn rpc_schema_recovery_requests_validate_shapes() {
         "passphrase": "secret",
         "now_ms": 104
     });
-    assert!(
-        serde_json::from_value::<VaultRecoveryEscrowRotateAllReq>(escrow_rotate_all).is_ok()
-    );
+    assert!(serde_json::from_value::<VaultRecoveryEscrowRotateAllReq>(escrow_rotate_all).is_ok());
 }
 
 #[test]
@@ -258,6 +255,14 @@ fn rpc_schema_sync_accepts_uri_targets() {
         "now_ms": 125
     });
     assert!(serde_json::from_value::<SyncPullReq>(pull_with_merge_v2).is_ok());
+
+    let pull_with_merge_v3 = serde_json::json!({
+        "vault_path": "/tmp/vault",
+        "target_path": "s3://demo-bucket/kc",
+        "auto_merge": "conservative_plus_v3",
+        "now_ms": 126
+    });
+    assert!(serde_json::from_value::<SyncPullReq>(pull_with_merge_v3).is_ok());
 }
 
 #[test]
@@ -275,6 +280,14 @@ fn rpc_schema_sync_merge_preview_requires_now_ms() {
         "now_ms": 123
     });
     assert!(serde_json::from_value::<SyncMergePreviewReq>(valid).is_ok());
+
+    let valid_v3 = serde_json::json!({
+        "vault_path": "/tmp/vault",
+        "target_path": "s3://demo-bucket/kc",
+        "policy": "conservative_plus_v3",
+        "now_ms": 124
+    });
+    assert!(serde_json::from_value::<SyncMergePreviewReq>(valid_v3).is_ok());
 }
 
 #[test]

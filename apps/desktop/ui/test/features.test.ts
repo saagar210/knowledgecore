@@ -749,10 +749,26 @@ describe("feature controllers", () => {
       })
     ).toMatchObject({ kind: "data" });
     expect(
+      await runSyncPull(api, {
+        vault_path: "/tmp/v",
+        target_path: "s3://demo-bucket/kc",
+        auto_merge: "conservative_plus_v3",
+        now_ms: 8
+      })
+    ).toMatchObject({ kind: "data" });
+    expect(
       await loadSyncMergePreview(api, {
         vault_path: "/tmp/v",
         target_path: "s3://demo-bucket/kc",
         policy: "conservative_plus_v2",
+        now_ms: 8
+      })
+    ).toMatchObject({ kind: "data" });
+    expect(
+      await loadSyncMergePreview(api, {
+        vault_path: "/tmp/v",
+        target_path: "s3://demo-bucket/kc",
+        policy: "conservative_plus_v3",
         now_ms: 8
       })
     ).toMatchObject({ kind: "data" });
