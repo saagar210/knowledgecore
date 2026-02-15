@@ -1,13 +1,14 @@
 use apps_desktop_tauri::rpc::{
     AskQuestionReq, LineageLockAcquireReq, LineageLockAcquireScopeReq, LineageLockReleaseReq,
     LineageLockStatusReq, LineageOverlayAddReq, LineageOverlayListReq, LineageOverlayRemoveReq,
-    LineageQueryReq, LineageQueryV2Req, LineageRoleGrantReq, LineageRoleListReq,
-    LineageRoleRevokeReq, SearchQueryReq, SyncMergePreviewReq, SyncPullReq, SyncPushReq,
-    SyncStatusReq, TrustDeviceEnrollReq, TrustDeviceListReq, TrustDeviceVerifyChainReq,
-    TrustIdentityCompleteReq, TrustIdentityStartReq, TrustPolicySetReq, TrustProviderAddReq,
-    TrustProviderDisableReq, TrustProviderListReq, VaultEncryptionEnableReq,
-    VaultEncryptionMigrateReq, VaultEncryptionStatusReq, VaultInitReq, VaultLockReq,
-    VaultLockStatusReq, VaultRecoveryEscrowEnableReq, VaultRecoveryEscrowProviderAddReq,
+    LineagePolicyAddReq, LineagePolicyBindReq, LineagePolicyListReq, LineageQueryReq,
+    LineageQueryV2Req, LineageRoleGrantReq, LineageRoleListReq, LineageRoleRevokeReq,
+    SearchQueryReq, SyncMergePreviewReq, SyncPullReq, SyncPushReq, SyncStatusReq,
+    TrustDeviceEnrollReq, TrustDeviceListReq, TrustDeviceVerifyChainReq, TrustIdentityCompleteReq,
+    TrustIdentityStartReq, TrustPolicySetReq, TrustProviderAddReq, TrustProviderDisableReq,
+    TrustProviderListReq, VaultEncryptionEnableReq, VaultEncryptionMigrateReq,
+    VaultEncryptionStatusReq, VaultInitReq, VaultLockReq, VaultLockStatusReq,
+    VaultRecoveryEscrowEnableReq, VaultRecoveryEscrowProviderAddReq,
     VaultRecoveryEscrowProviderListReq, VaultRecoveryEscrowRestoreReq,
     VaultRecoveryEscrowRotateAllReq, VaultRecoveryEscrowRotateReq, VaultRecoveryEscrowStatusReq,
     VaultRecoveryGenerateReq, VaultRecoveryStatusReq, VaultRecoveryVerifyReq, VaultUnlockReq,
@@ -628,4 +629,51 @@ fn rpc_schema_lineage_lock_acquire_scope_requires_fields() {
         "now_ms": 100
     });
     assert!(serde_json::from_value::<LineageLockAcquireScopeReq>(valid).is_ok());
+}
+
+#[test]
+fn rpc_schema_lineage_policy_requests_validate_shapes() {
+    let add = serde_json::json!({
+        "vault_path": "/tmp/vault",
+        "name": "allow-overlay",
+        "effect": "allow",
+        "condition_json": "{\"action\":\"lineage.overlay.write\"}",
+        "created_by": "desktop",
+        "now_ms": 300
+    });
+    assert!(serde_json::from_value::<LineagePolicyAddReq>(add).is_ok());
+
+    let bind = serde_json::json!({
+        "vault_path": "/tmp/vault",
+        "subject": "user-a",
+        "policy": "allow-overlay",
+        "bound_by": "desktop",
+        "now_ms": 301
+    });
+    assert!(serde_json::from_value::<LineagePolicyBindReq>(bind).is_ok());
+
+    let list = serde_json::json!({
+        "vault_path": "/tmp/vault"
+    });
+    assert!(serde_json::from_value::<LineagePolicyListReq>(list).is_ok());
+}
+
+#[test]
+fn rpc_schema_lineage_policy_rejects_invalid_shapes() {
+    let missing_now = serde_json::json!({
+        "vault_path": "/tmp/vault",
+        "name": "allow-overlay",
+        "effect": "allow",
+        "condition_json": "{}"
+    });
+    assert!(serde_json::from_value::<LineagePolicyAddReq>(missing_now).is_err());
+
+    let invalid_bind = serde_json::json!({
+        "vault_path": "/tmp/vault",
+        "subject": "user-a",
+        "policy": "allow-overlay",
+        "now_ms": 301,
+        "extra": "nope"
+    });
+    assert!(serde_json::from_value::<LineagePolicyBindReq>(invalid_bind).is_err());
 }

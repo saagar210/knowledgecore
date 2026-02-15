@@ -406,6 +406,10 @@ pub enum LineageCmd {
         #[command(subcommand)]
         cmd: LineageRoleCmd,
     },
+    Policy {
+        #[command(subcommand)]
+        cmd: LineagePolicyCmd,
+    },
     Lock {
         #[command(subcommand)]
         cmd: LineageLockCmd,
@@ -491,6 +495,37 @@ pub enum LineageRoleCmd {
         subject: String,
         #[arg(long)]
         role: String,
+    },
+    List {
+        vault_path: String,
+    },
+}
+
+#[derive(Subcommand)]
+pub enum LineagePolicyCmd {
+    Add {
+        vault_path: String,
+        #[arg(long)]
+        name: String,
+        #[arg(long)]
+        effect: String,
+        #[arg(long = "condition-json")]
+        condition_json: String,
+        #[arg(long, default_value = "cli")]
+        created_by: String,
+        #[arg(long = "now-ms")]
+        now_ms: i64,
+    },
+    Bind {
+        vault_path: String,
+        #[arg(long)]
+        subject: String,
+        #[arg(long)]
+        policy: String,
+        #[arg(long, default_value = "cli")]
+        bound_by: String,
+        #[arg(long = "now-ms")]
+        now_ms: i64,
     },
     List {
         vault_path: String,

@@ -532,6 +532,44 @@ export type LineageRoleRevokeReq = {
 export type LineageRoleRevokeRes = { revoked: boolean };
 export type LineageRoleListReq = { vault_path: string };
 export type LineageRoleListRes = { bindings: LineageRoleBinding[] };
+export type LineagePolicy = {
+  policy_id: string;
+  policy_name: string;
+  effect: string;
+  priority: number;
+  condition_json: string;
+  created_by: string;
+  created_at_ms: number;
+};
+export type LineagePolicyAddReq = {
+  vault_path: string;
+  name: string;
+  effect: string;
+  condition_json: string;
+  created_by?: string | null;
+  now_ms: number;
+};
+export type LineagePolicyAddRes = { policy: LineagePolicy };
+export type LineagePolicyBinding = {
+  subject_id: string;
+  policy_id: string;
+  policy_name: string;
+  effect: string;
+  priority: number;
+  condition_json: string;
+  bound_by: string;
+  bound_at_ms: number;
+};
+export type LineagePolicyBindReq = {
+  vault_path: string;
+  subject: string;
+  policy: string;
+  bound_by?: string | null;
+  now_ms: number;
+};
+export type LineagePolicyBindRes = { binding: LineagePolicyBinding };
+export type LineagePolicyListReq = { vault_path: string };
+export type LineagePolicyListRes = { bindings: LineagePolicyBinding[] };
 export type LineageScopeLockLease = {
   scope_kind: string;
   scope_value: string;
@@ -657,6 +695,12 @@ export const rpcMethods = {
     rpc<LineageRoleRevokeReq, LineageRoleRevokeRes>("lineage_role_revoke", req),
   lineageRoleList: (req: LineageRoleListReq) =>
     rpc<LineageRoleListReq, LineageRoleListRes>("lineage_role_list", req),
+  lineagePolicyAdd: (req: LineagePolicyAddReq) =>
+    rpc<LineagePolicyAddReq, LineagePolicyAddRes>("lineage_policy_add", req),
+  lineagePolicyBind: (req: LineagePolicyBindReq) =>
+    rpc<LineagePolicyBindReq, LineagePolicyBindRes>("lineage_policy_bind", req),
+  lineagePolicyList: (req: LineagePolicyListReq) =>
+    rpc<LineagePolicyListReq, LineagePolicyListRes>("lineage_policy_list", req),
   lineageLockAcquireScope: (req: LineageLockAcquireScopeReq) =>
     rpc<LineageLockAcquireScopeReq, LineageLockAcquireScopeRes>(
       "lineage_lock_acquire_scope",

@@ -56,6 +56,9 @@ fn main() {
         commands::lineage_role_grant,
         commands::lineage_role_revoke,
         commands::lineage_role_list,
+        commands::lineage_policy_add,
+        commands::lineage_policy_bind,
+        commands::lineage_policy_list,
         commands::lineage_lock_acquire_scope,
     ]);
 

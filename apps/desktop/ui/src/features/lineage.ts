@@ -14,6 +14,12 @@ import type {
   LineageOverlayListRes,
   LineageOverlayRemoveReq,
   LineageOverlayRemoveRes,
+  LineagePolicyAddReq,
+  LineagePolicyAddRes,
+  LineagePolicyBindReq,
+  LineagePolicyBindRes,
+  LineagePolicyListReq,
+  LineagePolicyListRes,
   LineageQueryReq,
   LineageQueryRes,
   LineageQueryV2Req,
@@ -102,6 +108,27 @@ export async function listLineageRoles(
   req: LineageRoleListReq
 ): Promise<ViewState<LineageRoleListRes>> {
   return nextStateFromRpc(await api.lineageRoleList(req));
+}
+
+export async function addLineagePolicy(
+  api: DesktopRpcApi,
+  req: LineagePolicyAddReq
+): Promise<ViewState<LineagePolicyAddRes>> {
+  return nextStateFromRpc(await api.lineagePolicyAdd(req));
+}
+
+export async function bindLineagePolicy(
+  api: DesktopRpcApi,
+  req: LineagePolicyBindReq
+): Promise<ViewState<LineagePolicyBindRes>> {
+  return nextStateFromRpc(await api.lineagePolicyBind(req));
+}
+
+export async function listLineagePolicies(
+  api: DesktopRpcApi,
+  req: LineagePolicyListReq
+): Promise<ViewState<LineagePolicyListRes>> {
+  return nextStateFromRpc(await api.lineagePolicyList(req));
 }
 
 export async function acquireLineageScopeLock(

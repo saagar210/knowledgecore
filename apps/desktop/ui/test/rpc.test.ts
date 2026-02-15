@@ -64,6 +64,9 @@ describe("rpc client", () => {
       "lineageRoleGrant",
       "lineageRoleRevoke",
       "lineageRoleList",
+      "lineagePolicyAdd",
+      "lineagePolicyBind",
+      "lineagePolicyList",
       "lineageLockAcquireScope"
     ]);
   });

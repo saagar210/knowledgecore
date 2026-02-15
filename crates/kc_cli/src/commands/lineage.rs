@@ -7,6 +7,7 @@ use kc_core::lineage::{
 use kc_core::lineage_governance::{
     lineage_lock_acquire_scope, lineage_role_grant, lineage_role_list, lineage_role_revoke,
 };
+use kc_core::lineage_policy::{lineage_policy_add, lineage_policy_bind, lineage_policy_list};
 use kc_core::vault::vault_open;
 use std::path::Path;
 
@@ -134,6 +135,64 @@ pub fn run_role_list(vault_path: &str) -> AppResult<()> {
     Ok(())
 }
 
+pub fn run_policy_add(
+    vault_path: &str,
+    name: &str,
+    effect: &str,
+    condition_json: &str,
+    created_by: &str,
+    now_ms: i64,
+) -> AppResult<()> {
+    let vault = vault_open(Path::new(vault_path))?;
+    let conn = open_db(&Path::new(vault_path).join(vault.db.relative_path))?;
+    let policy = lineage_policy_add(&conn, name, effect, condition_json, created_by, now_ms)?;
+    println!(
+        "{}",
+        serde_json::to_string_pretty(&serde_json::json!({
+            "status": "ok",
+            "policy": policy
+        }))
+        .unwrap_or_else(|_| "{}".to_string())
+    );
+    Ok(())
+}
+
+pub fn run_policy_bind(
+    vault_path: &str,
+    subject: &str,
+    policy: &str,
+    bound_by: &str,
+    now_ms: i64,
+) -> AppResult<()> {
+    let vault = vault_open(Path::new(vault_path))?;
+    let conn = open_db(&Path::new(vault_path).join(vault.db.relative_path))?;
+    let binding = lineage_policy_bind(&conn, subject, policy, bound_by, now_ms)?;
+    println!(
+        "{}",
+        serde_json::to_string_pretty(&serde_json::json!({
+            "status": "ok",
+            "binding": binding
+        }))
+        .unwrap_or_else(|_| "{}".to_string())
+    );
+    Ok(())
+}
+
+pub fn run_policy_list(vault_path: &str) -> AppResult<()> {
+    let vault = vault_open(Path::new(vault_path))?;
+    let conn = open_db(&Path::new(vault_path).join(vault.db.relative_path))?;
+    let bindings = lineage_policy_list(&conn)?;
+    println!(
+        "{}",
+        serde_json::to_string_pretty(&serde_json::json!({
+            "status": "ok",
+            "bindings": bindings
+        }))
+        .unwrap_or_else(|_| "{}".to_string())
+    );
+    Ok(())
+}
+
 pub fn run_lock_acquire(vault_path: &str, doc_id: &str, owner: &str, now_ms: i64) -> AppResult<()> {
     let vault = vault_open(Path::new(vault_path))?;
     let conn = open_db(&Path::new(vault_path).join(vault.db.relative_path))?;
@@ -205,8 +264,8 @@ pub fn run_lock_status(vault_path: &str, doc_id: &str, now_ms: i64) -> AppResult
 mod tests {
     use super::{
         run_lock_acquire, run_lock_acquire_scope, run_lock_release, run_lock_status,
-        run_overlay_add, run_overlay_list, run_overlay_remove, run_role_grant, run_role_list,
-        run_role_revoke,
+        run_overlay_add, run_overlay_list, run_overlay_remove, run_policy_add, run_policy_bind,
+        run_policy_list, run_role_grant, run_role_list, run_role_revoke,
     };
     use kc_core::db::open_db;
     use kc_core::ingest::ingest_bytes;
@@ -326,5 +385,24 @@ mod tests {
 
         run_role_revoke(root.to_string_lossy().as_ref(), "subject-a", "editor")
             .expect("role revoke");
+
+        run_policy_add(
+            root.to_string_lossy().as_ref(),
+            "allow-lineage-cli",
+            "allow",
+            r#"{"action":"lineage.overlay.write"}"#,
+            "cli-test",
+            13,
+        )
+        .expect("policy add");
+        run_policy_bind(
+            root.to_string_lossy().as_ref(),
+            "subject-a",
+            "allow-lineage-cli",
+            "cli-test",
+            14,
+        )
+        .expect("policy bind");
+        run_policy_list(root.to_string_lossy().as_ref()).expect("policy list");
     }
 }

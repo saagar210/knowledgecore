@@ -11,6 +11,10 @@ use crate::lineage_governance::{
     lineage_lock_acquire_scope, lineage_role_grant, lineage_role_list, lineage_role_revoke,
     LineageRoleBindingV2, LineageScopeLockLeaseV2,
 };
+use crate::lineage_policy::{
+    lineage_policy_add, lineage_policy_bind, lineage_policy_list, LineagePolicyBindingV3,
+    LineagePolicyV3,
+};
 use crate::object_store::{is_encrypted_payload, ObjectStore};
 use crate::recovery::{
     generate_recovery_bundle, read_recovery_manifest, verify_recovery_bundle,
@@ -1202,6 +1206,37 @@ pub fn lineage_lock_acquire_scope_service(
     let vault = vault_open(vault_path)?;
     let conn = open_db(&vault_path.join(vault.db.relative_path))?;
     lineage_lock_acquire_scope(&conn, scope_kind, scope_value, owner, now_ms)
+}
+
+pub fn lineage_policy_add_service(
+    vault_path: &Path,
+    policy_name: &str,
+    effect: &str,
+    condition_json: &str,
+    created_by: &str,
+    now_ms: i64,
+) -> AppResult<LineagePolicyV3> {
+    let vault = vault_open(vault_path)?;
+    let conn = open_db(&vault_path.join(vault.db.relative_path))?;
+    lineage_policy_add(&conn, policy_name, effect, condition_json, created_by, now_ms)
+}
+
+pub fn lineage_policy_bind_service(
+    vault_path: &Path,
+    subject_id: &str,
+    policy_name: &str,
+    bound_by: &str,
+    now_ms: i64,
+) -> AppResult<LineagePolicyBindingV3> {
+    let vault = vault_open(vault_path)?;
+    let conn = open_db(&vault_path.join(vault.db.relative_path))?;
+    lineage_policy_bind(&conn, subject_id, policy_name, bound_by, now_ms)
+}
+
+pub fn lineage_policy_list_service(vault_path: &Path) -> AppResult<Vec<LineagePolicyBindingV3>> {
+    let vault = vault_open(vault_path)?;
+    let conn = open_db(&vault_path.join(vault.db.relative_path))?;
+    lineage_policy_list(&conn)
 }
 
 fn load_object_hashes(conn: &rusqlite::Connection) -> AppResult<Vec<ObjectHash>> {

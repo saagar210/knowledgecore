@@ -969,6 +969,73 @@ pub struct LineageRoleListRes {
 
 #[derive(Debug, Deserialize)]
 #[serde(deny_unknown_fields)]
+pub struct LineagePolicyAddReq {
+    pub vault_path: String,
+    pub name: String,
+    pub effect: String,
+    pub condition_json: String,
+    #[serde(default)]
+    pub created_by: Option<String>,
+    pub now_ms: i64,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct LineagePolicyRes {
+    pub policy_id: String,
+    pub policy_name: String,
+    pub effect: String,
+    pub priority: i64,
+    pub condition_json: String,
+    pub created_by: String,
+    pub created_at_ms: i64,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct LineagePolicyAddRes {
+    pub policy: LineagePolicyRes,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct LineagePolicyBindReq {
+    pub vault_path: String,
+    pub subject: String,
+    pub policy: String,
+    #[serde(default)]
+    pub bound_by: Option<String>,
+    pub now_ms: i64,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct LineagePolicyBindingRes {
+    pub subject_id: String,
+    pub policy_id: String,
+    pub policy_name: String,
+    pub effect: String,
+    pub priority: i64,
+    pub condition_json: String,
+    pub bound_by: String,
+    pub bound_at_ms: i64,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct LineagePolicyBindRes {
+    pub binding: LineagePolicyBindingRes,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct LineagePolicyListReq {
+    pub vault_path: String,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct LineagePolicyListRes {
+    pub bindings: Vec<LineagePolicyBindingRes>,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct LineageLockAcquireScopeReq {
     pub vault_path: String,
     pub scope_kind: String,
@@ -1760,6 +1827,33 @@ fn map_lineage_role_binding(
     }
 }
 
+fn map_lineage_policy(policy: kc_core::lineage_policy::LineagePolicyV3) -> LineagePolicyRes {
+    LineagePolicyRes {
+        policy_id: policy.policy_id,
+        policy_name: policy.policy_name,
+        effect: policy.effect,
+        priority: policy.priority,
+        condition_json: policy.condition_json,
+        created_by: policy.created_by,
+        created_at_ms: policy.created_at_ms,
+    }
+}
+
+fn map_lineage_policy_binding(
+    binding: kc_core::lineage_policy::LineagePolicyBindingV3,
+) -> LineagePolicyBindingRes {
+    LineagePolicyBindingRes {
+        subject_id: binding.subject_id,
+        policy_id: binding.policy_id,
+        policy_name: binding.policy_name,
+        effect: binding.effect,
+        priority: binding.priority,
+        condition_json: binding.condition_json,
+        bound_by: binding.bound_by,
+        bound_at_ms: binding.bound_at_ms,
+    }
+}
+
 fn map_lineage_scope_lock_lease(
     lease: kc_core::lineage_governance::LineageScopeLockLeaseV2,
 ) -> LineageScopeLockLeaseRes {
@@ -1927,6 +2021,46 @@ pub fn lineage_role_list_rpc(req: LineageRoleListReq) -> RpcResponse<LineageRole
     match rpc_service::lineage_role_list_service(std::path::Path::new(&req.vault_path)) {
         Ok(bindings) => RpcResponse::ok(LineageRoleListRes {
             bindings: bindings.into_iter().map(map_lineage_role_binding).collect(),
+        }),
+        Err(error) => RpcResponse::err(error),
+    }
+}
+
+pub fn lineage_policy_add_rpc(req: LineagePolicyAddReq) -> RpcResponse<LineagePolicyAddRes> {
+    match rpc_service::lineage_policy_add_service(
+        std::path::Path::new(&req.vault_path),
+        &req.name,
+        &req.effect,
+        &req.condition_json,
+        req.created_by.as_deref().unwrap_or("rpc"),
+        req.now_ms,
+    ) {
+        Ok(policy) => RpcResponse::ok(LineagePolicyAddRes {
+            policy: map_lineage_policy(policy),
+        }),
+        Err(error) => RpcResponse::err(error),
+    }
+}
+
+pub fn lineage_policy_bind_rpc(req: LineagePolicyBindReq) -> RpcResponse<LineagePolicyBindRes> {
+    match rpc_service::lineage_policy_bind_service(
+        std::path::Path::new(&req.vault_path),
+        &req.subject,
+        &req.policy,
+        req.bound_by.as_deref().unwrap_or("rpc"),
+        req.now_ms,
+    ) {
+        Ok(binding) => RpcResponse::ok(LineagePolicyBindRes {
+            binding: map_lineage_policy_binding(binding),
+        }),
+        Err(error) => RpcResponse::err(error),
+    }
+}
+
+pub fn lineage_policy_list_rpc(req: LineagePolicyListReq) -> RpcResponse<LineagePolicyListRes> {
+    match rpc_service::lineage_policy_list_service(std::path::Path::new(&req.vault_path)) {
+        Ok(bindings) => RpcResponse::ok(LineagePolicyListRes {
+            bindings: bindings.into_iter().map(map_lineage_policy_binding).collect(),
         }),
         Err(error) => RpcResponse::err(error),
     }

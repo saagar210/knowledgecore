@@ -18,7 +18,7 @@ mod verifier;
 use clap::Parser;
 use cli::{
     BenchCmd, Cli, Command, DepsCmd, FixturesCmd, GcCmd, IndexCmd, IngestCmd, LineageCmd,
-    LineageLockCmd, LineageOverlayCmd, LineageRoleCmd, SyncCmd, TrustCmd, TrustDeviceCmd,
+    LineageLockCmd, LineageOverlayCmd, LineagePolicyCmd, LineageRoleCmd, SyncCmd, TrustCmd, TrustDeviceCmd,
     TrustIdentityCmd, TrustPolicyCmd, TrustProviderCmd,
     VaultCmd, VaultDbEncryptCmd, VaultEncryptCmd, VaultRecoveryCmd, VaultRecoveryEscrowCmd,
     VaultRecoveryEscrowProviderCmd,
@@ -302,6 +302,39 @@ fn main() {
                     role,
                 } => commands::lineage::run_role_revoke(&vault_path, &subject, &role),
                 LineageRoleCmd::List { vault_path } => commands::lineage::run_role_list(&vault_path),
+            },
+            LineageCmd::Policy { cmd } => match cmd {
+                LineagePolicyCmd::Add {
+                    vault_path,
+                    name,
+                    effect,
+                    condition_json,
+                    created_by,
+                    now_ms,
+                } => commands::lineage::run_policy_add(
+                    &vault_path,
+                    &name,
+                    &effect,
+                    &condition_json,
+                    &created_by,
+                    now_ms,
+                ),
+                LineagePolicyCmd::Bind {
+                    vault_path,
+                    subject,
+                    policy,
+                    bound_by,
+                    now_ms,
+                } => commands::lineage::run_policy_bind(
+                    &vault_path,
+                    &subject,
+                    &policy,
+                    &bound_by,
+                    now_ms,
+                ),
+                LineagePolicyCmd::List { vault_path } => {
+                    commands::lineage::run_policy_list(&vault_path)
+                }
             },
             LineageCmd::Lock { cmd } => match cmd {
                 LineageLockCmd::Acquire {

@@ -3,7 +3,8 @@ use apps_desktop_tauri::rpc::{
     ingest_inbox_start_rpc, ingest_inbox_stop_rpc, jobs_list_rpc, lineage_lock_acquire_rpc,
     lineage_lock_acquire_scope_rpc,
     lineage_lock_release_rpc, lineage_lock_status_rpc, lineage_overlay_add_rpc,
-    lineage_overlay_list_rpc, lineage_overlay_remove_rpc, lineage_query_rpc, lineage_query_v2_rpc,
+    lineage_overlay_list_rpc, lineage_overlay_remove_rpc, lineage_policy_add_rpc,
+    lineage_policy_bind_rpc, lineage_policy_list_rpc, lineage_query_rpc, lineage_query_v2_rpc,
     lineage_role_grant_rpc, lineage_role_list_rpc, lineage_role_revoke_rpc,
     sync_merge_preview_rpc, sync_pull_rpc, sync_push_rpc, sync_status_rpc, trust_device_enroll_rpc,
     trust_device_list_rpc, trust_device_verify_chain_rpc, trust_identity_complete_rpc,
@@ -16,8 +17,9 @@ use apps_desktop_tauri::rpc::{
     vault_recovery_generate_rpc, vault_recovery_status_rpc, vault_recovery_verify_rpc,
     vault_unlock_rpc, IngestInboxStartReq, IngestInboxStopReq, JobsListReq, LineageLockAcquireReq,
     LineageLockAcquireScopeReq, LineageLockReleaseReq, LineageLockStatusReq, LineageOverlayAddReq,
-    LineageOverlayListReq, LineageOverlayRemoveReq, LineageQueryReq, LineageQueryV2Req,
-    LineageRoleGrantReq, LineageRoleListReq, LineageRoleRevokeReq, RpcResponse,
+    LineageOverlayListReq, LineageOverlayRemoveReq, LineagePolicyAddReq, LineagePolicyBindReq,
+    LineagePolicyListReq, LineageQueryReq, LineageQueryV2Req, LineageRoleGrantReq,
+    LineageRoleListReq, LineageRoleRevokeReq, RpcResponse,
     SyncMergePreviewReq, SyncPullReq, SyncPushReq, SyncStatusReq, TrustDeviceEnrollReq,
     TrustDeviceListReq, TrustDeviceVerifyChainReq, TrustIdentityCompleteReq, TrustIdentityStartReq,
     VaultEncryptionEnableReq, VaultEncryptionMigrateReq, VaultEncryptionStatusReq, VaultInitReq,
@@ -760,6 +762,48 @@ fn rpc_lineage_v2_overlay_round_trip_is_deterministic() {
             assert_eq!(data.binding.role_name, "editor");
         }
         RpcResponse::Err { error } => panic!("lineage role grant failed: {}", error.code),
+    }
+
+    let policy_added = lineage_policy_add_rpc(LineagePolicyAddReq {
+        vault_path: root.to_string_lossy().to_string(),
+        name: "allow-overlay".to_string(),
+        effect: "allow".to_string(),
+        condition_json: "{\"action\":\"lineage.overlay.write\"}".to_string(),
+        created_by: Some("rpc-test".to_string()),
+        now_ms: 3,
+    });
+    match policy_added {
+        RpcResponse::Ok { data } => {
+            assert_eq!(data.policy.policy_name, "allow-overlay");
+            assert_eq!(data.policy.effect, "allow");
+        }
+        RpcResponse::Err { error } => panic!("lineage policy add failed: {}", error.code),
+    }
+
+    match lineage_policy_bind_rpc(LineagePolicyBindReq {
+        vault_path: root.to_string_lossy().to_string(),
+        subject: "desktop-test".to_string(),
+        policy: "allow-overlay".to_string(),
+        bound_by: Some("rpc-test".to_string()),
+        now_ms: 3,
+    }) {
+        RpcResponse::Ok { data } => {
+            assert_eq!(data.binding.subject_id, "desktop-test");
+            assert_eq!(data.binding.policy_name, "allow-overlay");
+        }
+        RpcResponse::Err { error } => panic!("lineage policy bind failed: {}", error.code),
+    }
+
+    match lineage_policy_list_rpc(LineagePolicyListReq {
+        vault_path: root.to_string_lossy().to_string(),
+    }) {
+        RpcResponse::Ok { data } => {
+            assert!(data
+                .bindings
+                .iter()
+                .any(|binding| binding.policy_name == "allow-overlay"));
+        }
+        RpcResponse::Err { error } => panic!("lineage policy list failed: {}", error.code),
     }
 
     let acquired = lineage_lock_acquire_rpc(LineageLockAcquireReq {

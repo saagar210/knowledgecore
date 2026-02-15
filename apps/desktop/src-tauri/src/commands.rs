@@ -331,6 +331,27 @@ pub fn lineage_role_list(
 }
 
 #[tauri::command]
+pub fn lineage_policy_add(
+    req: rpc::LineagePolicyAddReq,
+) -> rpc::RpcResponse<rpc::LineagePolicyAddRes> {
+    rpc::lineage_policy_add_rpc(req)
+}
+
+#[tauri::command]
+pub fn lineage_policy_bind(
+    req: rpc::LineagePolicyBindReq,
+) -> rpc::RpcResponse<rpc::LineagePolicyBindRes> {
+    rpc::lineage_policy_bind_rpc(req)
+}
+
+#[tauri::command]
+pub fn lineage_policy_list(
+    req: rpc::LineagePolicyListReq,
+) -> rpc::RpcResponse<rpc::LineagePolicyListRes> {
+    rpc::lineage_policy_list_rpc(req)
+}
+
+#[tauri::command]
 pub fn lineage_lock_acquire_scope(
     req: rpc::LineageLockAcquireScopeReq,
 ) -> rpc::RpcResponse<rpc::LineageLockAcquireScopeRes> {

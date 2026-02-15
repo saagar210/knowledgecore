@@ -13,7 +13,10 @@ import {
   acquireLineageScopeLock,
   acquireLineageLock,
   addLineageOverlay,
+  addLineagePolicy,
+  bindLineagePolicy,
   grantLineageRole,
+  listLineagePolicies,
   listLineageRoles,
   listLineageOverlays,
   loadLineageLockStatus,
@@ -474,6 +477,46 @@ function mockApi(): DesktopRpcApi {
           }
         ]
       }),
+    lineagePolicyAdd: () =>
+      ok({
+        policy: {
+          policy_id: "blake3:policy",
+          policy_name: "allow-overlay",
+          effect: "allow",
+          priority: 200,
+          condition_json: "{\"action\":\"lineage.overlay.write\"}",
+          created_by: "desktop",
+          created_at_ms: 10
+        }
+      }),
+    lineagePolicyBind: () =>
+      ok({
+        binding: {
+          subject_id: "tester",
+          policy_id: "blake3:policy",
+          policy_name: "allow-overlay",
+          effect: "allow",
+          priority: 200,
+          condition_json: "{\"action\":\"lineage.overlay.write\"}",
+          bound_by: "desktop",
+          bound_at_ms: 10
+        }
+      }),
+    lineagePolicyList: () =>
+      ok({
+        bindings: [
+          {
+            subject_id: "tester",
+            policy_id: "blake3:policy",
+            policy_name: "allow-overlay",
+            effect: "allow",
+            priority: 200,
+            condition_json: "{\"action\":\"lineage.overlay.write\"}",
+            bound_by: "desktop",
+            bound_at_ms: 10
+          }
+        ]
+      }),
     lineageLockAcquireScope: () =>
       ok({
         lease: {
@@ -814,6 +857,30 @@ describe("feature controllers", () => {
     ).toMatchObject({ kind: "data" });
     expect(
       await listLineageRoles(api, {
+        vault_path: "/tmp/v"
+      })
+    ).toMatchObject({ kind: "data" });
+    expect(
+      await addLineagePolicy(api, {
+        vault_path: "/tmp/v",
+        name: "allow-overlay",
+        effect: "allow",
+        condition_json: "{\"action\":\"lineage.overlay.write\"}",
+        created_by: "desktop",
+        now_ms: 10
+      })
+    ).toMatchObject({ kind: "data" });
+    expect(
+      await bindLineagePolicy(api, {
+        vault_path: "/tmp/v",
+        subject: "tester",
+        policy: "allow-overlay",
+        bound_by: "desktop",
+        now_ms: 10
+      })
+    ).toMatchObject({ kind: "data" });
+    expect(
+      await listLineagePolicies(api, {
         vault_path: "/tmp/v"
       })
     ).toMatchObject({ kind: "data" });
